@@ -1,0 +1,25 @@
+# Full stack: backend (FastAPI) + frontend (nginx serving the built SPA).
+# The browser only talks to the frontend on port 8080; nginx proxies /api.
+services:
+  backend:
+    build: ./backend
+    environment:
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-CHANGE_ME_IN_PRODUCTION}
+      DATABASE_URL: sqlite:////app/data/app.db
+      DOCUMENTS_DIR: /app/data/documents
+      CORS_ORIGINS: '["http://localhost:8080"]'
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+    volumes:
+      - app-data:/app/data      # persist the SQLite db + uploaded documents
+    expose:
+      - "8000"
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
+volumes:
+  app-data:

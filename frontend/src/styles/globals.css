@@ -1,0 +1,93 @@
+/**
+ * globals.css
+ * Aurora design tokens (light = :root, dark = .dark) + base element styles.
+ * All colors are HSL triples consumed via hsl(var(--x)) in tailwind.config.js.
+ */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Light theme */
+  --bg: 220 20% 98%;
+  --surface: 0 0% 100%;
+  --raised: 222 22% 95%;
+  --border: 222 20% 91%;
+  --input: 222 20% 91%;
+
+  --fg: 225 22% 9%;
+  --fg-muted: 224 15% 34%;
+  --fg-subtle: 220 13% 59%;
+
+  --accent: 248 63% 56%;
+  --accent-hover: 248 63% 48%;
+  --accent-fg: 0 0% 100%;
+  --accent-soft: 248 63% 95%;
+
+  --success: 145 76% 33%;
+  --warning: 32 95% 40%;
+  --danger: 347 77% 46%;
+}
+
+.dark {
+  /* Dark theme (default) */
+  --bg: 225 22% 8%;
+  --surface: 222 18% 11%;
+  --raised: 223 19% 16%;
+  --border: 222 16% 20%;
+  --input: 223 19% 18%;
+
+  --fg: 222 33% 96%;
+  --fg-muted: 222 18% 71%;
+  --fg-subtle: 222 12% 52%;
+
+  --accent: 249 84% 68%;
+  --accent-hover: 249 84% 74%;
+  --accent-fg: 0 0% 100%;
+  --accent-soft: 249 40% 20%;
+
+  --success: 145 63% 45%;
+  --warning: 38 92% 56%;
+  --danger: 347 82% 62%;
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+body {
+  margin: 0;
+  background: hsl(var(--bg));
+  color: hsl(var(--fg));
+  font-family: "Plus Jakarta Sans", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 {
+  font-family: "Outfit", system-ui, sans-serif;
+}
+
+/* frappe-gantt bar theming (imported CSS is overridden here) */
+.gantt .bar-progress {
+  fill: hsl(var(--accent));
+}
+.gantt .bar {
+  fill: hsl(var(--raised));
+  stroke: hsl(var(--border));
+}
+.gantt .gantt-delayed-bar .bar-progress {
+  fill: hsl(var(--danger));
+}
+.gantt .gantt-delayed-bar .bar {
+  fill: hsl(var(--danger) / 0.18);
+}
+.gantt .bar-label {
+  fill: hsl(var(--fg));
+  font-family: "Plus Jakarta Sans", sans-serif;
+}
+.gantt-container .popup-wrapper {
+  background: hsl(var(--surface));
+  color: hsl(var(--fg));
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+}
