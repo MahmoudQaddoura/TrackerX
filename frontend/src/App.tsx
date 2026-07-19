@@ -14,7 +14,7 @@ import { LoginPage } from "@/pages/LoginPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 import { ProjectDetailPage } from "@/pages/ProjectDetailPage";
 import { ProjectsPage } from "@/pages/ProjectsPage";
-import { TeamPage } from "@/pages/TeamPage";
+import { EmployeeListPage } from "@/pages/EmployeeListPage";
 
 function RequireManage({ children }: { children: React.ReactNode }) {
   const { canManage } = useAuth();
@@ -44,10 +44,10 @@ export default function App() {
         <Route path="/projects" element={<ProjectsPage />} />
         <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
         <Route
-          path="/team"
+          path="/employees"
           element={
             <RequireManage>
-              <TeamPage />
+              <EmployeeListPage />
             </RequireManage>
           }
         />

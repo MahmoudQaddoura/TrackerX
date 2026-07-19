@@ -1,29 +1,27 @@
 """
 seed_roles.py
-Create the real org accounts and team structure for the PSUT project, layered
-on top of the CSV-imported project/milestones/tasks/team_members:
+Create the demo user accounts and link them to the CSV-imported team_members.
+No teams — just user accounts linked to existing assignee records.
 
-  - admin     : Mohammad Alnabhan  (replaces the old owner@demo.com persona)
-  - pm        : Yazan Abu Osbeh    (leads the new team)
-  - client    : "PSUT Stakeholder" (placeholder — no real contact name was
-                given in the source CSV)
+  - admin     : Mohammad Alnabhan
+  - pm        : Yazan Abu Osbeh
+  - client    : "PSUT Stakeholder" (placeholder)
   - developer : the remaining active assignees
 
-Mohammad Abzakh left the company: soft-deactivated (is_active -> 0), not
-added to the team, no login — but his historical task assignments are left
-untouched so that attribution survives.
+Mohammad Abzakh left the company: soft-deactivated (is_active -> 0), no login.
 
-Idempotent: does nothing if a Team already exists. Run after
+Idempotent: does nothing if the admin user already exists. Run after
 `python -m app.load_sample_project`:  python -m app.seed_roles
 """
 
 from app.db import Base, SessionLocal, engine
-from app.models import Project, Team, TeamMember, User
+from app.models import Project, TeamMember, User
+from app.models.team import project_clients
 from app.security import hash_password
 
 DEMO_PASSWORD = "ChangeMe123!"
 
-LEAD_NAME = "Yazan Abu Osbeh"
+PM_NAME = "Yazan Abu Osbeh"
 DEVELOPERS = [
     "Mahmoud Qaddoura",
     "Mohammad Al Balawi",
@@ -52,8 +50,8 @@ def seed() -> None:
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
-        if db.query(Team).first() is not None:
-            print("Role/team seed skipped — a team already exists.")
+        if db.query(User).filter(User.email == "admin@demo.com").first() is not None:
+            print("Role seed skipped — demo users already exist.")
             return
 
         project = db.query(Project).first()
@@ -72,30 +70,23 @@ def seed() -> None:
             full_name="PSUT Stakeholder",
             role="client",
         )
-        lead_user = User(
-            email=_email_for(LEAD_NAME),
+        pm_user = User(
+            email=_email_for(PM_NAME),
             hashed_password=hash_password(DEMO_PASSWORD),
-            full_name=LEAD_NAME,
+            full_name=PM_NAME,
             role="pm",
         )
-        db.add_all([admin, client, lead_user])
+        db.add_all([admin, client, pm_user])
         db.flush()
 
-        lead_member = _member_or_raise(db, LEAD_NAME)
+        # Link client to the PSUT project.
+        db.execute(project_clients.insert().values(project_id=project.id, user_id=client.id))
 
-        team = Team(
-            name="PSUT LLM Engine Delivery Team",
-            function="Software Engineering",
-            lead_user_id=lead_user.id,
-        )
-        db.add(team)
-        db.flush()
+        # Link PM to their team_member record.
+        pm_member = _member_or_raise(db, PM_NAME)
+        pm_member.user_id = pm_user.id
 
-        team.projects.append(project)
-        project.clients.append(client)
-        lead_member.user_id = lead_user.id
-        lead_member.team_id = team.id
-
+        # Create developer logins and link to team_member records.
         dev_emails = []
         for name in DEVELOPERS:
             member = _member_or_raise(db, name)
@@ -108,18 +99,17 @@ def seed() -> None:
             db.add(dev_user)
             db.flush()
             member.user_id = dev_user.id
-            member.team_id = team.id
             dev_emails.append(dev_user.email)
 
+        # Soft-deactivate the departed member.
         departed = db.query(TeamMember).filter(TeamMember.name == DEPARTED).first()
         if departed is not None:
             departed.is_active = 0
-            departed.team_id = None
             departed.user_id = None
 
         db.commit()
-        print(f"Role/team seed complete. Team '{team.name}' led by {LEAD_NAME}.")
-        logins = ["admin@demo.com", lead_user.email, "client@demo.com", *dev_emails]
+        logins = ["admin@demo.com", pm_user.email, "client@demo.com", *dev_emails]
+        print(f"Role seed complete. {len(logins)} user accounts created.")
         print(f"Logins (password {DEMO_PASSWORD}): " + ", ".join(logins))
     finally:
         db.close()

@@ -23,7 +23,6 @@ from app.routers import (
     projects,
     tasks,
     team_members,
-    teams,
     users,
 )
 
@@ -58,7 +57,6 @@ for r in (
     milestones.router,
     tasks.router,
     team_members.router,
-    teams.router,
     users.router,
     documents.router,
     meetings.router,

@@ -14,7 +14,7 @@ export function Nav() {
   const links = [
     ...(canManage ? [{ to: "/dashboard", label: "Dashboard", icon: LayoutDashboard }] : []),
     { to: "/projects", label: "Projects", icon: FolderKanban },
-    ...(canManage ? [{ to: "/team", label: "Team", icon: Users }] : []),
+    ...(canManage ? [{ to: "/employees", label: "Employees", icon: Users }] : []),
   ];
 
   return (

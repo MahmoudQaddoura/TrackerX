@@ -10,14 +10,12 @@ class TeamMemberInput(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     role: str | None = Field(default=None, max_length=200)
     is_active: bool = True
-    team_id: int | None = None
 
 
 class TeamMemberUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     role: str | None = Field(default=None, max_length=200)
     is_active: bool | None = None
-    team_id: int | None = None
 
 
 class TeamMemberOut(BaseModel):
@@ -26,8 +24,8 @@ class TeamMemberOut(BaseModel):
     role: str | None
     is_active: bool
     task_count: int
-    team_id: int | None
-    team_name: str | None
+    team_ids: list[int]
+    team_names: list[str]
     user_id: int | None
     has_login: bool
     created_at: str

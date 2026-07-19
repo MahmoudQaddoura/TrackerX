@@ -14,7 +14,6 @@ from app.services.risk import task_risk, worst_risk
 def task_out(task) -> dict:
     """Serialize a Task, including its computed risk level and assignee name."""
     member = task.assigned_member
-    team = member.team if member else None
     return {
         "id": task.id,
         "milestone_id": task.milestone_id,
@@ -29,8 +28,6 @@ def task_out(task) -> dict:
         "est_days": task.est_days,
         "assigned_member_id": task.assigned_member_id,
         "assigned_member_name": member.name if member else None,
-        "assigned_team_id": team.id if team else None,
-        "assigned_team_name": team.name if team else None,
         "sort_order": task.sort_order,
         "created_at": task.created_at,
         "updated_at": task.updated_at,
@@ -70,6 +67,7 @@ def project_out(project) -> dict:
         "status": project.status,
         "start_date": project.start_date,
         "end_date": project.end_date,
+        "github_repo_url": project.github_repo_url,
         "created_at": project.created_at,
         "updated_at": project.updated_at,
         "milestone_count": len(project.milestones),
@@ -82,50 +80,31 @@ def project_out(project) -> dict:
 
 
 def team_member_out(member) -> dict:
+    # Derive distinct projects this member is assigned to via their tasks.
+    project_map: dict[int, str] = {}
+    total_est = 0.0
+    for t in member.tasks:
+        if t.milestone and t.milestone.project:
+            pid = t.milestone.project.id
+            if pid not in project_map:
+                project_map[pid] = t.milestone.project.name
+        if t.status != "done" and t.est_days:
+            total_est += t.est_days
+    projects = [{"id": pid, "name": pname} for pid, pname in project_map.items()]
     return {
         "id": member.id,
         "name": member.name,
         "role": member.role,
         "is_active": bool(member.is_active),
         "task_count": len(member.tasks),
-        "team_id": member.team_id,
-        "team_name": member.team.name if member.team else None,
+        "total_tasks": len(member.tasks),
+        "done_tasks": sum(1 for t in member.tasks if t.status == "done"),
+        "active_est_days": round(total_est, 1),
+        "projects": projects,
         "user_id": member.user_id,
         "has_login": member.user_id is not None,
         "created_at": member.created_at,
         "updated_at": member.updated_at,
-    }
-
-
-def team_out(team) -> dict:
-    """Serialize a Team with project links and a workload/capacity roll-up."""
-    active_days = sum(
-        (m.est_days or 0)
-        for member in team.members
-        for m in member.tasks
-        if m.status != "done"
-    )
-    total_tasks = sum(len(member.tasks) for member in team.members)
-    load_pct = (
-        round((active_days / team.weekly_capacity_days) * 100, 1)
-        if team.weekly_capacity_days
-        else None
-    )
-    return {
-        "id": team.id,
-        "name": team.name,
-        "function": team.function,
-        "lead_user_id": team.lead_user_id,
-        "lead_name": team.lead.full_name if team.lead else None,
-        "weekly_capacity_days": team.weekly_capacity_days,
-        "created_at": team.created_at,
-        "updated_at": team.updated_at,
-        "project_ids": [p.id for p in team.projects],
-        "project_names": [p.name for p in team.projects],
-        "member_count": len(team.members),
-        "total_tasks": total_tasks,
-        "active_task_est_days": active_days,
-        "load_pct": load_pct,
     }
 
 

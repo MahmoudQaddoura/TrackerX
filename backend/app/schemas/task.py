@@ -55,8 +55,6 @@ class TaskOut(BaseModel):
     est_days: float | None
     assigned_member_id: int | None
     assigned_member_name: str | None
-    assigned_team_id: int | None
-    assigned_team_name: str | None
     sort_order: int
     created_at: str
     updated_at: str

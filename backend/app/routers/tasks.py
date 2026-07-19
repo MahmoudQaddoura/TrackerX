@@ -18,7 +18,6 @@ from app.db import get_db
 from app.deps import (
     check_project_access,
     get_current_user,
-    get_member_team_id,
     require_manager,
     require_project_access,
 )
@@ -165,24 +164,15 @@ def list_project_tasks(
     user: User = Depends(get_current_user),
     project: Project = Depends(require_project_access),
 ):
-    """Flattened tasks across every milestone — feeds the Kanban board, which
-    is not part of the client experience (they get the read-only Milestones
-    & Tasks tab instead). A developer only sees cards for their own team
-    (unassigned tasks, or tasks assigned to a teammate), even if the project
-    involves other teams."""
+    """Flattened tasks across every milestone — feeds the Kanban board.
+    Project access is already scoped by role in deps.py, so within a
+    project every authorized user sees all tasks."""
     if user.role not in ("admin", "pm", "developer"):
         raise HTTPException(status_code=403, detail="This account cannot view the Kanban board.")
 
     rows = [t for m in project.milestones for t in m.tasks]
-
-    if user.role == "developer":
-        team_id = get_member_team_id(db, user.id)
-        rows = [
-            t
-            for t in rows
-            if t.assigned_member_id is None
-            or (t.assigned_member and t.assigned_member.team_id == team_id)
-        ]
+    rows.sort(key=lambda t: (t.milestone_id, t.sort_order, t.id))
+    return [task_out(t) for t in rows]
 
     rows.sort(key=lambda t: (t.milestone_id, t.sort_order, t.id))
     return [task_out(t) for t in rows]

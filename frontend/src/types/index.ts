@@ -27,6 +27,7 @@ export interface Project {
   status: ProjectStatus;
   start_date: string | null;
   end_date: string | null;
+  github_repo_url: string | null;
   created_at: string;
   updated_at: string;
   milestone_count: number;
@@ -68,8 +69,6 @@ export interface Task {
   est_days: number | null;
   assigned_member_id: number | null;
   assigned_member_name: string | null;
-  assigned_team_id: number | null;
-  assigned_team_name: string | null;
   sort_order: number;
   created_at: string;
   updated_at: string;
@@ -82,29 +81,14 @@ export interface TeamMember {
   role: string | null;
   is_active: boolean;
   task_count: number;
-  team_id: number | null;
-  team_name: string | null;
+  total_tasks: number;
+  done_tasks: number;
+  active_est_days: number;
+  projects: { id: number; name: string }[];
   user_id: number | null;
   has_login: boolean;
   created_at: string;
   updated_at: string;
-}
-
-export interface Team {
-  id: number;
-  name: string;
-  function: string | null;
-  lead_user_id: number | null;
-  lead_name: string | null;
-  weekly_capacity_days: number | null;
-  created_at: string;
-  updated_at: string;
-  project_ids: number[];
-  project_names: string[];
-  member_count: number;
-  total_tasks: number;
-  active_task_est_days: number;
-  load_pct: number | null;
 }
 
 export interface DocumentMeta {

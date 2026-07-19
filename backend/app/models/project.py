@@ -20,6 +20,7 @@ class Project(Base):
     status = Column(Text, nullable=False, default="active")
     start_date = Column(Text, nullable=True)  # ISO date string
     end_date = Column(Text, nullable=True)
+    github_repo_url = Column(Text, nullable=True)  # optional GitHub repo link
     created_at = Column(Text, nullable=False, default=now_iso)
     updated_at = Column(Text, nullable=False, default=now_iso, onupdate=now_iso)
 
@@ -31,7 +32,6 @@ class Project(Base):
     )
     meetings = relationship("Meeting", back_populates="project", cascade="all, delete-orphan")
     documents = relationship("Document", back_populates="project", cascade="all, delete-orphan")
-    teams = relationship("Team", secondary="project_teams", back_populates="projects")
     clients = relationship("User", secondary="project_clients")
 
     __table_args__ = (

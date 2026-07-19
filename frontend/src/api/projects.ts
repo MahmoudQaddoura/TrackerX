@@ -8,6 +8,7 @@ export interface ProjectPayload {
   status?: string;
   start_date?: string | null;
   end_date?: string | null;
+  github_repo_url?: string | null;
 }
 
 export async function fetchProjects(): Promise<Project[]> {

@@ -6,7 +6,6 @@ export interface TeamMemberPayload {
   name: string;
   role?: string | null;
   is_active?: boolean;
-  team_id?: number | null;
 }
 
 export async function fetchTeam(activeOnly = false): Promise<TeamMember[]> {

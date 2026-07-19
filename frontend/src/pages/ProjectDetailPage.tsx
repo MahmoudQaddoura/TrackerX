@@ -6,7 +6,7 @@
  *   client    : Overview, Milestones & Tasks (read-only), Gantt, Documents, Meetings
  * Admin/pm get edit/delete on the project header; only admin can delete.
  */
-import { AlertTriangle, ArrowLeft, CheckCircle2, ListChecks, Pencil, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, ExternalLink, ListChecks, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
@@ -67,6 +67,16 @@ export function ProjectDetailPage() {
             <h1 className="font-display text-2xl font-bold text-fg">{project.name}</h1>
             <ProjectStatusBadge status={project.status} />
             <RiskBadge risk={project.risk_level} />
+            {project.github_repo_url && (
+              <a
+                href={project.github_repo_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-0.5 text-xs font-medium text-fg-muted hover:bg-raised hover:text-fg transition-colors"
+              >
+                <ExternalLink className="h-3 w-3" /> Repo
+              </a>
+            )}
           </div>
           {project.description && <p className="mt-1 text-sm text-fg-muted">{project.description}</p>}
           <p className="mt-1 text-xs text-fg-subtle">

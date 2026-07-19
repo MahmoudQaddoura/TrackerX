@@ -39,6 +39,7 @@ export function ProjectFormDialog({
   const [status, setStatus] = useState("active");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [githubRepo, setGithubRepo] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -48,6 +49,7 @@ export function ProjectFormDialog({
       setStatus(project?.status ?? "active");
       setStartDate(toInputDate(project?.start_date));
       setEndDate(toInputDate(project?.end_date));
+      setGithubRepo(project?.github_repo_url ?? "");
       setError(null);
     }
   }, [open, project]);
@@ -64,6 +66,7 @@ export function ProjectFormDialog({
         status,
         start_date: startDate || null,
         end_date: endDate || null,
+        github_repo_url: githubRepo.trim() || null,
       });
       onOpenChange(false);
     } catch (err) {
@@ -105,6 +108,10 @@ export function ProjectFormDialog({
               <Label htmlFor="p-end">End date</Label>
               <Input id="p-end" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
             </div>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="p-repo">GitHub repo URL</Label>
+            <Input id="p-repo" value={githubRepo} onChange={(e) => setGithubRepo(e.target.value)} placeholder="https://github.com/org/repo" />
           </div>
           {error && <p className="text-sm text-danger">{error}</p>}
           <DialogFooter>

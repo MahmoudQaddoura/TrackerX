@@ -15,6 +15,7 @@ class ProjectInput(BaseModel):
     status: str = "active"
     start_date: str | None = None
     end_date: str | None = None
+    github_repo_url: str | None = None
 
 
 class ProjectUpdate(BaseModel):
@@ -23,6 +24,7 @@ class ProjectUpdate(BaseModel):
     status: str | None = None
     start_date: str | None = None
     end_date: str | None = None
+    github_repo_url: str | None = None
 
 
 class ProjectOut(BaseModel):
@@ -32,6 +34,7 @@ class ProjectOut(BaseModel):
     status: str
     start_date: str | None
     end_date: str | None
+    github_repo_url: str | None
     created_at: str
     updated_at: str
     # computed
