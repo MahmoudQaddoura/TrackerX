@@ -349,7 +349,6 @@ function TaskCard({
         {task.assigned_member_name ? (
           <Badge variant="neutral">
             {task.assigned_member_name}
-            {task.assigned_team_name ? ` · ${task.assigned_team_name}` : ""}
           </Badge>
         ) : (
           <Badge variant="neutral">Unassigned</Badge>
@@ -383,7 +382,6 @@ function TaskDetailDialog({
             <div className="flex flex-wrap gap-2">
               <Badge variant="neutral">
                 {task.assigned_member_name ?? "Unassigned"}
-                {task.assigned_team_name ? ` · ${task.assigned_team_name}` : ""}
               </Badge>
               {task.est_days != null && <Badge variant="outline">{task.est_days}d estimate</Badge>}
               <RiskBadge risk={task.risk_level} />
