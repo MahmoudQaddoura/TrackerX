@@ -23,6 +23,12 @@ CSV_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "sample_proj
 JAF_CSV_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "JAF_Tasks.csv"
 
 _TASK_NUM_RE = re.compile(r"^(\d+)\.\d+$")
+_DR_PREFIX = re.compile(r"^Dr\.\s*", re.IGNORECASE)
+
+
+def _normalize_name(raw: str) -> str:
+    """Collapse 'Dr.', spaces, and case so cross-CSV names match."""
+    return _DR_PREFIX.sub("", raw.strip()).replace(" ", "").lower()
 
 
 def _parse_jaf_csv(text: str) -> dict:
@@ -76,9 +82,16 @@ def _parse_jaf_csv(text: str) -> dict:
 
 
 def _find_or_create_member(db, cache: dict, name: str) -> TeamMember:
-    key = name.strip().lower()
+    """Look up or create a TeamMember, normalizing name so 'Al Balawi' and 'AlBalawi' match."""
+    key = _normalize_name(name)
     if key in cache:
         return cache[key]
+    # Also check the DB for an existing member with a different spelling.
+    existing = db.query(TeamMember).all()
+    for m in existing:
+        if _normalize_name(m.name) == key:
+            cache[key] = m
+            return m
     member = TeamMember(name=name.strip(), role=None, is_active=1)
     db.add(member)
     db.flush()
