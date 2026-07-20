@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 routers/milestones.py
 Milestones nested under a project, plus by-id read/update/delete.

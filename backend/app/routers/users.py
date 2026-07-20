@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 routers/users.py
 Admin-only account creation. Team-member login linkage (tying a new

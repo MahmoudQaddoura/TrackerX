@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 schemas/project.py
 Project request/response models. `ProjectOut` includes computed roll-ups

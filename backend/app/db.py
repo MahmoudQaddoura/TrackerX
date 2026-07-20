@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 db.py
 Database engine, session factory, declarative Base, and the request-scoped

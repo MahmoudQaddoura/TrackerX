@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 routers/documents.py
 Document upload/list/download/update/delete. Files are written to disk under

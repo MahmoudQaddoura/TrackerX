@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 schemas/comment.py
 Comment request/response models. Comments attach to a task or milestone.

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 models/team_member.py
 The employee directory — a person's name and role (e.g. "Backend Engineer").

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 routers/auth.py
 Login (JSON body) and the current-user endpoint. Mounted at /api/auth.

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 routers/gantt.py
 Return a project's tasks shaped for frappe-gantt. Tasks that have explicit

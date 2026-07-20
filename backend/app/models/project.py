@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 models/project.py
 Top of the hierarchy: a project owns milestones, meetings, and documents.

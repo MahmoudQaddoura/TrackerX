@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 seed_roles.py
 Create the demo user accounts and link them to the CSV-imported team_members.

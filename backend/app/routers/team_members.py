@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 routers/team_members.py
 Employee directory. Admin sees everyone and has full CRUD. PM sees everyone

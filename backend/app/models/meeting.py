@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 models/meeting.py
 Sprint / client meeting minutes attached to a project.

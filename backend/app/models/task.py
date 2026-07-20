@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 models/task.py
 Leaf work item. Carries schedule dates (for the Gantt), status, delay flags,

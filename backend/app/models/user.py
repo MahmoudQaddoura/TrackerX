@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 models/user.py
 Auth account. Four roles:

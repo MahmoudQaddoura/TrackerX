@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 schemas/auth.py
 Request/response shapes for login and the current-user endpoint.

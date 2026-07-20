@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 routers/csv_import.py
 Admin-only: create a whole project (with milestones and tasks) from an

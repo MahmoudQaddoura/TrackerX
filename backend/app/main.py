@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 main.py
 FastAPI application assembly: CORS, table creation, router mounting, health.

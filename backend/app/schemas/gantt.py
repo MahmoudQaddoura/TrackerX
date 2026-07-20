@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 schemas/gantt.py
 frappe-gantt-shaped task rows for a single project.

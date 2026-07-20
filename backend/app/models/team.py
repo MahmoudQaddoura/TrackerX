@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 models/team.py
 Gone: Team, project_teams, team_member_teams (teams feature removed 2026-07-19).

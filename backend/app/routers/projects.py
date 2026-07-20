@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 routers/projects.py
 Project CRUD. Reads are scoped per role (admin sees everything; pm/developer

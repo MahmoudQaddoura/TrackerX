@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 schemas/team_member.py
 Team directory request/response models.

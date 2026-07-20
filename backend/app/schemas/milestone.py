@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 schemas/milestone.py
 Milestone request/response models with computed roll-ups.

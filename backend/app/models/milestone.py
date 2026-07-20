@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 models/milestone.py
 A phase of a project. Owns tasks and (optionally) documents.

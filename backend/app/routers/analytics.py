@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 routers/analytics.py
 Read-only dashboard endpoints. Each accepts an optional ?project_id= to scope

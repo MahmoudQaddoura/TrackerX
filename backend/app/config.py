@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 config.py
 Single source of application settings, loaded from environment / .env.

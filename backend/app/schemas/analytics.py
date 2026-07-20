@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 schemas/analytics.py
 Response shapes for the dashboard analytics endpoints.

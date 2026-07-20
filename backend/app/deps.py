@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 deps.py
 FastAPI dependencies for authentication and role/scope enforcement.

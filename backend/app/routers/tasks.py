@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 routers/tasks.py
 Tasks nested under a milestone, plus by-id read/update/delete, plus the

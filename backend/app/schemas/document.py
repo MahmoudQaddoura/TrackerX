@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 schemas/document.py
 Document metadata response. (Upload uses multipart form fields, not JSON, so

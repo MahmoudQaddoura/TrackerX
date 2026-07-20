@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 models/comment.py
 A comment on a task or milestone. Polymorphic via (entity_type, entity_id) —

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 models package
 Importing this package registers every ORM model on the shared Base metadata,

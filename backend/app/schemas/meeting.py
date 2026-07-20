@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 schemas/meeting.py
 Meeting-minutes request/response models.

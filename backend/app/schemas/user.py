@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 schemas/user.py
 Admin-only account creation.

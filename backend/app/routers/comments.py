@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 routers/comments.py
 Comments on a task or milestone. Admin, pm, and client may post (client

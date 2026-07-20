@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 models/document.py
 File metadata. The bytes live on disk (file_path); the DB stores metadata only.

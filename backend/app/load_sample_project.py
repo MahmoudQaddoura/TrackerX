@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 load_sample_project.py
 Replace whatever project/milestone/task/team-member data is currently in the

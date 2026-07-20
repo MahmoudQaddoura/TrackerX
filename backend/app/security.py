@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 security.py
 Password hashing and JWT creation/verification. One purpose: cryptography.

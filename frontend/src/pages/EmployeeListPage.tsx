@@ -4,7 +4,7 @@
  * Admin: full CRUD (create, edit, soft-delete).
  * PM: read-only list with profile drill-down.
  */
-import { Pencil, Plus, Trash2, UserCircle } from "lucide-react";
+import { Pencil, Plus, Trash2, UserCircle, X } from "lucide-react";
 import { useState } from "react";
 
 import { createMember, deleteMember, updateMember, type TeamMemberPayload } from "@/api/team";
@@ -25,15 +25,13 @@ import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { useAuth } from "@/context/AuthContext";
 import { useTeam } from "@/hooks/useTeam";
-import { useQueryClient } from "@tanstack/react-query";
 import type { TeamMember } from "@/types";
 
 type ProfileView = { member: TeamMember } | null;
 
 export function EmployeeListPage() {
   const { isAdmin } = useAuth();
-  const qc = useQueryClient();
-  const { data: members, isLoading, isError, refetch } = useTeam();
+  const { data: members, isLoading, isError, refetch, mutate } = useTeam();
   const [profile, setProfile] = useState<ProfileView>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<TeamMember | null>(null);
@@ -75,7 +73,7 @@ export function EmployeeListPage() {
         await createMember(payload);
       }
       setFormOpen(false);
-      qc.invalidateQueries({ queryKey: ["team"] });
+      await mutate();
     } catch {
       setError("Failed to save employee.");
     } finally {
@@ -87,7 +85,7 @@ export function EmployeeListPage() {
     if (!confirm(`Deactivate ${member.name}? Tasks stay attributed.`)) return;
     try {
       await deleteMember(member.id);
-      qc.invalidateQueries({ queryKey: ["team"] });
+      await mutate();
     } catch {
       // ignore
     }

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 schemas/task.py
 Task request/response models. `TaskOut` adds the computed risk level and the

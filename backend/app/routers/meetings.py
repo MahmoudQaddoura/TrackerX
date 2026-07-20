@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 routers/meetings.py
 Sprint / client meeting minutes under a project. Reads are scoped to
