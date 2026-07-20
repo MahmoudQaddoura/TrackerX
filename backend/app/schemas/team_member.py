@@ -26,8 +26,10 @@ class TeamMemberOut(BaseModel):
     role: str | None
     is_active: bool
     task_count: int
-    team_ids: list[int]
-    team_names: list[str]
+    total_tasks: int
+    done_tasks: int
+    active_est_days: float
+    projects: list[dict]
     user_id: int | None
     has_login: bool
     created_at: str
