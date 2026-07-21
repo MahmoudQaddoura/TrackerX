@@ -19,10 +19,10 @@
   --fg-muted: 224 15% 34%;
   --fg-subtle: 220 13% 59%;
 
-  --accent: 248 63% 56%;
-  --accent-hover: 248 63% 48%;
+  --accent: 205 82% 24%;
+  --accent-hover: 205 82% 18%;
   --accent-fg: 0 0% 100%;
-  --accent-soft: 248 63% 95%;
+  --accent-soft: 205 78% 95%;
 
   --success: 145 76% 33%;
   --warning: 32 95% 40%;
@@ -41,10 +41,10 @@
   --fg-muted: 222 18% 71%;
   --fg-subtle: 222 12% 52%;
 
-  --accent: 249 84% 68%;
-  --accent-hover: 249 84% 74%;
+  --accent: 205 82% 24%;
+  --accent-hover: 205 82% 18%;
   --accent-fg: 0 0% 100%;
-  --accent-soft: 249 40% 20%;
+  --accent-soft: 205 78% 20%;
 
   --success: 145 63% 45%;
   --warning: 38 92% 56%;

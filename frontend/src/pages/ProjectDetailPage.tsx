@@ -6,7 +6,7 @@
  *   client    : Overview, Milestones & Tasks (read-only), Gantt, Documents, Meetings
  * Admin/pm get edit/delete on the project header; only admin can delete.
  */
-import { AlertTriangle, ArrowLeft, CheckCircle2, ExternalLink, ListChecks, Pencil, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, ListChecks, Percent, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
@@ -22,6 +22,7 @@ import { ProjectFormDialog } from "@/components/forms/ProjectFormDialog";
 import { GanttChart } from "@/components/gantt/GanttChart";
 import { KanbanBoard } from "@/components/project/KanbanBoard";
 import { MeetingsPanel } from "@/components/meetings/MeetingsPanel";
+import { ProjectGitHubButton } from "@/components/project/ProjectGitHubButton";
 import { MilestonesTasksBoard } from "@/components/project/MilestonesTasksBoard";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -67,16 +68,11 @@ export function ProjectDetailPage() {
             <h1 className="font-display text-2xl font-bold text-fg">{project.name}</h1>
             <ProjectStatusBadge status={project.status} />
             <RiskBadge risk={project.risk_level} />
-            {project.github_repo_url && (
-              <a
-                href={project.github_repo_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-0.5 text-xs font-medium text-fg-muted hover:bg-raised hover:text-fg transition-colors"
-              >
-                <ExternalLink className="h-3 w-3" /> Repo
-              </a>
-            )}
+            <ProjectGitHubButton
+              project={project}
+              isAdmin={isAdmin}
+              onSave={(payload) => update.mutateAsync({ id, payload })}
+            />
           </div>
           {project.description && <p className="mt-1 text-sm text-fg-muted">{project.description}</p>}
           <p className="mt-1 text-xs text-fg-subtle">
@@ -165,7 +161,7 @@ function OverviewTab({ projectId }: { projectId: number }) {
     <div className="flex flex-col gap-4">
       {summary.data && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <KpiCard label="Progress" value={`${summary.data.progress_pct}%`} icon={ListChecks} />
+          <KpiCard label="Progress" value={`${summary.data.progress_pct}%`} icon={Percent} />
           <KpiCard
             label="Completed"
             value={`${summary.data.done_tasks}/${summary.data.total_tasks}`}

@@ -32,7 +32,7 @@ class Settings(BaseSettings):
 
     # Document storage (files on disk; metadata in DB)
     documents_dir: Path = BASE_DIR / "data" / "documents"
-    max_upload_bytes: int = 10 * 1024 * 1024  # 10 MB
+    max_upload_bytes: int = 50 * 1024 * 1024  # 50 MB
 
     # CORS — the frontend dev server + any configured public URL
     cors_origins: list[str] = [

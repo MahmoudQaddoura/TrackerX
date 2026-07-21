@@ -82,7 +82,7 @@ async def upload_document(
     if not contents:
         raise HTTPException(status_code=422, detail="Uploaded file is empty.")
     if len(contents) > settings.max_upload_bytes:
-        raise HTTPException(status_code=413, detail="File exceeds the 10 MB limit.")
+        raise HTTPException(status_code=413, detail="File exceeds the 50 MB limit.")
 
     # Build a collision-proof path: documents/<project>/<milestone?>/<category>/<uuid>_<name>
     parts = [str(project_id)]

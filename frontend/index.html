@@ -1,9 +1,10 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Project Task Tracker</title>
+    <title>TrackerX</title>
+    <link rel="icon" type="image/png" href="/x.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -13,7 +14,7 @@
     <!-- Restore the saved theme before paint to avoid a flash of the wrong theme. -->
     <script>
       (function () {
-        var t = localStorage.getItem("ptt_theme") || "dark";
+        var t = localStorage.getItem("ptt_theme") || "light";
         document.documentElement.classList.toggle("dark", t === "dark");
       })();
     </script>

@@ -8,7 +8,6 @@ import { Outlet } from "react-router-dom";
 
 import { BrandLogo } from "@/components/layout/BrandLogo";
 import { Nav } from "@/components/layout/Nav";
-import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
@@ -33,7 +32,6 @@ export function AppShell() {
                 </Badge>
               </div>
             )}
-            <ThemeToggle />
             <Button variant="ghost" size="sm" onClick={logout}>
               <LogOut className="h-4 w-4" />
               <span className="hidden sm:inline">Log out</span>

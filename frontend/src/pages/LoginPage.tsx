@@ -7,7 +7,6 @@ import { FormEvent, useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 
 import { BrandLogo } from "@/components/layout/BrandLogo";
-import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -44,15 +43,12 @@ export function LoginPage() {
   }
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-bg px-4">
-      <div className="absolute right-4 top-4">
-        <ThemeToggle />
-      </div>
+    <div className="flex min-h-screen items-center justify-center bg-bg px-4">
       <Card className="w-full max-w-sm">
         <CardContent className="pt-6">
           <div className="mb-6 flex flex-col items-center gap-2 text-center">
             <BrandLogo showText={false} />
-            <h1 className="font-display text-xl font-bold text-fg">Project Task Tracker</h1>
+            <h1 className="font-display text-xl font-bold text-fg">TrackerX</h1>
             <p className="text-sm text-fg-muted">Sign in to continue</p>
           </div>
 

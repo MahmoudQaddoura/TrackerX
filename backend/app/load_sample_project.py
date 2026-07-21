@@ -3,11 +3,12 @@ from __future__ import annotations
 """
 load_sample_project.py
 Replace whatever project/milestone/task/team-member data is currently in the
-database with the real projects outlined in data/sample_project.csv (PSUT)
-and data/JAF_Tasks.csv (JAF). Users are left untouched so demo logins still
-work. Only fields present in the CSVs are populated — everything else
-(dates, status, delays) is left at its default for the PM to fill in later
-through the platform. Run with:  python -m app.load_sample_project
+database with the real projects outlined in the CSV files found in the data
+folder (for example sample_project.csv, JAF_Tasks.csv, and any additional
+project-plan exports such as alawneh_tasks.csv). Users are left untouched so
+demo logins still work. Only fields present in the CSVs are populated —
+everything else (dates, status, delays) is left at its default for the PM to
+fill in later through the platform. Run with:  python -m app.load_sample_project
 """
 
 import csv
@@ -19,8 +20,7 @@ from app.db import Base, SessionLocal, engine
 from app.models import Meeting, Milestone, Project, Task, TeamMember
 from app.services.csv_parser import parse_project_csv
 
-CSV_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "sample_project.csv"
-JAF_CSV_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "JAF_Tasks.csv"
+DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 
 _TASK_NUM_RE = re.compile(r"^(\d+)\.\d+$")
 _DR_PREFIX = re.compile(r"^Dr\.\s*", re.IGNORECASE)
@@ -149,16 +149,17 @@ def load() -> None:
 
         member_cache: dict[str, TeamMember] = {}
 
-        # Load PSUT project from the standard CSV
-        psut_text = CSV_PATH.read_text(encoding="utf-8-sig")
-        psut_outline = parse_project_csv(psut_text)
-        _load_project(db, psut_outline, member_cache)
+        csv_files = sorted(DATA_DIR.glob("*.csv"))
+        if not csv_files:
+            raise FileNotFoundError(f"No CSV project files were found in {DATA_DIR}")
 
-        # Load JAF project — auto-grouped by task-number prefix
-        if JAF_CSV_PATH.exists():
-            jaf_text = JAF_CSV_PATH.read_text(encoding="utf-8-sig")
-            jaf_outline = _parse_jaf_csv(jaf_text)
-            _load_project(db, jaf_outline, member_cache)
+        for csv_path in csv_files:
+            text = csv_path.read_text(encoding="utf-8-sig")
+            if "jaf" in csv_path.stem.lower():
+                outline = _parse_jaf_csv(text)
+            else:
+                outline = parse_project_csv(text)
+            _load_project(db, outline, member_cache)
 
         db.commit()
         print(f"Done. {len(member_cache)} team members across all projects.")

@@ -12,6 +12,7 @@ import { CsvImportDialog } from "@/components/forms/CsvImportDialog";
 import { ProjectFormDialog } from "@/components/forms/ProjectFormDialog";
 import { ProjectStatusBadge } from "@/components/common/StatusBadge";
 import { RiskBadge } from "@/components/common/RiskBadge";
+import { ProjectGitHubButton } from "@/components/project/ProjectGitHubButton";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -26,7 +27,7 @@ export function ProjectsPage() {
   const { isAdmin } = useAuth();
   const navigate = useNavigate();
   const { data, isLoading, isError, refetch } = useProjects();
-  const { create, importCsv } = useProjectMutations();
+  const { create, update, importCsv } = useProjectMutations();
   const [formOpen, setFormOpen] = useState(false);
   const [csvOpen, setCsvOpen] = useState(false);
 
@@ -77,7 +78,14 @@ export function ProjectsPage() {
               <CardContent className="pt-5">
                 <div className="mb-2 flex items-start justify-between gap-2">
                   <h3 className="font-semibold text-fg">{p.name}</h3>
-                  <ProjectStatusBadge status={p.status} />
+                  <div className="flex items-center gap-2">
+                    <ProjectGitHubButton
+                      project={p}
+                      isAdmin={isAdmin}
+                      onSave={(payload) => update.mutateAsync({ id: p.id, payload })}
+                    />
+                    <ProjectStatusBadge status={p.status} />
+                  </div>
                 </div>
                 {p.description && (
                   <p className="mb-3 line-clamp-2 text-sm text-fg-muted">{p.description}</p>
