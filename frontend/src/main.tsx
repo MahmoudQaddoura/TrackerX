@@ -1,4 +1,4 @@
-jus/**
+/**
  * main.tsx
  * App entry point: mounts React with the Query, Router, and Auth providers.
  */

@@ -1,4 +1,4 @@
-,/**
+/**
  * layout/AppShell.tsx
  * The authenticated frame: sticky header (brand, nav, user, logout) and
  * a centered main area. Every signed-in page renders inside <Outlet/>.
