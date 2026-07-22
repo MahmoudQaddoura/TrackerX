@@ -13,6 +13,10 @@ export function useDocuments(projectId: number) {
     queryKey: ["documents", projectId],
     queryFn: () => fetchDocuments(projectId),
     enabled: !!projectId,
+    // When switching projects, immediately show empty until the new data arrives.
+    // This prevents stale documents from the previous project from flashing.
+    placeholderData: [],
+    staleTime: 0,
   });
 }
 

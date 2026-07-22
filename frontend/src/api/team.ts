@@ -1,6 +1,6 @@
 /** api/team.ts — team directory CRUD. */
 import { api } from "@/lib/apiClient";
-import type { TeamMember } from "@/types";
+import type { DelegateTasksOut, DelegateTasksPayload, TeamMember } from "@/types";
 
 export interface TeamMemberPayload {
   name: string;
@@ -27,4 +27,15 @@ export async function updateMember(id: number, payload: TeamMemberPayload): Prom
 
 export async function deleteMember(id: number): Promise<void> {
   await api.delete(`/team-members/${id}`);
+}
+
+export async function delegateMemberTasks(
+  memberId: number,
+  payload: DelegateTasksPayload,
+): Promise<DelegateTasksOut> {
+  const { data } = await api.post<DelegateTasksOut>(
+    `/team-members/${memberId}/delegate-tasks`,
+    payload,
+  );
+  return data;
 }

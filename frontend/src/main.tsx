@@ -1,7 +1,12 @@
-/**
+jus/**
  * main.tsx
  * App entry point: mounts React with the Query, Router, and Auth providers.
  */
+
+// Strip stale theme artifacts from a previous session before anything renders.
+document.documentElement.classList.remove("dark");
+localStorage.removeItem("ptt_theme");
+
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";

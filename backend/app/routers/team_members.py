@@ -6,18 +6,35 @@ Employee directory. Admin sees everyone and has full CRUD. PM sees everyone
 (read-only — cannot create, edit, or delete). Developer and client get nothing.
 
 Delete is a soft delete (is_active -> 0) so historical task assignments survive.
+A task-delegation endpoint lets admins reassign a departing member's pending
+tasks to another active employee.
 """
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.deps import get_current_user, require_admin
-from app.models import TeamMember, User
+from app.models import Task, TeamMember, User
 from app.schemas.team_member import TeamMemberInput, TeamMemberOut, TeamMemberUpdate
 from app.services.serialize import team_member_out
 
 router = APIRouter(prefix="/team-members", tags=["employees"])
+
+
+class DelegateTasksInput(BaseModel):
+    """Reassign all non-done tasks from one member to another."""
+    to_member_id: int = Field(..., description="ID of the employee who will receive the tasks.")
+
+
+class DelegateTasksOut(BaseModel):
+    """Result of a task delegation operation."""
+    from_member_id: int
+    from_member_name: str
+    to_member_id: int
+    to_member_name: str
+    tasks_reassigned: int
 
 
 def _member_or_404(db: Session, member_id: int) -> TeamMember:
@@ -86,3 +103,47 @@ def delete_member(member_id: int, db: Session = Depends(get_db), _=Depends(requi
     m = _member_or_404(db, member_id)
     m.is_active = 0
     db.commit()
+
+
+@router.post("/{member_id}/delegate-tasks", response_model=DelegateTasksOut)
+def delegate_tasks(
+    member_id: int,
+    inp: DelegateTasksInput,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """
+    Reassign all non-done tasks from a (usually deactivated) member to another
+    active employee.  Completed tasks are left untouched so historical attribution
+    is preserved.
+    """
+    from_member = _member_or_404(db, member_id)
+    to_member = _member_or_404(db, inp.to_member_id)
+
+    if from_member.id == to_member.id:
+        raise HTTPException(status_code=422, detail="Cannot delegate tasks to the same employee.")
+
+    # Reassign every pending task (anything not 'done') from the source member.
+    tasks = (
+        db.query(Task)
+        .filter(
+            Task.assigned_member_id == from_member.id,
+            Task.status != "done",
+        )
+        .all()
+    )
+
+    count = 0
+    for t in tasks:
+        t.assigned_member_id = to_member.id
+        count += 1
+
+    db.commit()
+
+    return DelegateTasksOut(
+        from_member_id=from_member.id,
+        from_member_name=from_member.name,
+        to_member_id=to_member.id,
+        to_member_name=to_member.name,
+        tasks_reassigned=count,
+    )

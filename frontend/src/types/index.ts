@@ -91,6 +91,18 @@ export interface TeamMember {
   updated_at: string;
 }
 
+export interface DelegateTasksPayload {
+  to_member_id: number;
+}
+
+export interface DelegateTasksOut {
+  from_member_id: number;
+  from_member_name: string;
+  to_member_id: number;
+  to_member_name: string;
+  tasks_reassigned: number;
+}
+
 export interface DocumentMeta {
   id: number;
   project_id: number;

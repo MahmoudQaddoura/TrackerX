@@ -24,11 +24,25 @@ DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 
 _TASK_NUM_RE = re.compile(r"^(\d+)\.\d+$")
 _DR_PREFIX = re.compile(r"^Dr\.\s*", re.IGNORECASE)
+# Names that are purely numeric or clearly not real person names.
+_INVALID_NAME_RE = re.compile(r"^\d+$")
 
 
 def _normalize_name(raw: str) -> str:
     """Collapse 'Dr.', spaces, and case so cross-CSV names match."""
     return _DR_PREFIX.sub("", raw.strip()).replace(" ", "").lower()
+
+
+def _is_valid_person_name(name: str) -> bool:
+    """Reject names that are purely numeric or too short to be a real person."""
+    stripped = name.strip()
+    if not stripped:
+        return False
+    if _INVALID_NAME_RE.match(stripped):
+        return False
+    if len(stripped) < 3:
+        return False
+    return True
 
 
 def _parse_jaf_csv(text: str) -> dict:
@@ -68,7 +82,7 @@ def _parse_jaf_csv(text: str) -> dict:
                 "title": task_title or num,
                 "description": description or None,
                 "est_days": est_days,
-                "assignee": assignee or None,
+                "assignee": assignee if _is_valid_person_name(assignee) else None,
             }
         )
 
@@ -111,8 +125,9 @@ def _load_project(db, outline: dict, member_cache: dict) -> Project:
         db.flush()
         for t_order, t in enumerate(ms["tasks"]):
             member_id = None
-            if t.get("assignee"):
-                member = _find_or_create_member(db, member_cache, t["assignee"])
+            assignee = t.get("assignee")
+            if assignee and _is_valid_person_name(assignee):
+                member = _find_or_create_member(db, member_cache, assignee)
                 member_id = member.id
             db.add(
                 Task(

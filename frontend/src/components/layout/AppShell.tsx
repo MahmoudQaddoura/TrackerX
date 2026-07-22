@@ -1,6 +1,6 @@
-/**
+,/**
  * layout/AppShell.tsx
- * The authenticated frame: sticky header (brand, nav, theme, user, logout) and
+ * The authenticated frame: sticky header (brand, nav, user, logout) and
  * a centered main area. Every signed-in page renders inside <Outlet/>.
  */
 import { LogOut } from "lucide-react";
@@ -11,6 +11,13 @@ import { Nav } from "@/components/layout/Nav";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
+
+const ROLE_LABEL: Record<string, string> = {
+  admin: "Admin",
+  pm: "PM",
+  developer: "Developer",
+  client: "Client",
+};
 
 export function AppShell() {
   const { user, logout } = useAuth();
@@ -27,8 +34,8 @@ export function AppShell() {
             {user && (
               <div className="hidden items-center gap-2 sm:flex">
                 <span className="text-sm text-fg-muted">{user.full_name}</span>
-                <Badge variant={user.role === "pm" ? "default" : "neutral"}>
-                  {user.role === "pm" ? "PM" : "Owner"}
+                <Badge variant={user.role === "admin" ? "default" : "neutral"}>
+                  {ROLE_LABEL[user.role] ?? user.role}
                 </Badge>
               </div>
             )}
