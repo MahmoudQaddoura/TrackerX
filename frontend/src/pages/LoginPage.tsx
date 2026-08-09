@@ -1,11 +1,10 @@
 /**
  * pages/LoginPage.tsx
  * Email/password sign-in. Redirects to the intended page (or /dashboard) on
- * success. Shows the demo credentials for convenience.
+ * success.
  */
 import { FormEvent, useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
-
 import { BrandLogo } from "@/components/layout/BrandLogo";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -80,13 +79,6 @@ export function LoginPage() {
               {submitting && <Spinner />} Sign in
             </Button>
           </form>
-
-          <div className="mt-6 rounded-md border border-border bg-raised/50 p-3 text-xs text-fg-muted">
-            <p className="font-medium text-fg">Demo accounts</p>
-            <p className="mt-1">PM: pm@demo.com</p>
-            <p>Owner: owner@demo.com</p>
-            <p>Password: ChangeMe123!</p>
-          </div>
         </CardContent>
       </Card>
     </div>
