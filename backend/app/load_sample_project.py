@@ -125,6 +125,7 @@ def _load_project(db, outline: dict, member_cache: dict) -> Project:
         db.flush()
         for t_order, t in enumerate(ms["tasks"]):
             member_id = None
+            member = None
             assignee = t.get("assignee")
             if assignee and _is_valid_person_name(assignee):
                 member = _find_or_create_member(db, member_cache, assignee)
@@ -137,6 +138,7 @@ def _load_project(db, outline: dict, member_cache: dict) -> Project:
                     est_days=t.get("est_days"),
                     status="todo",
                     assigned_member_id=member_id,
+                    assigned_members=[member] if member else [],
                     sort_order=t_order,
                 )
             )

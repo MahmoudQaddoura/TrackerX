@@ -69,7 +69,7 @@ def delayed_tasks(projects) -> list[dict]:
                             "project_id": p.id,
                             "project_name": p.name,
                             "milestone_title": m.title,
-                            "owner": t.assigned_member.name if t.assigned_member else None,
+                            "owner": ", ".join(member.name for member in t.assigned_members) or None,
                             "delay_cause": t.delay_cause,
                             "delay_comment": t.delay_comment,
                             "end_date": t.end_date,

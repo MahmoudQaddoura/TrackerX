@@ -10,6 +10,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { RequireAuth } from "@/components/layout/RequireAuth";
 import { useAuth } from "@/context/AuthContext";
 import { DashboardPage } from "@/pages/DashboardPage";
+import { AttendancePage } from "@/pages/AttendancePage";
 import { LoginPage } from "@/pages/LoginPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 import { ProjectDetailPage } from "@/pages/ProjectDetailPage";
@@ -17,14 +18,14 @@ import { ProjectsPage } from "@/pages/ProjectsPage";
 import { EmployeeListPage } from "@/pages/EmployeeListPage";
 
 function RequireManage({ children }: { children: React.ReactNode }) {
-  const { canManage } = useAuth();
-  if (!canManage) return <Navigate to="/projects" replace />;
+  const { canViewManagement } = useAuth();
+  if (!canViewManagement) return <Navigate to="/projects" replace />;
   return <>{children}</>;
 }
 
 function IndexRedirect() {
-  const { canManage } = useAuth();
-  return <Navigate to={canManage ? "/dashboard" : "/projects"} replace />;
+  const { canViewManagement } = useAuth();
+  return <Navigate to={canViewManagement ? "/dashboard" : "/projects"} replace />;
 }
 
 export default function App() {
@@ -43,6 +44,7 @@ export default function App() {
         />
         <Route path="/projects" element={<ProjectsPage />} />
         <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
+        <Route path="/attendance" element={<AttendancePage />} />
         <Route
           path="/employees"
           element={

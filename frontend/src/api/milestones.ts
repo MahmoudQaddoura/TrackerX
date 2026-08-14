@@ -1,12 +1,13 @@
 /** api/milestones.ts — milestone CRUD. */
 import { api } from "@/lib/apiClient";
-import type { Milestone } from "@/types";
+import type { Milestone, MilestoneWorkstream } from "@/types";
 
 export interface MilestonePayload {
   title: string;
   description?: string | null;
   start_date?: string | null;
   end_date?: string | null;
+  workstream?: MilestoneWorkstream;
   sort_order?: number;
 }
 

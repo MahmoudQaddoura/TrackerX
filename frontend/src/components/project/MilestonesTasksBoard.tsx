@@ -49,7 +49,7 @@ function MilestoneCard({ milestone }: { milestone: Milestone }) {
   const [commentTask, setCommentTask] = useState<Task | null>(null);
 
   return (
-    <Card>
+    <Card id={`milestone-${milestone.id}`} className="scroll-mt-20">
       <CardHeader className="gap-2">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
@@ -80,7 +80,9 @@ function MilestoneCard({ milestone }: { milestone: Milestone }) {
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-fg">{task.title}</p>
               <p className="text-xs text-fg-subtle">
-                {task.assigned_member_name ?? "Unassigned"}
+                {task.assigned_members?.length
+                  ? task.assigned_members.map((member) => member.name).join(", ")
+                  : task.assigned_member_name ?? "Unassigned"}
                 {task.end_date ? ` · due ${formatDate(task.end_date)}` : ""}
               </p>
             </div>

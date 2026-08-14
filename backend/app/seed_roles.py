@@ -54,7 +54,18 @@ def _email_for(name: str) -> str:
 
 
 def _member_or_raise(db, name: str) -> TeamMember:
-    member = db.query(TeamMember).filter(TeamMember.name == name).first()
+    # CSV sources are not consistent about spaces in surnames (for example,
+    # "Al Balawi" vs "AlBalawi"). Match the existing assignee without
+    # renaming it or changing any task assignments.
+    normalized_name = name.lower().replace(" ", "")
+    member = next(
+        (
+            candidate
+            for candidate in db.query(TeamMember).all()
+            if candidate.name.lower().replace(" ", "") == normalized_name
+        ),
+        None,
+    )
     if member is None:
         raise RuntimeError(
             f"Expected a team member named '{name}' from the CSV import — "

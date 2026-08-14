@@ -13,6 +13,7 @@ class MilestoneInput(BaseModel):
     description: str | None = None
     start_date: str | None = None
     end_date: str | None = None
+    workstream: str = "project"
     sort_order: int = 0
 
 
@@ -21,6 +22,7 @@ class MilestoneUpdate(BaseModel):
     description: str | None = None
     start_date: str | None = None
     end_date: str | None = None
+    workstream: str | None = None
     sort_order: int | None = None
 
 
@@ -31,6 +33,7 @@ class MilestoneOut(BaseModel):
     description: str | None
     start_date: str | None
     end_date: str | None
+    workstream: str
     sort_order: int
     created_at: str
     updated_at: str

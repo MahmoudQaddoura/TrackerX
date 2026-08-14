@@ -22,6 +22,8 @@ export function useMilestoneMutations(projectId: number) {
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["milestones", projectId] });
     qc.invalidateQueries({ queryKey: ["project", projectId] });
+    qc.invalidateQueries({ queryKey: ["gantt", projectId] });
+    qc.invalidateQueries({ queryKey: ["analytics"] });
   };
 
   const create = useMutation({

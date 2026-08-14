@@ -91,3 +91,65 @@ h1, h2, h3, h4 {
   border: 1px solid hsl(var(--border));
   border-radius: 8px;
 }
+
+/* Milestone-first Gantt workspace */
+.gantt-workspace .gantt-container {
+  overflow: visible;
+}
+.gantt-workspace .gantt .grid-row:nth-child(even) {
+  fill: hsl(var(--raised) / 0.5);
+}
+.gantt-workspace .gantt .bar-wrapper {
+  cursor: pointer;
+}
+.gantt-workspace .gantt .handle-group {
+  display: none;
+}
+.gantt-workspace .gantt .bar-label {
+  font-size: 12px;
+}
+.gantt-workspace .gantt .gantt-milestone-bar .bar {
+  fill: hsl(var(--accent) / 0.88);
+  stroke: hsl(var(--accent));
+  stroke-width: 1.5px;
+}
+.gantt-workspace .gantt .gantt-milestone-bar .bar-progress {
+  fill: hsl(var(--accent-hover));
+}
+.gantt-workspace .gantt .gantt-milestone-operations .bar {
+  fill: hsl(var(--warning) / 0.72);
+  stroke: hsl(var(--warning));
+}
+.gantt-workspace .gantt .gantt-milestone-operations .bar-progress {
+  fill: hsl(var(--warning));
+}
+.gantt-workspace .gantt .gantt-milestone-bar .bar-label {
+  fill: white;
+  font-weight: 700;
+}
+.gantt-workspace .gantt .gantt-task-done .bar,
+.gantt-workspace .gantt .gantt-task-done .bar-progress {
+  fill: hsl(var(--success) / 0.82);
+}
+.gantt-workspace .gantt .gantt-task-blocked .bar,
+.gantt-workspace .gantt .gantt-task-blocked .bar-progress {
+  fill: hsl(var(--warning) / 0.78);
+}
+.gantt-workspace .gantt .gantt-task-in-progress .bar-progress,
+.gantt-workspace .gantt .gantt-task-in-review .bar-progress {
+  fill: hsl(var(--accent));
+}
+.gantt-workspace .gantt .gantt-delayed-bar .bar,
+.gantt-workspace .gantt .gantt-delayed-bar .bar-progress {
+  fill: hsl(var(--danger) / 0.82);
+  stroke: hsl(var(--danger));
+}
+.gantt-workspace .gantt .gantt-auto-bar .bar {
+  stroke: hsl(var(--fg-muted));
+  stroke-width: 2px;
+  stroke-dasharray: 5 3;
+}
+.gantt-workspace .gantt .gantt-selected-row .bar {
+  stroke: hsl(var(--fg));
+  stroke-width: 3px;
+}

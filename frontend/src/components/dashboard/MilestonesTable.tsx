@@ -58,7 +58,11 @@ function MilestoneRow({ milestone }: { milestone: Milestone }) {
                   <li key={t.id} className="flex items-center justify-between gap-2 text-sm">
                     <span className="text-fg">{t.title}</span>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-fg-subtle">{t.assigned_member_name ?? "—"}</span>
+                      <span className="text-xs text-fg-subtle">
+                        {t.assigned_members?.length
+                          ? t.assigned_members.map((member) => member.name).join(", ")
+                          : t.assigned_member_name ?? "—"}
+                      </span>
                       <TaskStatusBadge status={t.status} />
                     </div>
                   </li>

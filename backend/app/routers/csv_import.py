@@ -60,6 +60,7 @@ async def import_project_csv(
         db.flush()
         for t_order, t in enumerate(ms["tasks"]):
             member_id = None
+            member = None
             if t.get("assignee"):
                 member = _find_or_create_member(db, member_cache, t["assignee"])
                 member_id = member.id
@@ -71,6 +72,7 @@ async def import_project_csv(
                     est_days=t.get("est_days"),
                     status="todo",
                     assigned_member_id=member_id,
+                    assigned_members=[member] if member else [],
                     sort_order=t_order,
                 )
             )

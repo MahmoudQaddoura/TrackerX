@@ -31,4 +31,14 @@ class TeamMember(Base):
     updated_at = Column(Text, nullable=False, default=now_iso, onupdate=now_iso)
 
     tasks = relationship("Task", back_populates="assigned_member")
+    assigned_tasks = relationship(
+        "Task",
+        secondary="task_assignees",
+        back_populates="assigned_members",
+    )
+    attendance_records = relationship(
+        "AttendanceRecord",
+        back_populates="team_member",
+        cascade="all, delete-orphan",
+    )
     user = relationship("User")

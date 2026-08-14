@@ -30,6 +30,8 @@ def list_users(db: Session = Depends(get_db), _=Depends(require_admin)):
 def create_user(inp: UserCreateInput, db: Session = Depends(get_db), _=Depends(require_admin)):
     if inp.role not in ROLE_VALUES:
         raise HTTPException(status_code=422, detail=f"Invalid role '{inp.role}'.")
+    if inp.access_level not in ("read", "write"):
+        raise HTTPException(status_code=422, detail="Access level must be 'read' or 'write'.")
     email = inp.email.lower()
     if db.query(User).filter(func.lower(User.email) == email).first() is not None:
         raise HTTPException(status_code=409, detail="A user with this email already exists.")
@@ -37,6 +39,8 @@ def create_user(inp: UserCreateInput, db: Session = Depends(get_db), _=Depends(r
         email=email,
         full_name=inp.full_name,
         role=inp.role,
+        access_level="write" if inp.role == "admin" else inp.access_level,
+        is_enabled=1,
         hashed_password=hash_password(inp.password),
     )
     db.add(user)

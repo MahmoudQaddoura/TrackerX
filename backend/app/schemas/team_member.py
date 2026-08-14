@@ -5,7 +5,7 @@ schemas/team_member.py
 Team directory request/response models.
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 
 
 class TeamMemberInput(BaseModel):
@@ -20,6 +20,20 @@ class TeamMemberUpdate(BaseModel):
     is_active: bool | None = None
 
 
+class EmployeeCredentialsInput(BaseModel):
+    email: EmailStr
+    temporary_password: str | None = Field(default=None, min_length=8, max_length=200)
+    access_level: str = "read"
+    is_enabled: bool = True
+
+
+class EmployeeCredentialsOut(BaseModel):
+    user_id: int
+    email: EmailStr
+    access_level: str
+    is_enabled: bool
+
+
 class TeamMemberOut(BaseModel):
     id: int
     name: str
@@ -32,5 +46,8 @@ class TeamMemberOut(BaseModel):
     projects: list[dict]
     user_id: int | None
     has_login: bool
+    login_email: EmailStr | None
+    access_level: str | None
+    login_enabled: bool
     created_at: str
     updated_at: str

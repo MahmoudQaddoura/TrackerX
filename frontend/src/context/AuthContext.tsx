@@ -17,6 +17,8 @@ interface AuthContextValue {
   isPm: boolean;
   isDeveloper: boolean;
   isClient: boolean;
+  canWrite: boolean;
+  canViewManagement: boolean;
   /** admin or pm — full CRUD on milestones/tasks/documents/meetings. */
   canManage: boolean;
   login: (email: string, password: string) => Promise<void>;
@@ -59,7 +61,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isPm: user?.role === "pm",
       isDeveloper: user?.role === "developer",
       isClient: user?.role === "client",
-      canManage: user?.role === "admin" || user?.role === "pm",
+      canWrite: user?.role === "admin" || user?.access_level === "write",
+      canViewManagement: user?.role === "admin" || user?.role === "pm",
+      canManage:
+        user?.role === "admin" || (user?.role === "pm" && user?.access_level === "write"),
       login,
       logout,
     }),

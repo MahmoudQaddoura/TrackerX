@@ -49,6 +49,17 @@ export function ProjectDetailPage() {
   const { update, remove } = useProjectMutations();
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("overview");
+
+  function openMilestoneFromGantt(milestoneId: number) {
+    setActiveTab(canManage ? "kanban" : "board");
+    window.setTimeout(() => {
+      document.getElementById(`milestone-${milestoneId}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 100);
+  }
 
   if (isLoading) return <FullPageSpinner />;
   if (isError || !project)
@@ -97,7 +108,7 @@ export function ProjectDetailPage() {
         // Developers only ever see the board — no tab bar needed for one tab.
         <KanbanBoard project={project} />
       ) : (
-        <Tabs defaultValue="overview">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
             <TabsTrigger value="overview">Overview</TabsTrigger>
             {canManage && <TabsTrigger value="kanban">Kanban</TabsTrigger>}
@@ -121,7 +132,7 @@ export function ProjectDetailPage() {
             </TabsContent>
           )}
           <TabsContent value="gantt">
-            <GanttTab projectId={id} />
+            <GanttTab projectId={id} onOpenMilestone={openMilestoneFromGantt} />
           </TabsContent>
           <TabsContent value="documents">
             <DocumentRepository projectId={id} />
@@ -190,9 +201,15 @@ function OverviewTab({ projectId }: { projectId: number }) {
   );
 }
 
-function GanttTab({ projectId }: { projectId: number }) {
+function GanttTab({
+  projectId,
+  onOpenMilestone,
+}: {
+  projectId: number;
+  onOpenMilestone: (milestoneId: number) => void;
+}) {
   const { data, isLoading, isError, refetch } = useGantt(projectId);
   if (isLoading) return <Skeleton className="h-80 w-full" />;
   if (isError) return <ErrorState message="Could not load the timeline." onRetry={() => refetch()} />;
-  return <GanttChart tasks={data ?? []} />;
+  return <GanttChart tasks={data ?? []} onOpenMilestone={onOpenMilestone} />;
 }

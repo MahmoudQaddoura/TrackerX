@@ -24,8 +24,12 @@ class User(Base):
     hashed_password = Column(Text, nullable=False)
     full_name = Column(Text, nullable=False)
     role = Column(Text, nullable=False, default="client")
+    access_level = Column(Text, nullable=False, default="read")
+    is_enabled = Column(Integer, nullable=False, default=1)
     created_at = Column(Text, nullable=False, default=now_iso)
 
     __table_args__ = (
         CheckConstraint("role IN ('admin','pm','developer','client')", name="ck_user_role"),
+        CheckConstraint("access_level IN ('read','write')", name="ck_user_access_level"),
+        CheckConstraint("is_enabled IN (0,1)", name="ck_user_is_enabled"),
     )

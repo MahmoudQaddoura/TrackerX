@@ -5,9 +5,11 @@
  */
 
 export type Role = "admin" | "pm" | "developer" | "client";
+export type AccessLevel = "read" | "write";
 export type ProjectStatus = "active" | "on_hold" | "completed" | "archived";
 export type TaskStatus = "todo" | "in_progress" | "in_review" | "blocked" | "done";
 export type RiskLevel = "on_track" | "at_risk" | "overdue" | "unknown";
+export type MilestoneWorkstream = "project" | "operations";
 export type DelayCause = "Company" | "Client";
 export type DocumentCategory = "technical" | "meeting_minutes" | "business";
 export type MeetingType = "sprint" | "client";
@@ -18,6 +20,8 @@ export interface AuthUser {
   email: string;
   full_name: string;
   role: Role;
+  access_level: AccessLevel;
+  is_enabled: boolean;
 }
 
 export interface Project {
@@ -45,6 +49,7 @@ export interface Milestone {
   description: string | null;
   start_date: string | null;
   end_date: string | null;
+  workstream: MilestoneWorkstream;
   sort_order: number;
   created_at: string;
   updated_at: string;
@@ -53,6 +58,12 @@ export interface Milestone {
   progress_pct: number;
   is_delayed: boolean;
   risk_level: RiskLevel;
+}
+
+export interface TaskAssignee {
+  id: number;
+  name: string;
+  role: string | null;
 }
 
 export interface Task {
@@ -69,6 +80,7 @@ export interface Task {
   est_days: number | null;
   assigned_member_id: number | null;
   assigned_member_name: string | null;
+  assigned_members: TaskAssignee[];
   sort_order: number;
   created_at: string;
   updated_at: string;
@@ -87,8 +99,33 @@ export interface TeamMember {
   projects: { id: number; name: string }[];
   user_id: number | null;
   has_login: boolean;
+  login_email: string | null;
+  access_level: AccessLevel | null;
+  login_enabled: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export type AttendanceStatus =
+  | "not_recorded"
+  | "present"
+  | "remote"
+  | "leave"
+  | "sick_leave"
+  | "absent";
+
+export interface AttendanceRecord {
+  id: number | null;
+  team_member_id: number;
+  employee_name: string;
+  employee_role: string | null;
+  attendance_date: string;
+  status: AttendanceStatus;
+  check_in: string | null;
+  check_out: string | null;
+  notes: string | null;
+  recorded_by_name: string | null;
+  updated_at: string | null;
 }
 
 export interface DelegateTasksPayload {
@@ -149,6 +186,15 @@ export interface GanttTaskDTO {
   end: string;
   progress: number;
   custom_class: string;
+  entity_type: "milestone" | "task";
+  milestone_id: number;
+  milestone_name: string;
+  workstream: MilestoneWorkstream;
+  task_id: number | null;
+  status: TaskStatus | null;
+  is_delayed: boolean;
+  is_auto_scheduled: boolean;
+  assignee_names: string[];
 }
 
 // Analytics

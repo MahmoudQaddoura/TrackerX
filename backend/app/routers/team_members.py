@@ -12,12 +12,20 @@ tasks to another active employee.
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.deps import get_current_user, require_admin
-from app.models import Task, TeamMember, User
-from app.schemas.team_member import TeamMemberInput, TeamMemberOut, TeamMemberUpdate
+from app.models import TeamMember, User
+from app.schemas.team_member import (
+    EmployeeCredentialsInput,
+    EmployeeCredentialsOut,
+    TeamMemberInput,
+    TeamMemberOut,
+    TeamMemberUpdate,
+)
+from app.security import hash_password
 from app.services.serialize import team_member_out
 
 router = APIRouter(prefix="/team-members", tags=["employees"])
@@ -102,7 +110,60 @@ def delete_member(member_id: int, db: Session = Depends(get_db), _=Depends(requi
     """Soft delete — keep the row so assigned tasks keep their history."""
     m = _member_or_404(db, member_id)
     m.is_active = 0
+    if m.user and m.user.role != "admin":
+        m.user.is_enabled = 0
     db.commit()
+
+
+@router.put("/{member_id}/credentials", response_model=EmployeeCredentialsOut)
+def provision_credentials(
+    member_id: int,
+    inp: EmployeeCredentialsInput,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """Create, reset, enable, or permission an employee's linked login."""
+    member = _member_or_404(db, member_id)
+    if inp.access_level not in ("read", "write"):
+        raise HTTPException(status_code=422, detail="Access level must be 'read' or 'write'.")
+
+    email = inp.email.lower()
+    duplicate = db.query(User).filter(func.lower(User.email) == email).first()
+    if duplicate is not None and duplicate.id != member.user_id:
+        raise HTTPException(status_code=409, detail="That email is already used by another account.")
+
+    user = member.user
+    if user is None:
+        if not inp.temporary_password:
+            raise HTTPException(status_code=422, detail="A temporary password is required for a new login.")
+        user = User(
+            email=email,
+            full_name=member.name,
+            role="developer",
+            access_level=inp.access_level,
+            is_enabled=1 if inp.is_enabled else 0,
+            hashed_password=hash_password(inp.temporary_password),
+        )
+        db.add(user)
+        db.flush()
+        member.user_id = user.id
+    else:
+        user.email = email
+        user.full_name = member.name
+        if user.role != "admin":
+            user.access_level = inp.access_level
+            user.is_enabled = 1 if inp.is_enabled else 0
+        if inp.temporary_password:
+            user.hashed_password = hash_password(inp.temporary_password)
+
+    db.commit()
+    db.refresh(user)
+    return EmployeeCredentialsOut(
+        user_id=user.id,
+        email=user.email,
+        access_level="write" if user.role == "admin" else user.access_level,
+        is_enabled=bool(user.is_enabled),
+    )
 
 
 @router.post("/{member_id}/delegate-tasks", response_model=DelegateTasksOut)
@@ -123,19 +184,17 @@ def delegate_tasks(
     if from_member.id == to_member.id:
         raise HTTPException(status_code=422, detail="Cannot delegate tasks to the same employee.")
 
-    # Reassign every pending task (anything not 'done') from the source member.
-    tasks = (
-        db.query(Task)
-        .filter(
-            Task.assigned_member_id == from_member.id,
-            Task.status != "done",
-        )
-        .all()
-    )
+    # Replace the source employee on every pending multi-assignee task. Other
+    # assignees remain attached to the task.
+    tasks = [task for task in from_member.assigned_tasks if task.status != "done"]
 
     count = 0
     for t in tasks:
-        t.assigned_member_id = to_member.id
+        members = [member for member in t.assigned_members if member.id != from_member.id]
+        if all(member.id != to_member.id for member in members):
+            members.append(to_member)
+        t.assigned_members = members
+        t.assigned_member_id = members[0].id if members else None
         count += 1
 
     db.commit()

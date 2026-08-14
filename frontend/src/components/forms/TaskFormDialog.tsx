@@ -1,6 +1,6 @@
 /**
  * forms/TaskFormDialog.tsx
- * Create/edit a task: schedule, status, assignee, estimate, and a delay
+ * Create/edit a task: schedule, status, assignees, estimate, and a delay
  * sub-panel. "Delayed" is an overlay flag independent of status — a task in
  * any column can be flagged, and flagging it requires a cause.
  */
@@ -45,7 +45,7 @@ export function TaskFormDialog({
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [estDays, setEstDays] = useState("");
-  const [assignee, setAssignee] = useState("");
+  const [assigneeIds, setAssigneeIds] = useState<number[]>([]);
   const [isDelayed, setIsDelayed] = useState(false);
   const [delayCause, setDelayCause] = useState("Company");
   const [delayComment, setDelayComment] = useState("");
@@ -59,7 +59,13 @@ export function TaskFormDialog({
       setStartDate(toInputDate(task?.start_date));
       setEndDate(toInputDate(task?.end_date));
       setEstDays(task?.est_days != null ? String(task.est_days) : "");
-      setAssignee(task?.assigned_member_id != null ? String(task.assigned_member_id) : "");
+      setAssigneeIds(
+        task?.assigned_members?.length
+          ? task.assigned_members.map((member) => member.id)
+          : task?.assigned_member_id != null
+            ? [task.assigned_member_id]
+            : [],
+      );
       setIsDelayed(task?.is_delayed ?? false);
       setDelayCause(task?.delay_cause ?? "Company");
       setDelayComment(task?.delay_comment ?? "");
@@ -83,7 +89,7 @@ export function TaskFormDialog({
         start_date: startDate || null,
         end_date: endDate || null,
         est_days: estDays ? Number(estDays) : null,
-        assigned_member_id: assignee ? Number(assignee) : null,
+        assigned_member_ids: assigneeIds,
         is_delayed: delayed,
         delay_cause: delayed ? delayCause : null,
         delay_comment: delayed ? delayComment || null : null,
@@ -96,7 +102,7 @@ export function TaskFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>{task ? "Edit task" : "New task"}</DialogTitle>
         </DialogHeader>
@@ -109,28 +115,73 @@ export function TaskFormDialog({
             <Label htmlFor="t-desc">Description</Label>
             <Textarea id="t-desc" value={description} onChange={(e) => setDescription(e.target.value)} />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="t-status">Status</Label>
-              <Select id="t-status" value={status} onChange={(e) => setStatus(e.target.value)}>
-                {TASK_STATUS_OPTIONS.map((s) => (
-                  <option key={s} value={s}>
-                    {TASK_STATUS_LABELS[s]}
-                  </option>
-                ))}
-              </Select>
+          <div className="flex flex-col gap-1.5 sm:max-w-xs">
+            <Label htmlFor="t-status">Status</Label>
+            <Select id="t-status" value={status} onChange={(e) => setStatus(e.target.value)}>
+              {TASK_STATUS_OPTIONS.map((s) => (
+                <option key={s} value={s}>
+                  {TASK_STATUS_LABELS[s]}
+                </option>
+              ))}
+            </Select>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center justify-between gap-3">
+              <Label>Assignees</Label>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-fg-muted">
+                  {assigneeIds.length} selected
+                </span>
+                {assigneeIds.length > 0 && (
+                  <button
+                    type="button"
+                    className="text-xs font-medium text-accent hover:underline"
+                    onClick={() => setAssigneeIds([])}
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="t-assignee">Assignee</Label>
-              <Select id="t-assignee" value={assignee} onChange={(e) => setAssignee(e.target.value)}>
-                <option value="">Unassigned</option>
-                {(team ?? []).map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                  </option>
-                ))}
-              </Select>
+            <div className="grid max-h-44 gap-1 overflow-y-auto rounded-md border border-border bg-input p-2 sm:grid-cols-2">
+              {(team ?? []).map((member) => {
+                const checked = assigneeIds.includes(member.id);
+                return (
+                  <label
+                    key={member.id}
+                    className={`flex cursor-pointer items-start gap-2 rounded-md border px-3 py-2 transition-colors ${
+                      checked
+                        ? "border-accent bg-accent-soft"
+                        : "border-transparent hover:border-border hover:bg-raised"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={checked}
+                      onChange={() =>
+                        setAssigneeIds((current) =>
+                          checked
+                            ? current.filter((id) => id !== member.id)
+                            : [...current, member.id],
+                        )
+                      }
+                    />
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium text-fg">{member.name}</span>
+                      {member.role && (
+                        <span className="block truncate text-xs text-fg-subtle">{member.role}</span>
+                      )}
+                    </span>
+                  </label>
+                );
+              })}
+              {team?.length === 0 && (
+                <p className="p-2 text-sm text-fg-muted">No active team members available.</p>
+              )}
             </div>
+            <p className="text-xs text-fg-muted">Select everyone responsible for delivering this task.</p>
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div className="flex flex-col gap-1.5">

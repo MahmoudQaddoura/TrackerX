@@ -10,6 +10,8 @@ from sqlalchemy.orm import relationship
 
 from app.db import Base, now_iso
 
+MILESTONE_WORKSTREAMS = ("project", "operations")
+
 
 class Milestone(Base):
     __tablename__ = "milestones"
@@ -22,6 +24,7 @@ class Milestone(Base):
     description = Column(Text, nullable=True)
     start_date = Column(Text, nullable=True)
     end_date = Column(Text, nullable=True)
+    workstream = Column(Text, nullable=False, default="project", index=True)
     sort_order = Column(Integer, nullable=False, default=0)
     created_at = Column(Text, nullable=False, default=now_iso)
     updated_at = Column(Text, nullable=False, default=now_iso, onupdate=now_iso)

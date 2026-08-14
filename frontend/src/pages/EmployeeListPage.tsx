@@ -14,6 +14,7 @@
 import {
   ChevronDown,
   ChevronRight,
+  KeyRound,
   Pencil,
   Plus,
   Trash2,
@@ -26,6 +27,7 @@ import {
   createMember,
   delegateMemberTasks,
   deleteMember,
+  provisionMemberCredentials,
   updateMember,
   type TeamMemberPayload,
 } from "@/api/team";
@@ -47,6 +49,7 @@ import { Select } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { useAuth } from "@/context/AuthContext";
 import { useTeam } from "@/hooks/useTeam";
+import { getApiErrorMessage } from "@/lib/apiClient";
 import { useQueryClient } from "@tanstack/react-query";
 import type { TeamMember } from "@/types";
 
@@ -62,6 +65,15 @@ export function EmployeeListPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showDeactivated, setShowDeactivated] = useState(false);
+
+  // Credential and access state (admin only)
+  const [credentialTarget, setCredentialTarget] = useState<TeamMember | null>(null);
+  const [credentialEmail, setCredentialEmail] = useState("");
+  const [temporaryPassword, setTemporaryPassword] = useState("");
+  const [accessLevel, setAccessLevel] = useState<"read" | "write">("read");
+  const [loginEnabled, setLoginEnabled] = useState(true);
+  const [credentialSaving, setCredentialSaving] = useState(false);
+  const [credentialError, setCredentialError] = useState<string | null>(null);
 
   // Delegate state
   const [delegateTarget, setDelegateTarget] = useState<TeamMember | null>(null);
@@ -96,6 +108,39 @@ export function EmployeeListPage() {
     setDelegateTarget(member);
     setToMemberId(null);
     setDelegating(false);
+  }
+
+  function openCredentials(member: TeamMember) {
+    setCredentialTarget(member);
+    setCredentialEmail(member.login_email ?? "");
+    setTemporaryPassword("");
+    setAccessLevel(member.access_level ?? "read");
+    setLoginEnabled(member.has_login ? member.login_enabled : true);
+    setCredentialError(null);
+  }
+
+  async function handleCredentials() {
+    if (!credentialTarget) return;
+    if (!credentialEmail.trim()) return setCredentialError("Email is required.");
+    if (!credentialTarget.has_login && temporaryPassword.length < 8)
+      return setCredentialError("A temporary password of at least 8 characters is required.");
+    setCredentialSaving(true);
+    setCredentialError(null);
+    try {
+      await provisionMemberCredentials(credentialTarget.id, {
+        email: credentialEmail.trim(),
+        temporary_password: temporaryPassword || null,
+        access_level: accessLevel,
+        is_enabled: loginEnabled,
+      });
+      setCredentialTarget(null);
+      qc.invalidateQueries({ queryKey: ["team"] });
+      qc.invalidateQueries({ queryKey: ["users"] });
+    } catch (error) {
+      setCredentialError(getApiErrorMessage(error));
+    } finally {
+      setCredentialSaving(false);
+    }
   }
 
   async function handleSave() {
@@ -182,6 +227,7 @@ export function EmployeeListPage() {
               onEdit={() => openEdit(m)}
               onDelete={() => handleDelete(m)}
               onDelegate={() => openDelegate(m)}
+              onCredentials={() => openCredentials(m)}
             />
           ))}
         </div>
@@ -215,6 +261,7 @@ export function EmployeeListPage() {
                   onEdit={() => openEdit(m)}
                   onDelete={() => handleDelete(m)}
                   onDelegate={() => openDelegate(m)}
+                  onCredentials={() => openCredentials(m)}
                 />
               ))}
             </div>
@@ -306,6 +353,78 @@ export function EmployeeListPage() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Employee credentials and permission dialog */}
+      {credentialTarget && (
+        <Dialog open onOpenChange={() => setCredentialTarget(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <KeyRound className="h-5 w-5" />
+                TrackerX access · {credentialTarget.name}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="flex flex-col gap-4">
+              <div className="rounded-md border border-border bg-raised/50 p-3 text-sm text-fg-muted">
+                The admin controls this employee’s login and permission. Passwords are hashed and never displayed after saving.
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="credential-email">Login email</Label>
+                <Input
+                  id="credential-email"
+                  type="email"
+                  value={credentialEmail}
+                  onChange={(event) => setCredentialEmail(event.target.value)}
+                  placeholder="employee@company.com"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="credential-password">
+                  {credentialTarget.has_login ? "Reset temporary password" : "Temporary password"}
+                </Label>
+                <Input
+                  id="credential-password"
+                  type="password"
+                  value={temporaryPassword}
+                  onChange={(event) => setTemporaryPassword(event.target.value)}
+                  placeholder={credentialTarget.has_login ? "Leave blank to keep current password" : "Minimum 8 characters"}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="credential-access">Permission</Label>
+                <Select
+                  id="credential-access"
+                  value={accessLevel}
+                  onChange={(event) => setAccessLevel(event.target.value as "read" | "write")}
+                >
+                  <option value="read">Read only</option>
+                  <option value="write">Read &amp; write</option>
+                </Select>
+                <p className="text-xs text-fg-muted">
+                  Role restrictions still apply; write permission allows the actions available to that employee’s role.
+                </p>
+              </div>
+              <label className="flex items-center gap-2 rounded-md border border-border p-3 text-sm font-medium text-fg">
+                <input
+                  type="checkbox"
+                  checked={loginEnabled}
+                  onChange={(event) => setLoginEnabled(event.target.checked)}
+                />
+                Login enabled
+              </label>
+              {credentialError && <p className="text-sm text-danger">{credentialError}</p>}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setCredentialTarget(null)}>
+                Cancel
+              </Button>
+              <Button onClick={handleCredentials} disabled={credentialSaving}>
+                {credentialSaving && <Spinner />} Save access
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
@@ -320,6 +439,7 @@ function EmployeeCard({
   onEdit,
   onDelete,
   onDelegate,
+  onCredentials,
 }: {
   member: TeamMember;
   isDeactivated: boolean;
@@ -328,6 +448,7 @@ function EmployeeCard({
   onEdit: () => void;
   onDelete: () => void;
   onDelegate: () => void;
+  onCredentials: () => void;
 }) {
   const isOwner = member.role === "Owner";
 
@@ -360,7 +481,7 @@ function EmployeeCard({
               {member.task_count} task{member.task_count !== 1 ? "s" : ""}
               {member.has_login && (
                 <Badge variant="neutral" className="ml-1 text-[10px]">
-                  login
+                  {member.login_enabled ? member.access_level : "disabled"}
                 </Badge>
               )}
             </p>
@@ -374,6 +495,15 @@ function EmployeeCard({
               </Button>
             ) : (
               <>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Manage ${member.name} credentials`}
+                  title="Credentials and access"
+                  onClick={onCredentials}
+                >
+                  <KeyRound className="h-3.5 w-3.5" />
+                </Button>
                 <Button variant="ghost" size="icon" onClick={onEdit}>
                   <Pencil className="h-3.5 w-3.5" />
                 </Button>

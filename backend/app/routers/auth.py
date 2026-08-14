@@ -23,12 +23,21 @@ def login(payload: LoginInput, db: Session = Depends(get_db)) -> TokenResponse:
     """Verify credentials and return a JWT plus display info."""
     email = payload.email.lower()
     user = db.query(User).filter(func.lower(User.email) == email).first()
-    if user is None or not verify_password(payload.password, user.hashed_password):
+    if (
+        user is None
+        or not bool(user.is_enabled)
+        or not verify_password(payload.password, user.hashed_password)
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password."
         )
     token = create_access_token(user.id, user.role)
-    return TokenResponse(access_token=token, role=user.role, full_name=user.full_name)
+    return TokenResponse(
+        access_token=token,
+        role=user.role,
+        full_name=user.full_name,
+        access_level="write" if user.role == "admin" else user.access_level,
+    )
 
 
 @router.get("/me", response_model=UserOut)

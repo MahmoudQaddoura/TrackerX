@@ -15,6 +15,7 @@ class UserCreateInput(BaseModel):
     full_name: str = Field(min_length=1, max_length=200)
     role: str
     password: str = Field(min_length=8, max_length=200)
+    access_level: str = "read"
 
 
 ROLE_VALUES = set(USER_ROLES)

@@ -12,17 +12,19 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { getApiErrorMessage } from "@/lib/apiClient";
 import { toInputDate } from "@/lib/utils";
-import type { Milestone, Project } from "@/types";
+import type { Milestone, MilestoneWorkstream, Project } from "@/types";
 
 export function MilestoneFormDialog({
   open,
   onOpenChange,
   milestone,
   project,
+  defaultWorkstream = "project",
   onSubmit,
   isPending,
 }: {
@@ -30,6 +32,7 @@ export function MilestoneFormDialog({
   onOpenChange: (open: boolean) => void;
   milestone?: Milestone;
   project: Project;
+  defaultWorkstream?: MilestoneWorkstream;
   onSubmit: (payload: MilestonePayload) => Promise<unknown>;
   isPending?: boolean;
 }) {
@@ -37,10 +40,13 @@ export function MilestoneFormDialog({
   const [description, setDescription] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [workstream, setWorkstream] = useState<MilestoneWorkstream>("project");
   const [error, setError] = useState<string | null>(null);
 
-  const minDate = toInputDate(project.start_date) || undefined;
-  const maxDate = toInputDate(project.end_date) || undefined;
+  const projectStart = toInputDate(project.start_date) || undefined;
+  const projectEnd = toInputDate(project.end_date) || undefined;
+  const minDate = workstream === "operations" ? projectEnd ?? projectStart : projectStart;
+  const maxDate = workstream === "operations" ? undefined : projectEnd;
 
   useEffect(() => {
     if (open) {
@@ -48,9 +54,10 @@ export function MilestoneFormDialog({
       setDescription(milestone?.description ?? "");
       setStartDate(toInputDate(milestone?.start_date));
       setEndDate(toInputDate(milestone?.end_date));
+      setWorkstream(milestone?.workstream ?? defaultWorkstream);
       setError(null);
     }
-  }, [open, milestone]);
+  }, [defaultWorkstream, open, milestone]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -58,7 +65,11 @@ export function MilestoneFormDialog({
     if (startDate && endDate && startDate > endDate)
       return setError("Start date must be on or before end date.");
     if (minDate && startDate && startDate < minDate)
-      return setError(`Start date can't be before the project start (${minDate}).`);
+      return setError(
+        workstream === "operations"
+          ? `Maintenance starts when the project ends (${minDate}) or later.`
+          : `Start date can't be before the project start (${minDate}).`,
+      );
     if (maxDate && endDate && endDate > maxDate)
       return setError(`End date can't be after the project end (${maxDate}).`);
     try {
@@ -67,6 +78,7 @@ export function MilestoneFormDialog({
         description: description || null,
         start_date: startDate || null,
         end_date: endDate || null,
+        workstream,
       });
       onOpenChange(false);
     } catch (err) {
@@ -84,6 +96,20 @@ export function MilestoneFormDialog({
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="m-title">Title</Label>
             <Input id="m-title" value={title} onChange={(e) => setTitle(e.target.value)} required />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="m-workstream">Kanban section</Label>
+            <Select
+              id="m-workstream"
+              value={workstream}
+              onChange={(event) => setWorkstream(event.target.value as MilestoneWorkstream)}
+            >
+              <option value="project">Project Delivery</option>
+              <option value="operations">Maintenance &amp; Operations</option>
+            </Select>
+            <p className="text-xs text-fg-muted">
+              Maintenance milestones appear in their own Kanban section and may continue after delivery ends.
+            </p>
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="m-desc">Description</Label>

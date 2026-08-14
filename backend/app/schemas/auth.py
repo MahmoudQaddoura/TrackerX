@@ -18,6 +18,7 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     role: str
     full_name: str
+    access_level: str
 
 
 class UserOut(BaseModel):
@@ -25,5 +26,7 @@ class UserOut(BaseModel):
     email: EmailStr
     full_name: str
     role: str
+    access_level: str
+    is_enabled: bool
 
     model_config = {"from_attributes": True}

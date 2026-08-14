@@ -1,12 +1,13 @@
 /** api/auth.ts — login + current user. */
 import { api } from "@/lib/apiClient";
-import type { AuthUser, Role } from "@/types";
+import type { AccessLevel, AuthUser, Role } from "@/types";
 
 export interface LoginResponse {
   access_token: string;
   token_type: string;
   role: Role;
   full_name: string;
+  access_level: AccessLevel;
 }
 
 export async function login(email: string, password: string): Promise<LoginResponse> {

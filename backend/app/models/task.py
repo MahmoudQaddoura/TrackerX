@@ -4,16 +4,28 @@ from __future__ import annotations
 models/task.py
 Leaf work item. Carries schedule dates (for the Gantt), status, delay flags,
 an optional estimated-effort figure (preserved from CSV import), and an
-optional assignment to a team member.
+assignments to one or more team members.
 """
 
-from sqlalchemy import CheckConstraint, Column, Float, ForeignKey, Integer, Text
+from sqlalchemy import CheckConstraint, Column, Float, ForeignKey, Integer, Table, Text
 from sqlalchemy.orm import relationship
 
 from app.db import Base, now_iso
 
 TASK_STATUSES = ("todo", "in_progress", "in_review", "blocked", "done")
 DELAY_CAUSES = ("Company", "Client")
+
+
+task_assignees = Table(
+    "task_assignees",
+    Base.metadata,
+    Column("task_id", ForeignKey("tasks.id", ondelete="CASCADE"), primary_key=True),
+    Column(
+        "team_member_id",
+        ForeignKey("team_members.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+)
 
 
 class Task(Base):
@@ -40,7 +52,15 @@ class Task(Base):
     updated_at = Column(Text, nullable=False, default=now_iso, onupdate=now_iso)
 
     milestone = relationship("Milestone", back_populates="tasks")
+    # `assigned_member_id` remains as the first/primary assignee for backwards
+    # compatibility. `assigned_members` is the source of truth for the UI.
     assigned_member = relationship("TeamMember", back_populates="tasks")
+    assigned_members = relationship(
+        "TeamMember",
+        secondary=task_assignees,
+        back_populates="assigned_tasks",
+        order_by="TeamMember.name",
+    )
 
     __table_args__ = (
         CheckConstraint(

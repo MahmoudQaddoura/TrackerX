@@ -19,6 +19,8 @@ class TaskInput(BaseModel):
     delay_cause: str | None = None  # 'Company' | 'Client'
     delay_comment: str | None = None
     est_days: float | None = None
+    assigned_member_ids: list[int] = Field(default_factory=list)
+    # Deprecated single-assignee field retained for older API clients.
     assigned_member_id: int | None = None
     sort_order: int = 0
 
@@ -39,8 +41,15 @@ class TaskUpdate(BaseModel):
     delay_cause: str | None = None
     delay_comment: str | None = None
     est_days: float | None = None
+    assigned_member_ids: list[int] | None = None
     assigned_member_id: int | None = None
     sort_order: int | None = None
+
+
+class TaskAssigneeOut(BaseModel):
+    id: int
+    name: str
+    role: str | None
 
 
 class TaskOut(BaseModel):
@@ -57,6 +66,7 @@ class TaskOut(BaseModel):
     est_days: float | None
     assigned_member_id: int | None
     assigned_member_name: str | None
+    assigned_members: list[TaskAssigneeOut]
     sort_order: int
     created_at: str
     updated_at: str

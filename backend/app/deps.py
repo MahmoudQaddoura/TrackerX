@@ -50,7 +50,7 @@ def get_current_user(
         raise _CREDENTIALS_ERROR
 
     user = db.get(User, user_id)
-    if user is None:
+    if user is None or not bool(user.is_enabled):
         raise _CREDENTIALS_ERROR
     return user
 
@@ -66,10 +66,21 @@ def require_admin(user: User = Depends(get_current_user)) -> User:
 
 def require_manager(user: User = Depends(get_current_user)) -> User:
     """Allow admin or pm. Use on every milestone/task write endpoint."""
-    if user.role not in ("admin", "pm"):
+    if user.role not in ("admin", "pm") or (
+        user.role != "admin" and user.access_level != "write"
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="This action requires a project manager or admin account.",
+            detail="This action requires admin-approved write access.",
+        )
+    return user
+
+
+def require_write_access(user: User = Depends(get_current_user)) -> User:
+    if user.role != "admin" and user.access_level != "write":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account has read-only access. Ask an admin for write permission.",
         )
     return user
 
@@ -87,9 +98,10 @@ def get_accessible_project_ids(user: User, db: Session) -> set[int] | None:
         member = db.query(TeamMember).filter(TeamMember.user_id == user.id).first()
         if member is None:
             return set()
-        # Collect distinct project IDs from the member's tasks.
+        # Collect distinct project IDs from every task where this developer is
+        # one of the assignees.
         ids: set[int] = set()
-        for t in member.tasks:
+        for t in member.assigned_tasks:
             if t.milestone:
                 ids.add(t.milestone.project_id)
         return ids

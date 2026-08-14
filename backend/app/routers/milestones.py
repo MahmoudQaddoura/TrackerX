@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.deps import check_project_access, get_current_user, require_manager
 from app.models import Milestone, Project, User
+from app.models.milestone import MILESTONE_WORKSTREAMS
 from app.schemas.milestone import MilestoneInput, MilestoneOut, MilestoneUpdate
 from app.services.serialize import milestone_out
 
@@ -30,6 +31,11 @@ def _milestone_or_404(db: Session, milestone_id: int) -> Milestone:
 def _check_dates(start: str | None, end: str | None) -> None:
     if start and end and start > end:
         raise HTTPException(status_code=422, detail="Start date must be on or before end date.")
+
+
+def _check_workstream(workstream: str) -> None:
+    if workstream not in MILESTONE_WORKSTREAMS:
+        raise HTTPException(status_code=422, detail=f"Invalid Kanban section '{workstream}'.")
 
 
 @router.get("/projects/{project_id}/milestones", response_model=list[MilestoneOut])
@@ -59,6 +65,7 @@ def create_milestone(
         raise HTTPException(status_code=404, detail="Project not found.")
     check_project_access(db, user, project_id)
     _check_dates(inp.start_date, inp.end_date)
+    _check_workstream(inp.workstream)
     ms = Milestone(project_id=project_id, **inp.model_dump())
     db.add(ms)
     db.commit()
@@ -86,6 +93,8 @@ def update_milestone(
     check_project_access(db, user, ms.project_id)
     data = inp.model_dump(exclude_unset=True)
     _check_dates(data.get("start_date", ms.start_date), data.get("end_date", ms.end_date))
+    if "workstream" in data:
+        _check_workstream(data["workstream"])
     for field, value in data.items():
         setattr(ms, field, value)
     db.commit()

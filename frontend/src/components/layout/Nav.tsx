@@ -3,18 +3,19 @@
  * admin/pm: Dashboard · Projects · Team. developer/client: Projects only
  * (the backend already scopes what "Projects" shows to each of them).
  */
-import { LayoutDashboard, FolderKanban, Users } from "lucide-react";
+import { CalendarCheck2, LayoutDashboard, FolderKanban, Users } from "lucide-react";
 import { NavLink } from "react-router-dom";
 
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
 
 export function Nav() {
-  const { canManage } = useAuth();
+  const { canViewManagement } = useAuth();
   const links = [
-    ...(canManage ? [{ to: "/dashboard", label: "Dashboard", icon: LayoutDashboard }] : []),
+    ...(canViewManagement ? [{ to: "/dashboard", label: "Dashboard", icon: LayoutDashboard }] : []),
     { to: "/projects", label: "Projects", icon: FolderKanban },
-    ...(canManage ? [{ to: "/employees", label: "Employees", icon: Users }] : []),
+    { to: "/attendance", label: "Attendance", icon: CalendarCheck2 },
+    ...(canViewManagement ? [{ to: "/employees", label: "Employees", icon: Users }] : []),
   ];
 
   return (

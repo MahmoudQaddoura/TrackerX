@@ -12,6 +12,7 @@ export interface TaskPayload {
   delay_cause?: string | null;
   delay_comment?: string | null;
   est_days?: number | null;
+  assigned_member_ids?: number[];
   assigned_member_id?: number | null;
   sort_order?: number;
 }

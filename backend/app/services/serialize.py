@@ -12,8 +12,11 @@ from app.services.risk import task_risk, worst_risk
 
 
 def task_out(task) -> dict:
-    """Serialize a Task, including its computed risk level and assignee name."""
-    member = task.assigned_member
+    """Serialize a Task, including its computed risk and all assignees."""
+    members = list(task.assigned_members)
+    if not members and task.assigned_member:
+        members = [task.assigned_member]
+    primary_member = task.assigned_member if task.assigned_member in members else (members[0] if members else None)
     return {
         "id": task.id,
         "milestone_id": task.milestone_id,
@@ -26,8 +29,12 @@ def task_out(task) -> dict:
         "delay_cause": task.delay_cause,
         "delay_comment": task.delay_comment,
         "est_days": task.est_days,
-        "assigned_member_id": task.assigned_member_id,
-        "assigned_member_name": member.name if member else None,
+        "assigned_member_id": primary_member.id if primary_member else None,
+        "assigned_member_name": primary_member.name if primary_member else None,
+        "assigned_members": [
+            {"id": member.id, "name": member.name, "role": member.role}
+            for member in members
+        ],
         "sort_order": task.sort_order,
         "created_at": task.created_at,
         "updated_at": task.updated_at,
@@ -45,6 +52,7 @@ def milestone_out(ms) -> dict:
         "description": ms.description,
         "start_date": ms.start_date,
         "end_date": ms.end_date,
+        "workstream": ms.workstream,
         "sort_order": ms.sort_order,
         "created_at": ms.created_at,
         "updated_at": ms.updated_at,
@@ -83,7 +91,8 @@ def team_member_out(member) -> dict:
     # Derive distinct projects this member is assigned to via their tasks.
     project_map: dict[int, str] = {}
     total_est = 0.0
-    for t in member.tasks:
+    tasks = list(member.assigned_tasks)
+    for t in tasks:
         if t.milestone and t.milestone.project:
             pid = t.milestone.project.id
             if pid not in project_map:
@@ -96,13 +105,20 @@ def team_member_out(member) -> dict:
         "name": member.name,
         "role": member.role,
         "is_active": bool(member.is_active),
-        "task_count": len(member.tasks),
-        "total_tasks": len(member.tasks),
-        "done_tasks": sum(1 for t in member.tasks if t.status == "done"),
+        "task_count": len(tasks),
+        "total_tasks": len(tasks),
+        "done_tasks": sum(1 for t in tasks if t.status == "done"),
         "active_est_days": round(total_est, 1),
         "projects": projects,
         "user_id": member.user_id,
         "has_login": member.user_id is not None,
+        "login_email": member.user.email if member.user else None,
+        "access_level": (
+            "write" if member.user and member.user.role == "admin" else member.user.access_level
+            if member.user
+            else None
+        ),
+        "login_enabled": bool(member.user.is_enabled) if member.user else False,
         "created_at": member.created_at,
         "updated_at": member.updated_at,
     }

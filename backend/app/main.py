@@ -8,6 +8,7 @@ Every router is mounted under /api. One purpose: wire the app together.
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import inspect
 
 from app.config import settings
 from app.db import Base, engine
@@ -15,6 +16,7 @@ from app import models  # noqa: F401 — importing registers all tables on Base
 
 from app.routers import (
     analytics,
+    attendance,
     auth,
     comments,
     csv_import,
@@ -36,6 +38,48 @@ app = FastAPI(
     openapi_url="/api/openapi.json",
 )
 
+
+def _migrate_local_schema() -> None:
+    """Apply the small additive migrations needed by existing SQLite installs."""
+    if engine.dialect.name != "sqlite":
+        return
+
+    milestone_columns = {column["name"] for column in inspect(engine).get_columns("milestones")}
+    user_columns = {column["name"] for column in inspect(engine).get_columns("users")}
+    with engine.begin() as connection:
+        if "workstream" not in milestone_columns:
+            connection.exec_driver_sql(
+                "ALTER TABLE milestones ADD COLUMN workstream TEXT NOT NULL DEFAULT 'project'"
+            )
+        connection.exec_driver_sql(
+            "CREATE INDEX IF NOT EXISTS ix_milestones_workstream ON milestones (workstream)"
+        )
+        if "access_level" not in user_columns:
+            connection.exec_driver_sql(
+                "ALTER TABLE users ADD COLUMN access_level TEXT NOT NULL DEFAULT 'read'"
+            )
+            # Preserve the capabilities of accounts that could already edit or
+            # move work. Admin may adjust each employee after migration.
+            connection.exec_driver_sql(
+                "UPDATE users SET access_level = 'write' WHERE role IN ('admin','pm','developer')"
+            )
+        if "is_enabled" not in user_columns:
+            connection.exec_driver_sql(
+                "ALTER TABLE users ADD COLUMN is_enabled INTEGER NOT NULL DEFAULT 1"
+            )
+        # Preserve every existing single assignee as the first member of the
+        # new multi-assignee relationship. The composite PK makes this safe on
+        # every restart.
+        connection.exec_driver_sql(
+            """
+            INSERT OR IGNORE INTO task_assignees (task_id, team_member_id)
+            SELECT id, assigned_member_id
+            FROM tasks
+            WHERE assigned_member_id IS NOT NULL
+            """
+        )
+        connection.exec_driver_sql("PRAGMA optimize")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -50,6 +94,7 @@ def on_startup() -> None:
     """Create any missing tables. (Simple projects skip migration tooling.)"""
     settings.documents_dir.mkdir(parents=True, exist_ok=True)
     Base.metadata.create_all(bind=engine)
+    _migrate_local_schema()
 
 
 # Auth carries its own /auth prefix; everything else is mounted under /api.
@@ -65,6 +110,7 @@ for r in (
     comments.router,
     csv_import.router,
     analytics.router,
+    attendance.router,
     gantt.router,
 ):
     app.include_router(r, prefix="/api")

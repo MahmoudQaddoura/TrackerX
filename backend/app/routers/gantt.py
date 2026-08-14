@@ -1,15 +1,10 @@
 from __future__ import annotations
 
-"""
-routers/gantt.py
-Return a project's tasks shaped for frappe-gantt. Tasks that have explicit
-start_date/end_date are used as-is. Tasks without dates are auto-scheduled:
-milestones run sequentially, and within each milestone tasks are stacked in
-sort_order, each lasting its est_days (default 1). This way CSV-imported
-projects get a sensible timeline out of the box without manual date entry.
-"""
+"""Milestone-first schedule rows for the project Gantt workspace."""
 
 from datetime import date, datetime, timedelta
+from math import ceil
+
 from fastapi import APIRouter, Depends
 
 from app.deps import require_project_access
@@ -18,7 +13,6 @@ from app.schemas.gantt import GanttTask
 
 router = APIRouter(tags=["gantt"])
 
-# Progress shown on the bar per status.
 _PROGRESS = {
     "todo": 0,
     "blocked": 10,
@@ -29,139 +23,135 @@ _PROGRESS = {
 
 
 def _parse_date(raw: str | None) -> date | None:
-    """Try an ISO date (or datetime) string. Returns None on failure."""
     if not raw:
         return None
-    for fmt in ("%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d"):
+    try:
+        return date.fromisoformat(raw[:10])
+    except ValueError:
         try:
-            return datetime.strptime(raw, fmt).date()
+            return datetime.fromisoformat(raw.replace("Z", "+00:00")).date()
         except ValueError:
-            continue
-    return None
+            return None
 
 
-def _fmt(d: date) -> str:
-    return d.isoformat()
+def _add_days(start: date, days: float | int | None) -> date:
+    duration = max(1, ceil(float(days or 1)))
+    return start + timedelta(days=duration)
 
 
-def _add_workdays(start: date, days: int) -> date:
-    """Add calendar days (simple — no weekend skipping needed for Gantt)."""
-    return start + timedelta(days=max(days, 1))
+def _task_assignees(task) -> list[str]:
+    names = [member.name for member in task.assigned_members]
+    if not names and task.assigned_member:
+        names.append(task.assigned_member.name)
+    return names
 
 
 @router.get("/projects/{project_id}/gantt", response_model=list[GanttTask])
 def project_gantt(project: Project = Depends(require_project_access)):
-    anchor = _parse_date(project.created_at) or date.today()
-
-    # First pass: collect all tasks, noting which have explicit dates.
-    all_tasks: list[dict] = []
-    any_explicit = False
-    for m in sorted(project.milestones, key=lambda x: x.sort_order):
-        for t in sorted(m.tasks, key=lambda x: x.sort_order):
-            explicit = bool(t.start_date and t.end_date)
-            if explicit:
-                any_explicit = True
-            all_tasks.append({
-                "id": f"task-{t.id}",
-                "name": t.title,
-                "start": t.start_date,
-                "end": t.end_date,
-                "explicit": explicit,
-                "status": t.status,
-                "est_days": t.est_days,
-                "delayed": bool(t.is_delayed),
-            })
-
-    # If every task has explicit dates, render them as-is (respect manual scheduling).
-    if any_explicit and all(t["explicit"] for t in all_tasks):
-        bars: list[GanttTask] = []
-        for t in all_tasks:
-            start_str = _parse_date(t["start"])
-            end_str = _parse_date(t["end"])
-            if not start_str or not end_str:
-                continue
-            bars.append(
-                GanttTask(
-                    id=t["id"],
-                    name=t["name"],
-                    start=_fmt(start_str),
-                    end=_fmt(end_str),
-                    progress=_PROGRESS.get(t["status"], 0),
-                    custom_class="gantt-delayed-bar" if t["delayed"] else "gantt-normal-bar",
-                )
-            )
-        return bars
-
-    # Auto-schedule: milestones run sequentially; tasks within each milestone
-    # are stacked in order, each lasting its est_days (default 1 day).
-    bars: list[GanttTask] = []
+    """Return milestone parents followed by their task schedule rows."""
+    anchor = (
+        _parse_date(project.start_date)
+        or _parse_date(project.created_at)
+        or date.today()
+    )
     current_date = anchor
+    rows: list[GanttTask] = []
 
-    # Group tasks by milestone (already in order from the sorted query above).
-    ms_groups: list[list[dict]] = []
-    current_ms: list[dict] = []
-    prev_ms_id = None
-    for t in all_tasks:
-        # Infer milestone grouping from task id prefix — fragile but works here.
-        # Better: group from the original query loop directly.
-        pass
+    for milestone in sorted(project.milestones, key=lambda item: (item.sort_order, item.id)):
+        tasks = sorted(milestone.tasks, key=lambda item: (item.sort_order, item.id))
+        milestone_start_input = _parse_date(milestone.start_date)
+        milestone_end_input = _parse_date(milestone.end_date)
+        explicit_task_starts = [
+            parsed
+            for task in tasks
+            if (parsed := _parse_date(task.start_date)) is not None
+        ]
+        schedule_start = milestone_start_input or (
+            min(explicit_task_starts) if explicit_task_starts else current_date
+        )
+        cursor = schedule_start
+        task_rows: list[GanttTask] = []
+        task_starts: list[date] = []
+        task_ends: list[date] = []
 
-    # Better approach: iterate milestones directly.
-    for m in sorted(project.milestones, key=lambda x: x.sort_order):
-        ms_tasks = sorted(m.tasks, key=lambda x: x.sort_order)
-        if not ms_tasks:
-            continue
+        for task in tasks:
+            explicit_start = _parse_date(task.start_date)
+            explicit_end = _parse_date(task.end_date)
+            is_auto = explicit_start is None or explicit_end is None
+            task_start = explicit_start or cursor
+            task_end = explicit_end or _add_days(task_start, task.est_days)
+            if task_end < task_start:
+                task_end = task_start
+            cursor = max(cursor, task_end)
+            task_starts.append(task_start)
+            task_ends.append(task_end)
 
-        # If this milestone has ANY explicitly-dated task, honour those dates
-        # and place non-dated tasks relative to the milestone's earliest date.
-        explicit_dates = [(t.start_date, t.end_date) for t in ms_tasks if t.start_date and t.end_date]
-        if explicit_dates:
-            # Use the earliest explicit start as the milestone anchor.
-            earliest = min(
-                _parse_date(s) for s, e in explicit_dates if _parse_date(s)
-            )
-            # Still schedule undated tasks sequentially after the earliest dated one.
-            cursor = earliest
-        else:
-            cursor = current_date
+            classes = ["gantt-task-bar", f"gantt-task-{task.status.replace('_', '-')}"]
+            if bool(task.is_delayed):
+                classes.append("gantt-delayed-bar")
+            if is_auto:
+                classes.append("gantt-auto-bar")
 
-        for t in ms_tasks:
-            if t.start_date and t.end_date:
-                s = _parse_date(t.start_date)
-                e = _parse_date(t.end_date)
-                if s and e:
-                    bars.append(
-                        GanttTask(
-                            id=f"task-{t.id}",
-                            name=t.title,
-                            start=_fmt(s),
-                            end=_fmt(e),
-                            progress=_PROGRESS.get(t.status, 0),
-                            custom_class="gantt-delayed-bar" if t.is_delayed else "gantt-normal-bar",
-                        )
-                    )
-                    # Advance cursor past this explicit task (don't overlap).
-                    if e > cursor:
-                        cursor = e
-                continue
-
-            # Auto-schedule: use est_days, default 1 day.
-            days = int(t.est_days) if t.est_days else 1
-            task_end = _add_workdays(cursor, days)
-            bars.append(
+            task_rows.append(
                 GanttTask(
-                    id=f"task-{t.id}",
-                    name=t.title,
-                    start=_fmt(cursor),
-                    end=_fmt(task_end),
-                    progress=_PROGRESS.get(t.status, 0),
-                    custom_class="gantt-delayed-bar" if t.is_delayed else "gantt-normal-bar",
+                    id=f"task-{task.id}",
+                    name=f"↳ {task.title}",
+                    start=task_start.isoformat(),
+                    end=task_end.isoformat(),
+                    progress=_PROGRESS.get(task.status, 0),
+                    custom_class=" ".join(classes),
+                    entity_type="task",
+                    milestone_id=milestone.id,
+                    milestone_name=milestone.title,
+                    workstream=milestone.workstream,
+                    task_id=task.id,
+                    status=task.status,
+                    is_delayed=bool(task.is_delayed),
+                    is_auto_scheduled=is_auto,
+                    assignee_names=_task_assignees(task),
                 )
             )
-            cursor = task_end
 
-        # After each milestone, the next one picks up where we left off.
-        if not explicit_dates:
-            current_date = cursor
+        effective_start = min(
+            [value for value in [milestone_start_input, *task_starts] if value is not None],
+            default=schedule_start,
+        )
+        effective_end = max(
+            [value for value in [milestone_end_input, *task_ends] if value is not None],
+            default=_add_days(effective_start, 1),
+        )
+        if effective_end < effective_start:
+            effective_end = effective_start
+        total_tasks = len(tasks)
+        done_tasks = sum(1 for task in tasks if task.status == "done")
+        progress = round(done_tasks / total_tasks * 100) if total_tasks else 0
+        milestone_delayed = any(bool(task.is_delayed) for task in tasks)
+        milestone_classes = [
+            "gantt-milestone-bar",
+            f"gantt-milestone-{milestone.workstream}",
+        ]
+        if milestone_delayed:
+            milestone_classes.append("gantt-delayed-milestone")
 
-    return bars
+        rows.append(
+            GanttTask(
+                id=f"milestone-{milestone.id}",
+                name=f"◆ {milestone.title}",
+                start=effective_start.isoformat(),
+                end=effective_end.isoformat(),
+                progress=progress,
+                custom_class=" ".join(milestone_classes),
+                entity_type="milestone",
+                milestone_id=milestone.id,
+                milestone_name=milestone.title,
+                workstream=milestone.workstream,
+                status=None,
+                is_delayed=milestone_delayed,
+                is_auto_scheduled=milestone_start_input is None or milestone_end_input is None,
+                assignee_names=[],
+            )
+        )
+        rows.extend(task_rows)
+        current_date = max(current_date, effective_end)
+
+    return rows

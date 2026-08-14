@@ -17,6 +17,8 @@ declare module "frappe-gantt" {
     popup_on?: "click" | "hover";
     bar_height?: number;
     padding?: number;
+    on_click?: (task: GanttTask) => void;
+    custom_popup_html?: (task: GanttTask) => string;
   }
 
   export default class Gantt {

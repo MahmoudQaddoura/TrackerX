@@ -6,9 +6,24 @@
  * developers can only drag cards between columns, and never into/out of
  * Done (server-enforced too — this is UX, not the source of truth).
  */
-import { AlertTriangle, MessageSquare, Pencil, Plus, Trash2 } from "lucide-react";
+import {
+  AlertTriangle,
+  Download,
+  FileText,
+  MessageSquare,
+  Paperclip,
+  Pencil,
+  Plus,
+  Rocket,
+  Search,
+  Trash2,
+  Wrench,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 
+import { downloadDocument } from "@/api/documents";
 import { CommentThread } from "@/components/common/CommentThread";
 import { DelayBadge, RiskBadge } from "@/components/common/RiskBadge";
 import { DeleteConfirmDialog } from "@/components/forms/DeleteConfirmDialog";
@@ -20,52 +35,137 @@ import { Card } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
+import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/context/AuthContext";
+import { useDocuments } from "@/hooks/useDocuments";
 import { useMilestoneMutations, useMilestones } from "@/hooks/useMilestones";
 import { useProjectTasks, useTaskMutations } from "@/hooks/useTasks";
+import { getApiErrorMessage } from "@/lib/apiClient";
+import { getDocumentFolder, getDocumentPlacement } from "@/lib/documentFolders";
 import { cn, formatDate, TASK_STATUS_LABELS, TASK_STATUS_OPTIONS } from "@/lib/utils";
-import type { Milestone, Project, Task, TaskStatus } from "@/types";
+import type {
+  DocumentMeta,
+  Milestone,
+  MilestoneWorkstream,
+  Project,
+  Task,
+  TaskStatus,
+} from "@/types";
 
 const DONE: TaskStatus = "done";
 
+const WORKSTREAM_SECTIONS: {
+  key: MilestoneWorkstream;
+  title: string;
+  description: string;
+  addLabel: string;
+  icon: LucideIcon;
+}[] = [
+  {
+    key: "project",
+    title: "Project Delivery",
+    description: "Implementation milestones that deliver the project scope.",
+    addLabel: "Add delivery milestone",
+    icon: Rocket,
+  },
+  {
+    key: "operations",
+    title: "Maintenance & Operations",
+    description: "Post-delivery support, maintenance, service health, and continuous operations.",
+    addLabel: "Add maintenance milestone",
+    icon: Wrench,
+  },
+];
+
 export function KanbanBoard({ project }: { project: Project }) {
-  const { canManage, isDeveloper } = useAuth();
+  const { canManage, canWrite, isDeveloper } = useAuth();
   const milestones = useMilestones(project.id);
   const tasks = useProjectTasks(project.id);
+  const documents = useDocuments(project.id);
   const taskMut = useTaskMutations(project.id);
   const msMut = useMilestoneMutations(project.id);
 
   const [dragError, setDragError] = useState<string | null>(null);
   const [msFormOpen, setMsFormOpen] = useState(false);
   const [editingMs, setEditingMs] = useState<Milestone | undefined>();
+  const [newMilestoneWorkstream, setNewMilestoneWorkstream] =
+    useState<MilestoneWorkstream>("project");
   const [msToDelete, setMsToDelete] = useState<Milestone | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [assigneeFilter, setAssigneeFilter] = useState("");
+
+  const assigneeOptions = useMemo(() => {
+    const options = new Map<number, string>();
+    for (const task of tasks.data ?? []) {
+      for (const member of task.assigned_members ?? []) options.set(member.id, member.name);
+      if (task.assigned_member_id != null && task.assigned_member_name) {
+        options.set(task.assigned_member_id, task.assigned_member_name);
+      }
+    }
+    return Array.from(options, ([id, name]) => ({ id, name })).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
+  }, [tasks.data]);
+
+  const visibleTasks = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
+    const selectedAssignee = assigneeFilter ? Number(assigneeFilter) : null;
+    return (tasks.data ?? []).filter((task) => {
+      const members = task.assigned_members?.length
+        ? task.assigned_members
+        : task.assigned_member_id != null && task.assigned_member_name
+          ? [{ id: task.assigned_member_id, name: task.assigned_member_name, role: null }]
+          : [];
+      const matchesAssignee =
+        selectedAssignee == null || members.some((member) => member.id === selectedAssignee);
+      const matchesQuery =
+        !normalizedQuery ||
+        `${task.title} ${task.description ?? ""} ${members.map((member) => member.name).join(" ")}`
+          .toLocaleLowerCase()
+          .includes(normalizedQuery);
+      return matchesAssignee && matchesQuery;
+    });
+  }, [assigneeFilter, searchQuery, tasks.data]);
 
   const tasksByMilestone = useMemo(() => {
     const map = new Map<number, Task[]>();
-    for (const t of tasks.data ?? []) {
+    for (const t of visibleTasks) {
       const list = map.get(t.milestone_id) ?? [];
       list.push(t);
       map.set(t.milestone_id, list);
     }
     return map;
-  }, [tasks.data]);
+  }, [visibleTasks]);
+
+  const documentsByMilestone = useMemo(() => {
+    const map = new Map<number, DocumentMeta[]>();
+    for (const document of documents.data ?? []) {
+      if (document.milestone_id == null) continue;
+      const list = map.get(document.milestone_id) ?? [];
+      list.push(document);
+      map.set(document.milestone_id, list);
+    }
+    return map;
+  }, [documents.data]);
 
   function canDrag(task: Task): boolean {
     if (canManage) return true;
-    if (isDeveloper) return task.status !== DONE;
+    if (isDeveloper && canWrite) return task.status !== DONE;
     return false;
   }
 
   function canDropIn(status: TaskStatus): boolean {
     if (canManage) return true;
-    if (isDeveloper) return status !== DONE;
+    if (isDeveloper && canWrite) return status !== DONE;
     return false;
   }
 
@@ -79,9 +179,19 @@ export function KanbanBoard({ project }: { project: Project }) {
     }
   }
 
-  if (milestones.isLoading || tasks.isLoading) return <Skeleton className="h-96 w-full" />;
-  if (milestones.isError || tasks.isError)
-    return <ErrorState message="Could not load the board." onRetry={() => { milestones.refetch(); tasks.refetch(); }} />;
+  if (milestones.isLoading || tasks.isLoading || documents.isLoading)
+    return <Skeleton className="h-96 w-full" />;
+  if (milestones.isError || tasks.isError || documents.isError)
+    return (
+      <ErrorState
+        message="Could not load the board."
+        onRetry={() => {
+          milestones.refetch();
+          tasks.refetch();
+          documents.refetch();
+        }}
+      />
+    );
 
   return (
     <div className="flex flex-col gap-4">
@@ -91,46 +201,133 @@ export function KanbanBoard({ project }: { project: Project }) {
         </div>
       )}
 
-      {canManage && (
-        <div className="flex justify-end">
-          <Button
-            size="sm"
-            onClick={() => {
-              setEditingMs(undefined);
-              setMsFormOpen(true);
-            }}
+      <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-3 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+        <div className="grid flex-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,0.45fr)]">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-subtle" />
+            <Input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search tasks, descriptions, or assignees…"
+              aria-label="Search Kanban tasks"
+              className="pl-9"
+            />
+          </div>
+          <Select
+            value={assigneeFilter}
+            onChange={(event) => setAssigneeFilter(event.target.value)}
+            aria-label="Filter Kanban by assignee"
           >
-            <Plus className="h-4 w-4" /> Add milestone
-          </Button>
+            <option value="">All assignees</option>
+            {assigneeOptions.map((member) => (
+              <option key={member.id} value={member.id}>
+                {member.name}
+              </option>
+            ))}
+          </Select>
         </div>
-      )}
+        <div className="flex items-center justify-between gap-3 lg:justify-end">
+          <span className="text-xs font-medium text-fg-muted">
+            Showing {visibleTasks.length} of {tasks.data?.length ?? 0} tasks
+          </span>
+          {(searchQuery || assigneeFilter) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setSearchQuery("");
+                setAssigneeFilter("");
+              }}
+            >
+              <X className="h-4 w-4" /> Clear
+            </Button>
+          )}
+        </div>
+      </div>
 
-      {milestones.data?.length === 0 && (
-        <EmptyState title="No milestones yet" description={canManage ? "Add one to start planning." : undefined} />
-      )}
+      {WORKSTREAM_SECTIONS.map((section) => {
+        const SectionIcon = section.icon;
+        const sectionMilestones = (milestones.data ?? []).filter(
+          (milestone) => milestone.workstream === section.key,
+        );
+        const sectionTaskCount = sectionMilestones.reduce(
+          (total, milestone) => total + (tasksByMilestone.get(milestone.id)?.length ?? 0),
+          0,
+        );
+        return (
+          <section key={section.key} className="flex flex-col gap-3" aria-labelledby={`${section.key}-kanban-title`}>
+            <div className="flex flex-col gap-3 rounded-lg border border-border bg-raised/45 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-accent-soft text-accent">
+                  <SectionIcon className="h-4 w-4" />
+                </span>
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 id={`${section.key}-kanban-title`} className="font-display text-base font-semibold text-fg">
+                      {section.title}
+                    </h2>
+                    <Badge variant="neutral">{sectionMilestones.length} milestones</Badge>
+                    <Badge variant="outline">{sectionTaskCount} visible tasks</Badge>
+                  </div>
+                  <p className="mt-0.5 text-xs text-fg-muted">{section.description}</p>
+                </div>
+              </div>
+              {canManage && (
+                <Button
+                  size="sm"
+                  variant={section.key === "project" ? "default" : "outline"}
+                  onClick={() => {
+                    setEditingMs(undefined);
+                    setNewMilestoneWorkstream(section.key);
+                    setMsFormOpen(true);
+                  }}
+                >
+                  <Plus className="h-4 w-4" /> {section.addLabel}
+                </Button>
+              )}
+            </div>
 
-      {milestones.data?.map((milestone) => (
-        <MilestoneSwimlane
-          key={milestone.id}
-          project={project}
-          milestone={milestone}
-          tasks={tasksByMilestone.get(milestone.id) ?? []}
-          canDrag={canDrag}
-          canDropIn={canDropIn}
-          onMoveTask={moveTask}
-          onEditMilestone={() => {
-            setEditingMs(milestone);
-            setMsFormOpen(true);
-          }}
-          onDeleteMilestone={() => setMsToDelete(milestone)}
-        />
-      ))}
+            {sectionMilestones.length === 0 ? (
+              <EmptyState
+                icon={SectionIcon}
+                title={`No ${section.title.toLocaleLowerCase()} milestones yet`}
+                description={
+                  canManage
+                    ? section.key === "operations"
+                      ? "Add the support and maintenance milestones that begin after project delivery."
+                      : "Add a delivery milestone to start planning the project."
+                    : undefined
+                }
+              />
+            ) : (
+              sectionMilestones.map((milestone) => (
+                <MilestoneSwimlane
+                  key={milestone.id}
+                  project={project}
+                  milestone={milestone}
+                  tasks={tasksByMilestone.get(milestone.id) ?? []}
+                  documents={documentsByMilestone.get(milestone.id) ?? []}
+                  canDrag={canDrag}
+                  canDropIn={canDropIn}
+                  onMoveTask={moveTask}
+                  onEditMilestone={() => {
+                    setEditingMs(milestone);
+                    setMsFormOpen(true);
+                  }}
+                  onDeleteMilestone={() => setMsToDelete(milestone)}
+                />
+              ))
+            )}
+          </section>
+        );
+      })}
 
       <MilestoneFormDialog
         open={msFormOpen}
         onOpenChange={setMsFormOpen}
         milestone={editingMs}
         project={project}
+        defaultWorkstream={newMilestoneWorkstream}
         isPending={msMut.create.isPending || msMut.update.isPending}
         onSubmit={(payload) =>
           editingMs ? msMut.update.mutateAsync({ id: editingMs.id, payload }) : msMut.create.mutateAsync(payload)
@@ -154,6 +351,7 @@ function MilestoneSwimlane({
   project,
   milestone,
   tasks,
+  documents,
   canDrag,
   canDropIn,
   onMoveTask,
@@ -163,6 +361,7 @@ function MilestoneSwimlane({
   project: Project;
   milestone: Milestone;
   tasks: Task[];
+  documents: DocumentMeta[];
   canDrag: (task: Task) => boolean;
   canDropIn: (status: TaskStatus) => boolean;
   onMoveTask: (taskId: number, status: TaskStatus) => void;
@@ -185,7 +384,7 @@ function MilestoneSwimlane({
   }, [tasks]);
 
   return (
-    <Card>
+    <Card id={`milestone-${milestone.id}`} className="scroll-mt-20">
       <div className="flex flex-wrap items-start justify-between gap-2 border-b border-border p-4">
         <div>
           <h3 className="font-semibold text-fg">{milestone.title}</h3>
@@ -201,6 +400,7 @@ function MilestoneSwimlane({
         </div>
         <div className="flex items-center gap-2">
           <RiskBadge risk={milestone.risk_level} />
+          <MilestoneDocumentsButton milestone={milestone} documents={documents} />
           {canManage && (
             <>
               <Button
@@ -309,6 +509,92 @@ function MilestoneSwimlane({
   );
 }
 
+function MilestoneDocumentsButton({
+  milestone,
+  documents,
+}: {
+  milestone: Milestone;
+  documents: DocumentMeta[];
+}) {
+  const [open, setOpen] = useState(false);
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+
+  if (documents.length === 0) return null;
+
+  async function handleDownload(document: DocumentMeta) {
+    setDownloadingId(document.id);
+    setDownloadError(null);
+    try {
+      await downloadDocument(document);
+    } catch (error) {
+      setDownloadError(getApiErrorMessage(error));
+    } finally {
+      setDownloadingId(null);
+    }
+  }
+
+  return (
+    <>
+      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
+        <Paperclip className="h-4 w-4" />
+        {documents.length} {documents.length === 1 ? "file" : "files"}
+      </Button>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{milestone.title} documents</DialogTitle>
+            <DialogDescription>
+              Files tagged to this milestone from Document control.
+            </DialogDescription>
+          </DialogHeader>
+
+          {downloadError && <p className="text-sm text-danger">{downloadError}</p>}
+
+          <ul className="overflow-hidden rounded-lg border border-border">
+            {documents.map((document) => {
+              const placement = getDocumentPlacement(document);
+              const folder = getDocumentFolder(placement.collection, placement.folder);
+              return (
+                <li
+                  key={document.id}
+                  className="flex items-center justify-between gap-3 border-b border-border px-3 py-3 last:border-b-0"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-raised text-fg-muted">
+                      <FileText className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-fg">{document.title}</p>
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                        <Badge variant="outline">
+                          {placement.collection === "project" ? "Actual Project" : "Maintenance & Operations"}
+                        </Badge>
+                        <Badge variant="neutral">{folder?.label ?? "Document"}</Badge>
+                      </div>
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Download ${document.title}`}
+                    title="Download"
+                    onClick={() => handleDownload(document)}
+                    disabled={downloadingId === document.id}
+                  >
+                    <Download className="h-4 w-4" />
+                  </Button>
+                </li>
+              );
+            })}
+          </ul>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 function TaskCard({
   task,
   draggable,
@@ -324,6 +610,12 @@ function TaskCard({
   onClick: () => void;
   onComment: (e: React.MouseEvent) => void;
 }) {
+  const assignees = task.assigned_members?.length
+    ? task.assigned_members
+    : task.assigned_member_id != null && task.assigned_member_name
+      ? [{ id: task.assigned_member_id, name: task.assigned_member_name, role: null }]
+      : [];
+
   return (
     <div
       role="button"
@@ -346,12 +638,21 @@ function TaskCard({
         )}
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
-        {task.assigned_member_name ? (
-          <Badge variant="neutral">
-            {task.assigned_member_name}
-          </Badge>
-        ) : (
+        {assignees.length === 0 ? (
           <Badge variant="neutral">Unassigned</Badge>
+        ) : (
+          <>
+            {assignees.slice(0, 2).map((member) => (
+              <Badge key={member.id} variant="neutral" title={member.role ?? undefined}>
+                {member.name}
+              </Badge>
+            ))}
+            {assignees.length > 2 && (
+              <Badge variant="outline" title={assignees.slice(2).map((member) => member.name).join(", ")}>
+                +{assignees.length - 2}
+              </Badge>
+            )}
+          </>
         )}
         {task.est_days != null && <Badge variant="outline">{task.est_days}d</Badge>}
       </div>
@@ -380,9 +681,15 @@ function TaskDetailDialog({
           <div className="flex flex-col gap-3 text-sm">
             {task.description && <p className="text-fg-muted">{task.description}</p>}
             <div className="flex flex-wrap gap-2">
-              <Badge variant="neutral">
-                {task.assigned_member_name ?? "Unassigned"}
-              </Badge>
+              {task.assigned_members?.length ? (
+                task.assigned_members.map((member) => (
+                  <Badge key={member.id} variant="neutral">
+                    {member.name}
+                  </Badge>
+                ))
+              ) : (
+                <Badge variant="neutral">{task.assigned_member_name ?? "Unassigned"}</Badge>
+              )}
               {task.est_days != null && <Badge variant="outline">{task.est_days}d estimate</Badge>}
               <RiskBadge risk={task.risk_level} />
               <DelayBadge delayed={task.is_delayed} />

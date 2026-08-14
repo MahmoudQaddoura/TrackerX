@@ -1,11 +1,30 @@
 /** api/team.ts — team directory CRUD. */
 import { api } from "@/lib/apiClient";
-import type { DelegateTasksOut, DelegateTasksPayload, TeamMember } from "@/types";
+import type {
+  AccessLevel,
+  DelegateTasksOut,
+  DelegateTasksPayload,
+  TeamMember,
+} from "@/types";
 
 export interface TeamMemberPayload {
   name: string;
   role?: string | null;
   is_active?: boolean;
+}
+
+export interface EmployeeCredentialsPayload {
+  email: string;
+  temporary_password?: string | null;
+  access_level: AccessLevel;
+  is_enabled: boolean;
+}
+
+export interface EmployeeCredentialsResult {
+  user_id: number;
+  email: string;
+  access_level: AccessLevel;
+  is_enabled: boolean;
 }
 
 export async function fetchTeam(activeOnly = false): Promise<TeamMember[]> {
@@ -35,6 +54,17 @@ export async function delegateMemberTasks(
 ): Promise<DelegateTasksOut> {
   const { data } = await api.post<DelegateTasksOut>(
     `/team-members/${memberId}/delegate-tasks`,
+    payload,
+  );
+  return data;
+}
+
+export async function provisionMemberCredentials(
+  memberId: number,
+  payload: EmployeeCredentialsPayload,
+): Promise<EmployeeCredentialsResult> {
+  const { data } = await api.put<EmployeeCredentialsResult>(
+    `/team-members/${memberId}/credentials`,
     payload,
   );
   return data;

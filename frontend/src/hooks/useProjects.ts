@@ -29,6 +29,7 @@ export function useProjectMutations() {
     onSuccess: (_d, v) => {
       invalidate();
       qc.invalidateQueries({ queryKey: ["project", v.id] });
+      qc.invalidateQueries({ queryKey: ["gantt", v.id] });
     },
   });
   const remove = useMutation({ mutationFn: (id: number) => deleteProject(id), onSuccess: invalidate });
