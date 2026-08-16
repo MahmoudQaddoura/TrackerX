@@ -31,7 +31,8 @@ Prototype/
 | `db.py` | SQLAlchemy `engine`, `SessionLocal`, declarative `Base`, `get_db()` request dependency, `now_iso()` timestamp helper. |
 | `security.py` | `hash_password` / `verify_password` (bcrypt); `create_access_token` / `decode_access_token` (HS256 JWT carrying `sub` + `role`). |
 | `deps.py` | `get_current_user` (401 if no/invalid token) and `require_pm` (403 for owners) FastAPI dependencies. |
-| `seed.py` | Idempotent demo data: PM + Owner users, team members, three sample projects with milestones/tasks/meetings. Run `python -m app.seed`. |
+| `bootstrap.py` | Validates production secrets and creates the first temporary-password administrator only when the users table is empty. |
+| `load_sample_project.py` / `seed_roles.py` | Optional local-development sample projects and demo-role accounts. These are never run automatically in production. |
 
 ### Models — `models/` (one table per file)
 

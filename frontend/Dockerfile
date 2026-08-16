@@ -1,6 +1,6 @@
 # Frontend image — build the static bundle, then serve it with nginx.
 # nginx also reverse-proxies /api to the backend so the browser uses one origin.
-FROM node:20-alpine AS build
+FROM node:22-alpine AS build
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci

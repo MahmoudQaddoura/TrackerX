@@ -1,25 +1,41 @@
+name: trackerx
+
 # Full stack: backend (FastAPI) + frontend (nginx serving the built SPA).
-# The browser only talks to the frontend on port 8080; nginx proxies /api.
+# Only nginx is published; it proxies /api over the private Compose network.
 services:
   backend:
     build: ./backend
     environment:
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-CHANGE_ME_IN_PRODUCTION}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in the production .env file}
       DATABASE_URL: sqlite:////app/data/app.db
       DOCUMENTS_DIR: /app/data/documents
-      CORS_ORIGINS: '["http://localhost:8080"]'
+      CORS_ORIGINS: '${CORS_ORIGINS:-["http://localhost:8080"]}'
       ENVIRONMENT: ${ENVIRONMENT:-production}
+      INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL:-}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}
+      INITIAL_ADMIN_FULL_NAME: ${INITIAL_ADMIN_FULL_NAME:-TrackerX Administrator}
     volumes:
-      - app-data:/app/data      # persist the SQLite db + uploaded documents
+      - app-data:/app/data
     expose:
       - "8000"
+    init: true
+    restart: unless-stopped
 
   frontend:
     build: ./frontend
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     ports:
-      - "8080:80"
+      - "${TRACKERX_BIND_ADDRESS:-127.0.0.1}:${TRACKERX_HTTP_PORT:-8080}:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/api/health >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    init: true
+    restart: unless-stopped
 
 volumes:
   app-data:

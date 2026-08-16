@@ -9,7 +9,8 @@ No DB access, no FastAPI dependencies here — those live in deps.py.
 
 from datetime import datetime, timedelta, timezone
 
-from jose import JWTError, jwt
+import jwt
+from jwt import InvalidTokenError
 from passlib.context import CryptContext
 
 from app.config import settings
@@ -43,5 +44,5 @@ def decode_access_token(token: str) -> dict:
     """Decode and validate a JWT. Raises ValueError on any problem."""
     try:
         return jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
-    except JWTError as exc:  # expired, bad signature, malformed, ...
+    except InvalidTokenError as exc:  # expired, bad signature, malformed, ...
         raise ValueError("Invalid or expired token") from exc
