@@ -6,7 +6,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 
-import { fetchMe, login as loginRequest } from "@/api/auth";
+import { changePassword as changePasswordRequest, fetchMe, login as loginRequest } from "@/api/auth";
 import { clearToken, getToken, setToken } from "@/lib/auth";
 import type { AuthUser } from "@/types";
 
@@ -21,7 +21,10 @@ interface AuthContextValue {
   canViewManagement: boolean;
   /** admin or pm — full CRUD on milestones/tasks/documents/meetings. */
   canManage: boolean;
+  /** Project-level work enabled by an admin for PMs and assigned employees. */
+  canEditProjectContent: boolean;
   login: (email: string, password: string) => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -53,6 +56,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
+  const changePassword = useCallback(async (currentPassword: string, newPassword: string) => {
+    setUser(await changePasswordRequest(currentPassword, newPassword));
+  }, []);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
@@ -65,10 +72,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       canViewManagement: user?.role === "admin" || user?.role === "pm",
       canManage:
         user?.role === "admin" || (user?.role === "pm" && user?.access_level === "write"),
+      canEditProjectContent:
+        user?.role === "admin" ||
+        ((user?.role === "pm" || user?.role === "developer") && user?.access_level === "write"),
       login,
+      changePassword,
       logout,
     }),
-    [user, loading, login, logout],
+    [user, loading, login, changePassword, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

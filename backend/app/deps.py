@@ -20,7 +20,7 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import Project, TeamMember, User
+from app.models import Milestone, Project, Task, TeamMember, User, task_assignees
 from app.models.team import project_clients
 from app.security import decode_access_token
 
@@ -36,11 +36,11 @@ _FORBIDDEN_PROJECT = HTTPException(
 )
 
 
-def get_current_user(
+def get_authenticated_user(
     token: str | None = Depends(oauth2_scheme),
     db: Session = Depends(get_db),
 ) -> User:
-    """Resolve the current user from the JWT, or raise 401."""
+    """Resolve identity even when a mandatory password change is pending."""
     if not token:
         raise _CREDENTIALS_ERROR
     try:
@@ -52,6 +52,16 @@ def get_current_user(
     user = db.get(User, user_id)
     if user is None or not bool(user.is_enabled):
         raise _CREDENTIALS_ERROR
+    return user
+
+
+def get_current_user(user: User = Depends(get_authenticated_user)) -> User:
+    """Resolve an account that has completed any required password replacement."""
+    if bool(user.must_change_password):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Password change required before continuing.",
+        )
     return user
 
 
@@ -85,6 +95,18 @@ def require_write_access(user: User = Depends(get_current_user)) -> User:
     return user
 
 
+def require_project_content_editor(user: User = Depends(get_current_user)) -> User:
+    """Allow project content writes only to approved staff with write access."""
+    if user.role == "admin":
+        return user
+    if user.role not in ("pm", "developer") or user.access_level != "write":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account has read-only access. Ask an admin for write permission.",
+        )
+    return user
+
+
 def get_accessible_project_ids(user: User, db: Session) -> set[int] | None:
     """
     The set of project ids `user` may see, or `None` meaning "no filter"
@@ -98,13 +120,17 @@ def get_accessible_project_ids(user: User, db: Session) -> set[int] | None:
         member = db.query(TeamMember).filter(TeamMember.user_id == user.id).first()
         if member is None:
             return set()
-        # Collect distinct project IDs from every task where this developer is
-        # one of the assignees.
-        ids: set[int] = set()
-        for t in member.assigned_tasks:
-            if t.milestone:
-                ids.add(t.milestone.project_id)
-        return ids
+        # Query distinct project IDs directly. This is the security boundary
+        # for every downstream project tool, including Gantt and documents.
+        rows = (
+            db.query(Milestone.project_id)
+            .join(Task, Task.milestone_id == Milestone.id)
+            .join(task_assignees, task_assignees.c.task_id == Task.id)
+            .filter(task_assignees.c.team_member_id == member.id)
+            .distinct()
+            .all()
+        )
+        return {row[0] for row in rows}
     if user.role == "client":
         rows = db.query(project_clients.c.project_id).filter(project_clients.c.user_id == user.id).all()
         return {r[0] for r in rows}

@@ -103,6 +103,7 @@ def seed() -> None:
             hashed_password=hash_password(DEMO_PASSWORD),
             full_name=PM_NAME,
             role="pm",
+            must_change_password=1,
         )
         db.add_all([admin, client, pm_user])
         db.flush()
@@ -125,6 +126,7 @@ def seed() -> None:
                 hashed_password=hash_password(DEMO_PASSWORD),
                 full_name=name,
                 role="developer",
+                must_change_password=1,
             )
             db.add(dev_user)
             db.flush()

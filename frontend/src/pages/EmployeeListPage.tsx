@@ -12,16 +12,28 @@
  * Special "Owner" badge (amber) on team_members whose role is "Owner".
  */
 import {
+  ArrowRight,
+  BriefcaseBusiness,
+  CalendarRange,
+  CheckCircle2,
   ChevronDown,
   ChevronRight,
+  FileArchive,
+  FolderKanban,
   KeyRound,
+  ListChecks,
+  MessagesSquare,
   Pencil,
   Plus,
+  Search,
+  ShieldCheck,
   Trash2,
   UserCircle,
+  UserCheck,
   Users,
 } from "lucide-react";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 
 import {
   createMember,
@@ -34,6 +46,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { KpiCard } from "@/components/dashboard/KpiCard";
 import {
   Dialog,
   DialogContent,
@@ -45,18 +58,20 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Select } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { useAuth } from "@/context/AuthContext";
 import { useTeam } from "@/hooks/useTeam";
 import { getApiErrorMessage } from "@/lib/apiClient";
+import { timeGreeting } from "@/lib/greeting";
 import { useQueryClient } from "@tanstack/react-query";
 import type { TeamMember } from "@/types";
 
 type ProfileView = { member: TeamMember } | null;
 
 export function EmployeeListPage() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, user } = useAuth();
   const qc = useQueryClient();
   const { data: members, isLoading, isError, refetch } = useTeam();
   const [profile, setProfile] = useState<ProfileView>(null);
@@ -65,6 +80,7 @@ export function EmployeeListPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showDeactivated, setShowDeactivated] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Credential and access state (admin only)
   const [credentialTarget, setCredentialTarget] = useState<TeamMember | null>(null);
@@ -85,8 +101,18 @@ export function EmployeeListPage() {
   const [role, setRole] = useState("");
 
   const rows = members ?? [];
-  const activeMembers = rows.filter((m) => m.is_active);
-  const deactivatedMembers = rows.filter((m) => !m.is_active);
+  const allActiveMembers = rows.filter((m) => m.is_active);
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const matchesSearch = (member: TeamMember) =>
+    !normalizedSearch ||
+    member.name.toLowerCase().includes(normalizedSearch) ||
+    member.role?.toLowerCase().includes(normalizedSearch) ||
+    member.projects.some((project) => project.name.toLowerCase().includes(normalizedSearch));
+  const activeMembers = allActiveMembers.filter(matchesSearch);
+  const deactivatedMembers = rows.filter((m) => !m.is_active && matchesSearch(m));
+  const assignedProjectCount = new Set(rows.flatMap((member) => member.projects.map((project) => project.id))).size;
+  const linkedLogins = rows.filter((member) => member.has_login && member.login_enabled).length;
+  const openTasks = rows.reduce((total, member) => total + member.total_tasks - member.done_tasks, 0);
 
   function openCreate() {
     setEditing(null);
@@ -195,25 +221,62 @@ export function EmployeeListPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      <Card className="relative overflow-hidden border-accent/20 bg-gradient-to-br from-accent via-accent to-accent-hover px-6 py-6 text-white shadow-lg">
+        <div className="absolute -right-16 -top-20 h-56 w-56 rounded-full bg-white/10" />
+        <div className="relative flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <Badge className="border border-white/20 bg-white/10 text-white">
+              <ShieldCheck className="h-3.5 w-3.5" /> Employee control center
+            </Badge>
+            <h1 className="mt-3 font-display text-3xl font-bold tracking-tight">
+              {timeGreeting()}, {user?.full_name ?? "Manager"}
+            </h1>
+            <p className="mt-1 text-sm text-white/75">
+              Keep people, assigned projects, workload, credentials, and access in one current view.
+            </p>
+          </div>
+          <Button size="sm" className="bg-white text-accent hover:bg-white/90" asChild>
+            <Link to="/attendance">Open attendance <ArrowRight className="h-4 w-4" /></Link>
+          </Button>
+        </div>
+      </Card>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <KpiCard label="Active employees" value={allActiveMembers.length} description="Current team members" icon={UserCheck} />
+        <KpiCard label="Assigned projects" value={assignedProjectCount} description="Projects linked through tasks" icon={BriefcaseBusiness} />
+        <KpiCard label="Enabled logins" value={`${linkedLogins}/${rows.length}`} description="Employees with TrackerX access" icon={KeyRound} accent="success" />
+        <KpiCard label="Open assignments" value={openTasks} description="Tasks not completed" icon={ListChecks} />
+      </div>
+      <div className="relative sm:hidden">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-subtle" />
+        <Input className="pl-9" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search people, roles, or projects" />
+      </div>
+
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-display text-2xl font-bold text-fg">Employees</h1>
+          <h2 className="font-display text-2xl font-bold text-fg">Employee directory</h2>
           <p className="text-sm text-fg-muted">
-            {activeMembers.length} active · {deactivatedMembers.length} deactivated
+            {allActiveMembers.length} active · {rows.length - allActiveMembers.length} deactivated
           </p>
         </div>
-        {isAdmin && (
-          <Button size="sm" onClick={openCreate}>
-            <Plus className="h-4 w-4" /> Add
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          <div className="relative hidden sm:block">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-subtle" />
+            <Input className="w-72 pl-9" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search people, roles, or projects" />
+          </div>
+          {isAdmin && (
+            <Button size="sm" onClick={openCreate}>
+              <Plus className="h-4 w-4" /> Add employee
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* ---- Active Employees ---- */}
       {activeMembers.length === 0 ? (
         <EmptyState
           title="No active employees"
-          description="Import a CSV or add one from the button above."
+          description={normalizedSearch ? "No employee matches this search." : "Import a CSV or add one from the button above."}
         />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -331,7 +394,7 @@ export function EmployeeListPage() {
                   onChange={(e) => setToMemberId(e.target.value ? Number(e.target.value) : null)}
                 >
                   <option value="">Choose an employee…</option>
-                  {activeMembers
+                  {allActiveMembers
                     .filter((m) => m.id !== delegateTarget.id)
                     .map((m) => (
                       <option key={m.id} value={String(m.id)}>
@@ -366,7 +429,7 @@ export function EmployeeListPage() {
             </DialogHeader>
             <div className="flex flex-col gap-4">
               <div className="rounded-md border border-border bg-raised/50 p-3 text-sm text-fg-muted">
-                The admin controls this employee’s login and permission. Passwords are hashed and never displayed after saving.
+                The admin controls this employee’s login and permission. A new or reset password is temporary, and the employee must replace it after signing in.
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="credential-email">Login email</Label>
@@ -382,9 +445,8 @@ export function EmployeeListPage() {
                 <Label htmlFor="credential-password">
                   {credentialTarget.has_login ? "Reset temporary password" : "Temporary password"}
                 </Label>
-                <Input
+                <PasswordInput
                   id="credential-password"
-                  type="password"
                   value={temporaryPassword}
                   onChange={(event) => setTemporaryPassword(event.target.value)}
                   placeholder={credentialTarget.has_login ? "Leave blank to keep current password" : "Minimum 8 characters"}
@@ -485,6 +547,19 @@ function EmployeeCard({
                 </Badge>
               )}
             </p>
+            <p className="mt-1 text-xs text-fg-muted">
+              {member.projects.length} assigned project{member.projects.length !== 1 ? "s" : ""}
+            </p>
+            {member.projects.length > 0 && (
+              <div className="mt-1.5 flex flex-wrap gap-1">
+                {member.projects.slice(0, 2).map((project) => (
+                  <Badge key={project.id} variant="outline" className="max-w-[150px] truncate text-[10px]">
+                    {project.name}
+                  </Badge>
+                ))}
+                {member.projects.length > 2 && <Badge variant="neutral" className="text-[10px]">+{member.projects.length - 2}</Badge>}
+              </div>
+            )}
           </div>
         </button>
         {isAdmin && (
@@ -526,7 +601,7 @@ function ProfileDialog({ member, onClose }: { member: TeamMember; onClose: () =>
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <UserCircle className="h-5 w-5" />
@@ -541,47 +616,73 @@ function ProfileDialog({ member, onClose }: { member: TeamMember; onClose: () =>
             )}
           </DialogTitle>
         </DialogHeader>
-        <div className="space-y-3 text-sm">
-          <div className="grid grid-cols-2 gap-2">
-            <div>
+        <div className="space-y-5 text-sm">
+          <div className="grid gap-3 sm:grid-cols-4">
+            <div className="rounded-lg bg-raised/60 p-3">
               <span className="text-fg-muted">Role</span>
               <p className="font-medium">{member.role ?? "—"}</p>
             </div>
-            <div>
+            <div className="rounded-lg bg-raised/60 p-3">
               <span className="text-fg-muted">Status</span>
               <p className="font-medium">{member.is_active ? "Active" : "Inactive"}</p>
             </div>
+            <div className="rounded-lg bg-raised/60 p-3">
+              <span className="text-fg-muted">Task progress</span>
+              <p className="font-medium">{member.done_tasks}/{member.total_tasks}</p>
+            </div>
+            <div className="rounded-lg bg-raised/60 p-3">
+              <span className="text-fg-muted">Active effort</span>
+              <p className="font-medium">{member.active_est_days} days</p>
+            </div>
           </div>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border px-4 py-3">
             <div>
-              <span className="text-fg-muted">Total tasks</span>
-              <p className="font-medium">{member.total_tasks}</p>
+              <p className="font-medium text-fg">TrackerX access</p>
+              <p className="text-xs text-fg-muted">{member.login_email ?? "No login has been created"}</p>
             </div>
-            <div>
-              <span className="text-fg-muted">Done</span>
-              <p className="font-medium">{member.done_tasks}</p>
-            </div>
-            <div>
-              <span className="text-fg-muted">Est. days</span>
-              <p className="font-medium">{member.active_est_days}</p>
-            </div>
+            <Badge variant={member.login_enabled ? "success" : "outline"}>
+              {member.login_enabled ? member.access_level : "No active login"}
+            </Badge>
           </div>
           <div>
-            <span className="text-fg-muted">Has login</span>
-            <p className="font-medium">{member.has_login ? "Yes" : "No"}</p>
-          </div>
-          {member.projects.length > 0 && (
-            <div>
-              <span className="text-fg-muted">Projects</span>
-              <ul className="list-disc pl-5 mt-1">
-                {member.projects.map((p) => (
-                  <li key={p.id} className="text-fg">
-                    {p.name}
-                  </li>
-                ))}
-              </ul>
+            <div className="mb-2 flex items-center justify-between">
+              <div>
+                <p className="font-semibold text-fg">Assigned project workspaces</p>
+                <p className="text-xs text-fg-muted">Access is derived from this employee’s task assignments.</p>
+              </div>
+              <Badge variant="neutral">{member.projects.length} projects</Badge>
             </div>
-          )}
+            {member.projects.length > 0 ? (
+              <div className="space-y-2">
+                {member.projects.map((project) => (
+                  <div key={project.id} className="rounded-lg border border-border p-3">
+                    <div className="flex items-center gap-2 font-medium text-fg">
+                      <FolderKanban className="h-4 w-4 text-accent" /> {project.name}
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {[
+                        { tab: "overview", label: "Overview", icon: CheckCircle2 },
+                        { tab: "kanban", label: "Tasks", icon: ListChecks },
+                        { tab: "gantt", label: "Gantt", icon: CalendarRange },
+                        { tab: "documents", label: "Documents", icon: FileArchive },
+                        { tab: "meetings", label: "Meetings", icon: MessagesSquare },
+                      ].map(({ tab, label, icon: Icon }) => (
+                        <Button key={tab} variant="outline" size="sm" asChild>
+                          <Link to={`/projects/${project.id}?tab=${tab}`} onClick={onClose}>
+                            <Icon className="h-3.5 w-3.5" /> {label}
+                          </Link>
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed border-border p-5 text-center text-fg-muted">
+                No project is linked yet. Assign this employee to a task to grant project access.
+              </div>
+            )}
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>

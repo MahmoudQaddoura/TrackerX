@@ -36,6 +36,23 @@ export async function deleteDocument(id: number): Promise<void> {
   await api.delete(`/documents/${id}`);
 }
 
+export interface DocumentPreviewResponse {
+  blob: Blob;
+  contentType: string;
+  truncated: boolean;
+}
+
+export async function previewDocument(id: number): Promise<DocumentPreviewResponse> {
+  const response = await api.get<Blob>(`/documents/${id}/preview`, { responseType: "blob" });
+  return {
+    blob: response.data,
+    contentType: String(
+      response.headers["content-type"] ?? response.data.type ?? "application/octet-stream",
+    ),
+    truncated: response.headers["x-preview-truncated"] === "true",
+  };
+}
+
 /** Download a file as an attachment (never rendered inline). */
 export async function downloadDocument(doc: DocumentMeta): Promise<void> {
   const response = await api.get(`/documents/${doc.id}/download`, { responseType: "blob" });

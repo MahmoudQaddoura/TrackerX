@@ -8,12 +8,30 @@ portfolio dashboard and a single-project dashboard.
 
 from __future__ import annotations
 
+from datetime import date
+
 from app.models.task import TASK_STATUSES
 from app.services import progress as prog
+from app.services.risk import task_risk
 
 
 def _all_tasks(projects) -> list:
     return [t for p in projects for m in p.milestones for t in m.tasks]
+
+
+def _is_delayed(task) -> bool:
+    """Treat an explicit delay or an incomplete past-due task as an alert."""
+    return bool(task.is_delayed) or task_risk(task) == "overdue"
+
+
+def _days_overdue(task) -> int | None:
+    if not task.end_date or task.status == "done":
+        return None
+    try:
+        due = date.fromisoformat(task.end_date[:10])
+    except ValueError:
+        return None
+    return max((date.today() - due).days, 0)
 
 
 def summary(projects) -> dict:
@@ -26,7 +44,7 @@ def summary(projects) -> dict:
         "total_tasks": r["total_tasks"],
         "done_tasks": r["done_tasks"],
         "progress_pct": r["progress_pct"],
-        "delayed_tasks": r["delayed_tasks"],
+        "delayed_tasks": sum(1 for task in tasks if _is_delayed(task)),
     }
 
 
@@ -49,7 +67,7 @@ def project_timelines(projects) -> list[dict]:
                 "project_id": p.id,
                 "name": p.name,
                 "progress_pct": r["progress_pct"],
-                "is_delayed": r["is_delayed"],
+                "is_delayed": any(_is_delayed(task) for task in tasks),
             }
         )
     return out
@@ -61,18 +79,25 @@ def delayed_tasks(projects) -> list[dict]:
     for p in projects:
         for m in p.milestones:
             for t in m.tasks:
-                if bool(t.is_delayed) or t.status == "delayed":
+                if _is_delayed(t):
                     out.append(
                         {
                             "task_id": t.id,
                             "task_title": t.title,
                             "project_id": p.id,
                             "project_name": p.name,
+                            "milestone_id": m.id,
                             "milestone_title": m.title,
                             "owner": ", ".join(member.name for member in t.assigned_members) or None,
                             "delay_cause": t.delay_cause,
                             "delay_comment": t.delay_comment,
                             "end_date": t.end_date,
+                            "trigger_type": "manual" if bool(t.is_delayed) else "schedule",
+                            "days_overdue": _days_overdue(t),
                         }
                     )
-    return out
+    return sorted(
+        out,
+        key=lambda item: (item["days_overdue"] or 0, item["task_id"]),
+        reverse=True,
+    )

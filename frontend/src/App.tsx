@@ -1,9 +1,9 @@
 /**
  * App.tsx
  * Route table. /login is public; everything else is behind RequireAuth, which
- * renders inside the AppShell. Dashboard/Team are admin/pm-only — a
- * developer or client landing there (via the index redirect or a typed URL)
- * bounces to /projects instead.
+ * renders inside the AppShell. Every signed-in user receives a dashboard that
+ * is scoped by the backend to projects they are permitted to see. Employee
+ * directory management remains admin/pm-only.
  */
 import { Navigate, Route, Routes } from "react-router-dom";
 
@@ -11,6 +11,7 @@ import { RequireAuth } from "@/components/layout/RequireAuth";
 import { useAuth } from "@/context/AuthContext";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { AttendancePage } from "@/pages/AttendancePage";
+import { ChangePasswordPage } from "@/pages/ChangePasswordPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 import { ProjectDetailPage } from "@/pages/ProjectDetailPage";
@@ -23,25 +24,14 @@ function RequireManage({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-function IndexRedirect() {
-  const { canViewManagement } = useAuth();
-  return <Navigate to={canViewManagement ? "/dashboard" : "/projects"} replace />;
-}
-
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route element={<RequireAuth />}>
-        <Route index element={<IndexRedirect />} />
-        <Route
-          path="/dashboard"
-          element={
-            <RequireManage>
-              <DashboardPage />
-            </RequireManage>
-          }
-        />
+        <Route index element={<Navigate to="/dashboard" replace />} />
+        <Route path="/change-password" element={<ChangePasswordPage />} />
+        <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/projects" element={<ProjectsPage />} />
         <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
         <Route path="/attendance" element={<AttendancePage />} />

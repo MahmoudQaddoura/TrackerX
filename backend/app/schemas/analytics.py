@@ -34,8 +34,11 @@ class DelayedTaskItem(BaseModel):
     task_title: str
     project_id: int
     project_name: str
+    milestone_id: int
     milestone_title: str
     owner: str | None
     delay_cause: str | None
     delay_comment: str | None
     end_date: str | None
+    trigger_type: str
+    days_overdue: int | None

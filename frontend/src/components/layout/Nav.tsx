@@ -1,7 +1,7 @@
 /**
  * layout/Nav.tsx — primary top navigation, scoped per role.
- * admin/pm: Dashboard · Projects · Team. developer/client: Projects only
- * (the backend already scopes what "Projects" shows to each of them).
+ * Dashboard and assigned projects are available to every signed-in user.
+ * Company-wide employee management remains admin/pm-only.
  */
 import { CalendarCheck2, LayoutDashboard, FolderKanban, Users } from "lucide-react";
 import { NavLink } from "react-router-dom";
@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 export function Nav() {
   const { canViewManagement } = useAuth();
   const links = [
-    ...(canViewManagement ? [{ to: "/dashboard", label: "Dashboard", icon: LayoutDashboard }] : []),
+    { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { to: "/projects", label: "Projects", icon: FolderKanban },
     { to: "/attendance", label: "Attendance", icon: CalendarCheck2 },
     ...(canViewManagement ? [{ to: "/employees", label: "Employees", icon: Users }] : []),

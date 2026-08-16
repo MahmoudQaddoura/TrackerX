@@ -2,13 +2,12 @@
  * pages/ProjectDetailPage.tsx
  * A single project, tabs scoped per role:
  *   admin/pm  : Overview, Kanban (their work surface), Gantt, Documents, Meetings
- *   developer : Kanban only (no tab bar — nothing else to see)
- *   client    : Overview, Milestones & Tasks (read-only), Gantt, Documents, Meetings
+ *   developer/client: every approved project tool in read-only mode
  * Admin/pm get edit/delete on the project header; only admin can delete.
  */
 import { AlertTriangle, ArrowLeft, CheckCircle2, ListChecks, Percent, Pencil, Trash2 } from "lucide-react";
-import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { RiskBadge } from "@/components/common/RiskBadge";
 import { ProjectStatusBadge } from "@/components/common/StatusBadge";
@@ -44,15 +43,34 @@ export function ProjectDetailPage() {
   const { projectId } = useParams();
   const id = Number(projectId);
   const navigate = useNavigate();
-  const { isAdmin, canManage, isDeveloper } = useAuth();
+  const [searchParams] = useSearchParams();
+  const { isAdmin, canManage, canEditProjectContent } = useAuth();
   const { data: project, isLoading, isError, refetch } = useProject(id);
   const { update, remove } = useProjectMutations();
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState("overview");
+  const [activeTab, setActiveTab] = useState(() =>
+    resolveProjectTab(searchParams.get("tab"), canEditProjectContent),
+  );
+
+  useEffect(() => {
+    setActiveTab(resolveProjectTab(searchParams.get("tab"), canEditProjectContent));
+  }, [canEditProjectContent, searchParams]);
+
+  useEffect(() => {
+    const milestoneId = Number(searchParams.get("milestone"));
+    if (!milestoneId || !["kanban", "board"].includes(activeTab)) return;
+    const timer = window.setTimeout(() => {
+      document.getElementById(`milestone-${milestoneId}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 200);
+    return () => window.clearTimeout(timer);
+  }, [activeTab, searchParams]);
 
   function openMilestoneFromGantt(milestoneId: number) {
-    setActiveTab(canManage ? "kanban" : "board");
+    setActiveTab(canEditProjectContent ? "kanban" : "board");
     window.setTimeout(() => {
       document.getElementById(`milestone-${milestoneId}`)?.scrollIntoView({
         behavior: "smooth",
@@ -104,15 +122,11 @@ export function ProjectDetailPage() {
         )}
       </div>
 
-      {isDeveloper ? (
-        // Developers only ever see the board — no tab bar needed for one tab.
-        <KanbanBoard project={project} />
-      ) : (
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
             <TabsTrigger value="overview">Overview</TabsTrigger>
-            {canManage && <TabsTrigger value="kanban">Kanban</TabsTrigger>}
-            {!canManage && <TabsTrigger value="board">Milestones &amp; Tasks</TabsTrigger>}
+            {canEditProjectContent && <TabsTrigger value="kanban">Kanban</TabsTrigger>}
+            {!canEditProjectContent && <TabsTrigger value="board">Milestones &amp; Tasks</TabsTrigger>}
             <TabsTrigger value="gantt">Gantt</TabsTrigger>
             <TabsTrigger value="documents">Documents</TabsTrigger>
             <TabsTrigger value="meetings">Meetings</TabsTrigger>
@@ -121,12 +135,12 @@ export function ProjectDetailPage() {
           <TabsContent value="overview">
             <OverviewTab projectId={id} />
           </TabsContent>
-          {canManage && (
+          {canEditProjectContent && (
             <TabsContent value="kanban">
               <KanbanBoard project={project} />
             </TabsContent>
           )}
-          {!canManage && (
+          {!canEditProjectContent && (
             <TabsContent value="board">
               <MilestonesTasksBoard project={project} />
             </TabsContent>
@@ -140,8 +154,7 @@ export function ProjectDetailPage() {
           <TabsContent value="meetings">
             <MeetingsPanel projectId={id} />
           </TabsContent>
-        </Tabs>
-      )}
+      </Tabs>
 
       <ProjectFormDialog
         open={editOpen}
@@ -160,6 +173,14 @@ export function ProjectDetailPage() {
       />
     </div>
   );
+}
+
+function resolveProjectTab(requested: string | null, canEditProjectContent: boolean): string {
+  const normalized = requested === "kanban" && !canEditProjectContent ? "board" : requested;
+  const allowed = canEditProjectContent
+    ? ["overview", "kanban", "gantt", "documents", "meetings"]
+    : ["overview", "board", "gantt", "documents", "meetings"];
+  return normalized && allowed.includes(normalized) ? normalized : "overview";
 }
 
 function OverviewTab({ projectId }: { projectId: number }) {

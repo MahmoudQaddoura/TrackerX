@@ -8,6 +8,7 @@ export interface LoginResponse {
   role: Role;
   full_name: string;
   access_level: AccessLevel;
+  must_change_password: boolean;
 }
 
 export async function login(email: string, password: string): Promise<LoginResponse> {
@@ -17,5 +18,16 @@ export async function login(email: string, password: string): Promise<LoginRespo
 
 export async function fetchMe(): Promise<AuthUser> {
   const { data } = await api.get<AuthUser>("/auth/me");
+  return data;
+}
+
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<AuthUser> {
+  const { data } = await api.put<AuthUser>("/auth/change-password", {
+    current_password: currentPassword,
+    new_password: newPassword,
+  });
   return data;
 }

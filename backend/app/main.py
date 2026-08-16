@@ -54,6 +54,10 @@ def _migrate_local_schema() -> None:
         connection.exec_driver_sql(
             "CREATE INDEX IF NOT EXISTS ix_milestones_workstream ON milestones (workstream)"
         )
+        connection.exec_driver_sql(
+            "CREATE INDEX IF NOT EXISTS ix_task_assignees_team_member_id "
+            "ON task_assignees (team_member_id)"
+        )
         if "access_level" not in user_columns:
             connection.exec_driver_sql(
                 "ALTER TABLE users ADD COLUMN access_level TEXT NOT NULL DEFAULT 'read'"
@@ -66,6 +70,16 @@ def _migrate_local_schema() -> None:
         if "is_enabled" not in user_columns:
             connection.exec_driver_sql(
                 "ALTER TABLE users ADD COLUMN is_enabled INTEGER NOT NULL DEFAULT 1"
+            )
+        if "must_change_password" not in user_columns:
+            connection.exec_driver_sql(
+                "ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0"
+            )
+            # Existing employee accounts currently use administrator-issued
+            # credentials. Require a private replacement at their next login.
+            connection.exec_driver_sql(
+                "UPDATE users SET must_change_password = 1 "
+                "WHERE role IN ('pm','developer')"
             )
         # Preserve every existing single assignee as the first member of the
         # new multi-assignee relationship. The composite PK makes this safe on

@@ -2,11 +2,10 @@ from __future__ import annotations
 
 """
 routers/documents.py
-Document upload/list/download/update/delete. Files are written to disk under
+Document upload/list/preview/download/update/delete. Files are written to disk under
 settings.documents_dir; the DB stores metadata only.
-- Upload / update / delete: admin/pm only.
-- List / download: any authenticated user with access to the project
-  (client can download, not upload).
+- Upload / update / delete: admin or assigned staff with admin-approved write access.
+- List / preview / download: any authenticated user with access to the project.
 """
 
 import re
@@ -14,16 +13,17 @@ import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, PlainTextResponse
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db import get_db
-from app.deps import check_project_access, get_current_user, require_manager
+from app.deps import check_project_access, get_current_user, require_project_content_editor
 from app.models import Document, Milestone, Project, User
 from app.models.document import DOCUMENT_CATEGORIES
 from app.schemas.document import DocumentOut, DocumentUpdate
 from app.services.serialize import document_out
+from app.services.document_preview import PreviewUnavailable, prepare_preview
 
 router = APIRouter(tags=["documents"])
 
@@ -35,6 +35,16 @@ def _document_or_404(db: Session, document_id: int) -> Document:
     if doc is None:
         raise HTTPException(status_code=404, detail="Document not found.")
     return doc
+
+
+def _stored_document_path(doc: Document) -> Path:
+    base = Path(settings.documents_dir).resolve()
+    path = Path(doc.file_path).resolve()
+    try:
+        path.relative_to(base)
+    except ValueError:
+        raise HTTPException(status_code=410, detail="The stored file path is invalid.")
+    return path
 
 
 @router.get("/projects/{project_id}/documents", response_model=list[DocumentOut])
@@ -66,7 +76,7 @@ async def upload_document(
     description: str | None = Form(None),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    user: User = Depends(require_manager),
+    user: User = Depends(require_project_content_editor),
 ):
     if db.get(Project, project_id) is None:
         raise HTTPException(status_code=404, detail="Project not found.")
@@ -78,12 +88,6 @@ async def upload_document(
         if ms is None or ms.project_id != project_id:
             raise HTTPException(status_code=422, detail="Milestone does not belong to project.")
 
-    contents = await file.read()
-    if not contents:
-        raise HTTPException(status_code=422, detail="Uploaded file is empty.")
-    if len(contents) > settings.max_upload_bytes:
-        raise HTTPException(status_code=413, detail="File exceeds the 50 MB limit.")
-
     # Build a collision-proof path: documents/<project>/<milestone?>/<category>/<uuid>_<name>
     parts = [str(project_id)]
     if milestone_id is not None:
@@ -94,7 +98,19 @@ async def upload_document(
 
     safe_name = _SAFE_NAME.sub("_", file.filename or "file")
     stored_path = folder / f"{uuid.uuid4().hex}_{safe_name}"
-    stored_path.write_bytes(contents)
+    total_bytes = 0
+    try:
+        with stored_path.open("wb") as destination:
+            while chunk := await file.read(1024 * 1024):
+                total_bytes += len(chunk)
+                if total_bytes > settings.max_upload_bytes:
+                    raise HTTPException(status_code=413, detail="File exceeds the 50 MB limit.")
+                destination.write(chunk)
+        if total_bytes == 0:
+            raise HTTPException(status_code=422, detail="Uploaded file is empty.")
+    except Exception:
+        stored_path.unlink(missing_ok=True)
+        raise
 
     doc = Document(
         project_id=project_id,
@@ -105,7 +121,7 @@ async def upload_document(
         file_name=file.filename or safe_name,
         file_path=str(stored_path),
         content_type=file.content_type,
-        file_size=len(contents),
+        file_size=total_bytes,
         uploaded_by_id=user.id,
     )
     db.add(doc)
@@ -121,7 +137,7 @@ def download_document(
     """Stream the file as an attachment (download, never inline preview)."""
     doc = _document_or_404(db, document_id)
     check_project_access(db, user, doc.project_id)
-    path = Path(doc.file_path)
+    path = _stored_document_path(doc)
     if not path.exists():
         raise HTTPException(status_code=410, detail="File is no longer available on the server.")
     return FileResponse(
@@ -132,12 +148,41 @@ def download_document(
     )
 
 
+@router.get("/documents/{document_id}/preview")
+def preview_document(
+    document_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+):
+    """Return an authorized inline preview without exposing the storage path."""
+    doc = _document_or_404(db, document_id)
+    check_project_access(db, user, doc.project_id)
+    path = _stored_document_path(doc)
+    if not path.exists():
+        raise HTTPException(status_code=410, detail="File is no longer available on the server.")
+    try:
+        preview = prepare_preview(path, doc.file_name, doc.content_type)
+    except PreviewUnavailable as exc:
+        raise HTTPException(status_code=415, detail=str(exc))
+    headers = {
+        "Content-Disposition": "inline",
+        "X-Preview-Truncated": "true" if preview.truncated else "false",
+    }
+    if preview.kind == "binary":
+        return FileResponse(
+            path,
+            filename=doc.file_name,
+            media_type=preview.media_type,
+            content_disposition_type="inline",
+            headers=headers,
+        )
+    return PlainTextResponse(preview.text or "", media_type=preview.media_type, headers=headers)
+
+
 @router.put("/documents/{document_id}", response_model=DocumentOut)
 def update_document(
     document_id: int,
     inp: DocumentUpdate,
     db: Session = Depends(get_db),
-    user: User = Depends(require_manager),
+    user: User = Depends(require_project_content_editor),
 ):
     doc = _document_or_404(db, document_id)
     check_project_access(db, user, doc.project_id)
@@ -153,10 +198,12 @@ def update_document(
 
 @router.delete("/documents/{document_id}", status_code=204)
 def delete_document(
-    document_id: int, db: Session = Depends(get_db), user: User = Depends(require_manager)
+    document_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_project_content_editor),
 ):
     doc = _document_or_404(db, document_id)
     check_project_access(db, user, doc.project_id)
-    Path(doc.file_path).unlink(missing_ok=True)  # remove the file from disk
+    _stored_document_path(doc).unlink(missing_ok=True)  # remove the file from disk
     db.delete(doc)
     db.commit()

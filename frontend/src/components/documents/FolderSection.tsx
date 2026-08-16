@@ -1,6 +1,7 @@
 /** A focused document category with upload, search, download, and delete actions. */
 import {
   Download,
+  Eye,
   FileText,
   KeyRound,
   Link2,
@@ -14,6 +15,7 @@ import { DragEvent, FormEvent, useMemo, useState } from "react";
 
 import { downloadDocument } from "@/api/documents";
 import { DeleteConfirmDialog } from "@/components/forms/DeleteConfirmDialog";
+import { FilePreviewDialog } from "@/components/documents/FilePreviewDialog";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
@@ -47,7 +49,7 @@ export function FolderSection({
   documents: DocumentMeta[];
   milestones: Milestone[];
 }) {
-  const { canManage } = useAuth();
+  const { canEditProjectContent } = useAuth();
   const { uploadMany, remove } = useDocumentMutations(projectId);
   const [showUpload, setShowUpload] = useState(false);
   const [selectedMilestoneId, setSelectedMilestoneId] = useState("");
@@ -58,6 +60,7 @@ export function FolderSection({
   const [query, setQuery] = useState("");
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const [toDelete, setToDelete] = useState<DocumentMeta | null>(null);
+  const [toPreview, setToPreview] = useState<DocumentMeta | null>(null);
 
   const visibleDocuments = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase();
@@ -171,7 +174,7 @@ export function FolderSection({
             <p className="mt-1 text-sm text-fg-muted">{folder.description}</p>
           </div>
         </div>
-        {canManage && (
+        {canEditProjectContent && (
           <Button
             size="sm"
             variant={showUpload ? "subtle" : "default"}
@@ -193,7 +196,7 @@ export function FolderSection({
           </div>
         )}
 
-        {canManage && showUpload && (
+        {canEditProjectContent && showUpload && (
           <form onSubmit={handleUpload} className="animate-slide-up rounded-lg border border-border bg-surface p-4">
             <div className="mb-4 max-w-xl">
               <Label htmlFor={`milestone-${collection}-${folder.key}`}>Link files to milestone</Label>
@@ -335,7 +338,7 @@ export function FolderSection({
             title={`No documents in ${folder.label} yet`}
             description="Documents uploaded to this category will be listed here by newest first."
             action={
-              canManage ? (
+              canEditProjectContent ? (
                 <Button size="sm" variant="outline" onClick={() => setShowUpload(true)}>
                   <Upload className="h-4 w-4" /> Upload first document
                 </Button>
@@ -367,7 +370,12 @@ export function FolderSection({
                     key={document.id}
                     className="flex items-center justify-between gap-3 border-b border-border px-3 py-3 last:border-b-0 sm:px-4"
                   >
-                    <div className="flex min-w-0 items-center gap-3">
+                    <button
+                      type="button"
+                      className="flex min-w-0 flex-1 items-center gap-3 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      onClick={() => setToPreview(document)}
+                      aria-label={`Preview ${document.title}`}
+                    >
                       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-raised text-fg-muted">
                         <FileText className="h-4 w-4" />
                       </span>
@@ -386,8 +394,17 @@ export function FolderSection({
                           </span>
                         </span>
                       </div>
-                    </div>
+                    </button>
                     <div className="flex shrink-0 items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Preview ${document.title}`}
+                        title="Preview"
+                        onClick={() => setToPreview(document)}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -398,7 +415,7 @@ export function FolderSection({
                       >
                         {downloadingId === document.id ? <Spinner /> : <Download className="h-4 w-4" />}
                       </Button>
-                      {canManage && (
+                      {canEditProjectContent && (
                         <Button
                           variant="ghost"
                           size="icon"
@@ -428,6 +445,7 @@ export function FolderSection({
           if (toDelete) remove.mutate(toDelete.id, { onSuccess: () => setToDelete(null) });
         }}
       />
+      <FilePreviewDialog document={toPreview} onClose={() => setToPreview(null)} />
     </div>
   );
 }

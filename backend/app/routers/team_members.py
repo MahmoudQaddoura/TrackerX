@@ -142,6 +142,7 @@ def provision_credentials(
             role="developer",
             access_level=inp.access_level,
             is_enabled=1 if inp.is_enabled else 0,
+            must_change_password=1,
             hashed_password=hash_password(inp.temporary_password),
         )
         db.add(user)
@@ -155,6 +156,7 @@ def provision_credentials(
             user.is_enabled = 1 if inp.is_enabled else 0
         if inp.temporary_password:
             user.hashed_password = hash_password(inp.temporary_password)
+            user.must_change_password = 1
 
     db.commit()
     db.refresh(user)

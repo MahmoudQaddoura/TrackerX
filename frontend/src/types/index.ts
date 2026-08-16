@@ -22,6 +22,7 @@ export interface AuthUser {
   role: Role;
   access_level: AccessLevel;
   is_enabled: boolean;
+  must_change_password: boolean;
 }
 
 export interface Project {
@@ -221,9 +222,12 @@ export interface DelayedTaskItem {
   task_title: string;
   project_id: number;
   project_name: string;
+  milestone_id: number;
   milestone_title: string;
   owner: string | null;
   delay_cause: DelayCause | null;
   delay_comment: string | null;
   end_date: string | null;
+  trigger_type: "manual" | "schedule";
+  days_overdue: number | null;
 }

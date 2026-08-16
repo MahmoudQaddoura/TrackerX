@@ -41,6 +41,7 @@ def create_user(inp: UserCreateInput, db: Session = Depends(get_db), _=Depends(r
         role=inp.role,
         access_level="write" if inp.role == "admin" else inp.access_level,
         is_enabled=1,
+        must_change_password=1 if inp.role in ("pm", "developer") else 0,
         hashed_password=hash_password(inp.password),
     )
     db.add(user)
