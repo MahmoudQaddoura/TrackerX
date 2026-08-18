@@ -64,7 +64,7 @@ function readableDate(value: string): string {
   }).format(new Date(`${value}T12:00:00`));
 }
 
-export function LeaveRequestsPage() {
+export function LeaveRequestsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { isAdmin } = useAuth();
   const requests = useLeaveRequests(isAdmin ? "all" : "mine");
   const createRequest = useCreateLeaveRequest();
@@ -195,18 +195,20 @@ export function LeaveRequestsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <CalendarClock className="h-6 w-6 text-accent" />
-            <h1 className="font-display text-2xl font-bold text-fg">Leave &amp; absence</h1>
+      {!embedded && (
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <CalendarClock className="h-6 w-6 text-accent" />
+              <h1 className="font-display text-2xl font-bold text-fg">Leave &amp; absence</h1>
+            </div>
+            <p className="mt-1 text-sm text-fg-muted">
+              Submit reasons, review requests, and keep attendance linked to the approval record.
+            </p>
           </div>
-          <p className="mt-1 text-sm text-fg-muted">
-            Submit reasons, review requests, and keep attendance linked to the approval record.
-          </p>
+          {isAdmin && <Badge variant={pendingCount ? "warning" : "success"}>{pendingCount} pending</Badge>}
         </div>
-        {isAdmin && <Badge variant={pendingCount ? "warning" : "success"}>{pendingCount} pending</Badge>}
-      </div>
+      )}
 
       {isAdmin ? (
         <RequestList requests={requests.data ?? []} canReview onReview={openReview} />

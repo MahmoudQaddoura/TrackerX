@@ -64,7 +64,7 @@ function labelFor(status: AttendanceStatus): string {
   return STATUS_OPTIONS.find((option) => option.value === status)?.label ?? status;
 }
 
-export function AttendancePage() {
+export function AttendancePage({ embedded = false }: { embedded?: boolean } = {}) {
   const { isAdmin } = useAuth();
   const [searchParams] = useSearchParams();
   const [date, setDate] = useState(() => searchParams.get("date") ?? localDate());
@@ -144,17 +144,19 @@ export function AttendancePage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <CalendarCheck2 className="h-6 w-6 text-accent" />
-            <h1 className="font-display text-2xl font-bold text-fg">Attendance</h1>
+        {!embedded && (
+          <div>
+            <div className="flex items-center gap-2">
+              <CalendarCheck2 className="h-6 w-6 text-accent" />
+              <h1 className="font-display text-2xl font-bold text-fg">Attendance</h1>
+            </div>
+            <p className="mt-1 text-sm text-fg-muted">
+              {isAdmin
+                ? "Record the daily attendance sheet for every active employee."
+                : "View your daily attendance record."}
+            </p>
           </div>
-          <p className="mt-1 text-sm text-fg-muted">
-            {isAdmin
-              ? "Record the daily attendance sheet for every active employee."
-              : "View your daily attendance record."}
-          </p>
-        </div>
+        )}
         <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="outline"

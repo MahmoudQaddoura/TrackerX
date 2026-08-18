@@ -10,10 +10,9 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { RequireAuth } from "@/components/layout/RequireAuth";
 import { useAuth } from "@/context/AuthContext";
 import { DashboardPage } from "@/pages/DashboardPage";
-import { AttendancePage } from "@/pages/AttendancePage";
+import { AttendanceHubPage } from "@/pages/AttendanceHubPage";
 import { ChangePasswordPage } from "@/pages/ChangePasswordPage";
 import { LoginPage } from "@/pages/LoginPage";
-import { LeaveRequestsPage } from "@/pages/LeaveRequestsPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 import { ProjectDetailPage } from "@/pages/ProjectDetailPage";
 import { ProjectsPage } from "@/pages/ProjectsPage";
@@ -35,8 +34,8 @@ export default function App() {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/projects" element={<ProjectsPage />} />
         <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
-        <Route path="/attendance" element={<AttendancePage />} />
-        <Route path="/leave-requests" element={<LeaveRequestsPage />} />
+        <Route path="/attendance" element={<AttendanceHubPage />} />
+        <Route path="/leave-requests" element={<Navigate to="/attendance?section=leave" replace />} />
         <Route
           path="/employees"
           element={
