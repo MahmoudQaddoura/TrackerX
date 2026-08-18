@@ -23,6 +23,7 @@ class TeamMemberUpdate(BaseModel):
 class EmployeeCredentialsInput(BaseModel):
     email: EmailStr
     temporary_password: str | None = Field(default=None, min_length=8, max_length=200)
+    account_role: str | None = None
     access_level: str = "read"
     is_enabled: bool = True
 
@@ -30,6 +31,7 @@ class EmployeeCredentialsInput(BaseModel):
 class EmployeeCredentialsOut(BaseModel):
     user_id: int
     email: EmailStr
+    account_role: str
     access_level: str
     is_enabled: bool
 
@@ -47,6 +49,8 @@ class TeamMemberOut(BaseModel):
     user_id: int | None
     has_login: bool
     login_email: EmailStr | None
+    account_role: str | None
+    is_primary_admin: bool
     access_level: str | None
     login_enabled: bool
     created_at: str

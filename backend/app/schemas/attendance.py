@@ -27,4 +27,5 @@ class AttendanceOut(BaseModel):
     check_out: str | None
     notes: str | None
     recorded_by_name: str | None
+    leave_request_id: int | None
     updated_at: str | None

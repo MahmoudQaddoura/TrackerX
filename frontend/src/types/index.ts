@@ -5,6 +5,7 @@
  */
 
 export type Role = "admin" | "pm" | "developer" | "client";
+export type EmployeeAccountRole = Exclude<Role, "client">;
 export type AccessLevel = "read" | "write";
 export type ProjectStatus = "active" | "on_hold" | "completed" | "archived";
 export type TaskStatus = "todo" | "in_progress" | "in_review" | "blocked" | "done";
@@ -14,6 +15,8 @@ export type DelayCause = "Company" | "Client";
 export type DocumentCategory = "technical" | "meeting_minutes" | "business";
 export type MeetingType = "sprint" | "client";
 export type CommentEntity = "task" | "milestone";
+export type LeaveRequestType = "leave" | "sick_leave" | "absent";
+export type LeaveRequestStatus = "pending" | "approved" | "rejected";
 
 export interface AuthUser {
   id: number;
@@ -22,6 +25,7 @@ export interface AuthUser {
   role: Role;
   access_level: AccessLevel;
   is_enabled: boolean;
+  is_primary_admin: boolean;
   must_change_password: boolean;
 }
 
@@ -101,6 +105,8 @@ export interface TeamMember {
   user_id: number | null;
   has_login: boolean;
   login_email: string | null;
+  account_role: EmployeeAccountRole | null;
+  is_primary_admin: boolean;
   access_level: AccessLevel | null;
   login_enabled: boolean;
   created_at: string;
@@ -126,7 +132,25 @@ export interface AttendanceRecord {
   check_out: string | null;
   notes: string | null;
   recorded_by_name: string | null;
+  leave_request_id: number | null;
   updated_at: string | null;
+}
+
+export interface LeaveRequest {
+  id: number;
+  team_member_id: number;
+  employee_name: string;
+  employee_role: string | null;
+  request_type: LeaveRequestType;
+  start_date: string;
+  end_date: string;
+  reason: string;
+  status: LeaveRequestStatus;
+  review_note: string | null;
+  reviewed_by_name: string | null;
+  attendance_autofilled: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface DelegateTasksPayload {

@@ -51,6 +51,7 @@ def _serialize(member: TeamMember, record: AttendanceRecord | None, day: str) ->
         "recorded_by_name": (
             record.recorded_by.full_name if record and record.recorded_by else None
         ),
+        "leave_request_id": record.leave_request_id if record else None,
         "updated_at": record.updated_at if record else None,
     }
 
@@ -127,6 +128,9 @@ def save_attendance_sheet(
         record.check_out = item.check_out or None
         record.notes = item.notes.strip() if item.notes and item.notes.strip() else None
         record.recorded_by_id = admin.id
+        # A manual edit takes ownership of the row away from an earlier
+        # request autofill while keeping the note text visible to the admin.
+        record.leave_request_id = None
 
     db.commit()
     if not inp.records:

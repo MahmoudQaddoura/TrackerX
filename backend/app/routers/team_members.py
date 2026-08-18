@@ -30,6 +30,8 @@ from app.services.serialize import team_member_out
 
 router = APIRouter(prefix="/team-members", tags=["employees"])
 
+EMPLOYEE_ACCOUNT_ROLES = {"admin", "pm", "developer"}
+
 
 class DelegateTasksInput(BaseModel):
     """Reassign all non-done tasks from one member to another."""
@@ -120,12 +122,17 @@ def provision_credentials(
     member_id: int,
     inp: EmployeeCredentialsInput,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    admin: User = Depends(require_admin),
 ):
     """Create, reset, enable, or permission an employee's linked login."""
     member = _member_or_404(db, member_id)
     if inp.access_level not in ("read", "write"):
         raise HTTPException(status_code=422, detail="Access level must be 'read' or 'write'.")
+    if inp.account_role is not None and inp.account_role not in EMPLOYEE_ACCOUNT_ROLES:
+        raise HTTPException(
+            status_code=422,
+            detail="Account role must be admin, pm, or developer.",
+        )
 
     email = inp.email.lower()
     duplicate = db.query(User).filter(func.lower(User.email) == email).first()
@@ -133,14 +140,31 @@ def provision_credentials(
         raise HTTPException(status_code=409, detail="That email is already used by another account.")
 
     user = member.user
+    account_role = inp.account_role or (user.role if user else "developer")
+    existing_role = user.role if user else None
+    changes_privileged_role = account_role != existing_role and (
+        account_role in ("admin", "pm") or existing_role in ("admin", "pm")
+    )
+    if changes_privileged_role and not bool(admin.is_primary_admin):
+        raise HTTPException(
+            status_code=403,
+            detail="Only the primary administrator can assign administrator or project-manager roles.",
+        )
+    if user and bool(user.is_primary_admin) and (
+        account_role != "admin" or not inp.is_enabled
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="The primary administrator cannot be demoted or disabled.",
+        )
     if user is None:
         if not inp.temporary_password:
             raise HTTPException(status_code=422, detail="A temporary password is required for a new login.")
         user = User(
             email=email,
             full_name=member.name,
-            role="developer",
-            access_level=inp.access_level,
+            role=account_role,
+            access_level="write" if account_role == "admin" else inp.access_level,
             is_enabled=1 if inp.is_enabled else 0,
             must_change_password=1,
             hashed_password=hash_password(inp.temporary_password),
@@ -149,11 +173,22 @@ def provision_credentials(
         db.flush()
         member.user_id = user.id
     else:
+        if user.role == "admin" and (account_role != "admin" or not inp.is_enabled):
+            other_enabled_admins = (
+                db.query(User)
+                .filter(User.role == "admin", User.is_enabled == 1, User.id != user.id)
+                .count()
+            )
+            if other_enabled_admins == 0:
+                raise HTTPException(
+                    status_code=422,
+                    detail="TrackerX must keep at least one enabled administrator.",
+                )
         user.email = email
         user.full_name = member.name
-        if user.role != "admin":
-            user.access_level = inp.access_level
-            user.is_enabled = 1 if inp.is_enabled else 0
+        user.role = account_role
+        user.access_level = "write" if account_role == "admin" else inp.access_level
+        user.is_enabled = 1 if inp.is_enabled else 0
         if inp.temporary_password:
             user.hashed_password = hash_password(inp.temporary_password)
             user.must_change_password = 1
@@ -163,6 +198,7 @@ def provision_credentials(
     return EmployeeCredentialsOut(
         user_id=user.id,
         email=user.email,
+        account_role=user.role,
         access_level="write" if user.role == "admin" else user.access_level,
         is_enabled=bool(user.is_enabled),
     )

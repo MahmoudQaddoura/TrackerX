@@ -22,6 +22,7 @@ from app.routers import (
     csv_import,
     documents,
     gantt,
+    leave_requests,
     meetings,
     milestones,
     projects,
@@ -46,6 +47,9 @@ def _migrate_local_schema() -> None:
 
     milestone_columns = {column["name"] for column in inspect(engine).get_columns("milestones")}
     user_columns = {column["name"] for column in inspect(engine).get_columns("users")}
+    attendance_columns = {
+        column["name"] for column in inspect(engine).get_columns("attendance_records")
+    }
     with engine.begin() as connection:
         if "workstream" not in milestone_columns:
             connection.exec_driver_sql(
@@ -71,6 +75,26 @@ def _migrate_local_schema() -> None:
             connection.exec_driver_sql(
                 "ALTER TABLE users ADD COLUMN is_enabled INTEGER NOT NULL DEFAULT 1"
             )
+        if "is_primary_admin" not in user_columns:
+            connection.exec_driver_sql(
+                "ALTER TABLE users ADD COLUMN is_primary_admin INTEGER NOT NULL DEFAULT 0"
+            )
+        # Existing installations predate the primary-admin flag. Preserve the
+        # earliest enabled administrator as the owner of role assignment.
+        connection.exec_driver_sql(
+            """
+            UPDATE users
+            SET is_primary_admin = 1
+            WHERE id = (
+                SELECT id FROM users
+                WHERE role = 'admin' AND is_enabled = 1
+                ORDER BY id LIMIT 1
+            )
+            AND NOT EXISTS (
+                SELECT 1 FROM users WHERE is_primary_admin = 1
+            )
+            """
+        )
         if "must_change_password" not in user_columns:
             connection.exec_driver_sql(
                 "ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0"
@@ -91,6 +115,14 @@ def _migrate_local_schema() -> None:
             FROM tasks
             WHERE assigned_member_id IS NOT NULL
             """
+        )
+        if "leave_request_id" not in attendance_columns:
+            connection.exec_driver_sql(
+                "ALTER TABLE attendance_records ADD COLUMN leave_request_id INTEGER"
+            )
+        connection.exec_driver_sql(
+            "CREATE INDEX IF NOT EXISTS ix_attendance_records_leave_request_id "
+            "ON attendance_records (leave_request_id)"
         )
         connection.exec_driver_sql("PRAGMA optimize")
 
@@ -125,6 +157,7 @@ for r in (
     csv_import.router,
     analytics.router,
     attendance.router,
+    leave_requests.router,
     gantt.router,
 ):
     app.include_router(r, prefix="/api")

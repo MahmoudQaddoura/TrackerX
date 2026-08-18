@@ -66,12 +66,12 @@ import { useTeam } from "@/hooks/useTeam";
 import { getApiErrorMessage } from "@/lib/apiClient";
 import { timeGreeting } from "@/lib/greeting";
 import { useQueryClient } from "@tanstack/react-query";
-import type { TeamMember } from "@/types";
+import type { EmployeeAccountRole, TeamMember } from "@/types";
 
 type ProfileView = { member: TeamMember } | null;
 
 export function EmployeeListPage() {
-  const { isAdmin, user } = useAuth();
+  const { isAdmin, isPrimaryAdmin, user } = useAuth();
   const qc = useQueryClient();
   const { data: members, isLoading, isError, refetch } = useTeam();
   const [profile, setProfile] = useState<ProfileView>(null);
@@ -86,6 +86,7 @@ export function EmployeeListPage() {
   const [credentialTarget, setCredentialTarget] = useState<TeamMember | null>(null);
   const [credentialEmail, setCredentialEmail] = useState("");
   const [temporaryPassword, setTemporaryPassword] = useState("");
+  const [accountRole, setAccountRole] = useState<EmployeeAccountRole>("developer");
   const [accessLevel, setAccessLevel] = useState<"read" | "write">("read");
   const [loginEnabled, setLoginEnabled] = useState(true);
   const [credentialSaving, setCredentialSaving] = useState(false);
@@ -140,6 +141,7 @@ export function EmployeeListPage() {
     setCredentialTarget(member);
     setCredentialEmail(member.login_email ?? "");
     setTemporaryPassword("");
+    setAccountRole(member.account_role ?? "developer");
     setAccessLevel(member.access_level ?? "read");
     setLoginEnabled(member.has_login ? member.login_enabled : true);
     setCredentialError(null);
@@ -156,6 +158,7 @@ export function EmployeeListPage() {
       await provisionMemberCredentials(credentialTarget.id, {
         email: credentialEmail.trim(),
         temporary_password: temporaryPassword || null,
+        account_role: isPrimaryAdmin ? accountRole : undefined,
         access_level: accessLevel,
         is_enabled: loginEnabled,
       });
@@ -452,18 +455,50 @@ export function EmployeeListPage() {
                   placeholder={credentialTarget.has_login ? "Leave blank to keep current password" : "Minimum 8 characters"}
                 />
               </div>
+              {isPrimaryAdmin ? (
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="credential-role">Account role</Label>
+                  <Select
+                    id="credential-role"
+                    value={accountRole}
+                    onChange={(event) => {
+                      const nextRole = event.target.value as EmployeeAccountRole;
+                      setAccountRole(nextRole);
+                      if (nextRole === "admin") setAccessLevel("write");
+                    }}
+                  >
+                    <option value="developer">Employee</option>
+                    <option value="pm">Project manager</option>
+                    <option value="admin">Administrator</option>
+                  </Select>
+                  <p className="text-xs text-fg-muted">
+                    Only the primary admin can assign project-manager or administrator roles.
+                  </p>
+                </div>
+              ) : (
+                <div className="rounded-md border border-border bg-raised/50 p-3">
+                  <p className="text-xs font-medium uppercase tracking-wide text-fg-subtle">Account role</p>
+                  <p className="mt-1 text-sm font-semibold capitalize text-fg">
+                    {accountRole === "pm" ? "Project manager" : accountRole === "admin" ? "Administrator" : "Employee"}
+                  </p>
+                  <p className="mt-1 text-xs text-fg-muted">The primary admin controls role changes.</p>
+                </div>
+              )}
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="credential-access">Permission</Label>
                 <Select
                   id="credential-access"
                   value={accessLevel}
+                  disabled={accountRole === "admin"}
                   onChange={(event) => setAccessLevel(event.target.value as "read" | "write")}
                 >
                   <option value="read">Read only</option>
                   <option value="write">Read &amp; write</option>
                 </Select>
                 <p className="text-xs text-fg-muted">
-                  Role restrictions still apply; write permission allows the actions available to that employee’s role.
+                  {accountRole === "admin"
+                    ? "Administrator accounts always have read and write permission."
+                    : "Write permission enables the actions available to this account role."}
                 </p>
               </div>
               <label className="flex items-center gap-2 rounded-md border border-border p-3 text-sm font-medium text-fg">
@@ -532,6 +567,16 @@ function EmployeeCard({
                   className="border-amber-500/50 bg-amber-500/10 text-amber-700 text-[10px]"
                 >
                   Owner
+                </Badge>
+              )}
+              {member.account_role === "admin" && (
+                <Badge variant="success" className="text-[10px]">
+                  Admin privileges
+                </Badge>
+              )}
+              {member.is_primary_admin && (
+                <Badge variant="default" className="text-[10px]">
+                  Primary admin
                 </Badge>
               )}
               {isDeactivated && !isOwner && (
@@ -614,6 +659,16 @@ function ProfileDialog({ member, onClose }: { member: TeamMember; onClose: () =>
                 Owner
               </Badge>
             )}
+            {member.account_role === "admin" && (
+              <Badge variant="success" className="ml-1 text-[11px]">
+                Admin privileges
+              </Badge>
+            )}
+            {member.is_primary_admin && (
+              <Badge variant="default" className="ml-1 text-[11px]">
+                Primary admin
+              </Badge>
+            )}
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-5 text-sm">
@@ -641,7 +696,11 @@ function ProfileDialog({ member, onClose }: { member: TeamMember; onClose: () =>
               <p className="text-xs text-fg-muted">{member.login_email ?? "No login has been created"}</p>
             </div>
             <Badge variant={member.login_enabled ? "success" : "outline"}>
-              {member.login_enabled ? member.access_level : "No active login"}
+              {member.login_enabled
+                ? member.account_role === "admin"
+                  ? "Administrator · Read & write"
+                  : member.access_level
+                : "No active login"}
             </Badge>
           </div>
           <div>

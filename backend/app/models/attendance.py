@@ -23,11 +23,15 @@ class AttendanceRecord(Base):
     check_out = Column(Text, nullable=True)
     notes = Column(Text, nullable=True)
     recorded_by_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    leave_request_id = Column(
+        Integer, ForeignKey("leave_requests.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at = Column(Text, nullable=False, default=now_iso)
     updated_at = Column(Text, nullable=False, default=now_iso, onupdate=now_iso)
 
     team_member = relationship("TeamMember", back_populates="attendance_records")
     recorded_by = relationship("User")
+    leave_request = relationship("LeaveRequest", back_populates="attendance_records")
 
     __table_args__ = (
         UniqueConstraint("team_member_id", "attendance_date", name="uq_attendance_member_date"),

@@ -79,7 +79,21 @@ def seed() -> None:
     db = SessionLocal()
     try:
         if db.query(User).filter(User.email == "admin@demo.com").first() is not None:
-            print("Role seed skipped — demo users already exist.")
+            admin_user = db.query(User).filter(User.email == "admin@demo.com").first()
+            admin_user.role = "admin"
+            admin_user.access_level = "write"
+            admin_user.is_enabled = 1
+            admin_user.is_primary_admin = 1
+            yazan_user = db.query(User).filter(User.email == _email_for(PM_NAME)).first()
+            if yazan_user is not None:
+                yazan_user.role = "admin"
+                yazan_user.access_level = "write"
+                yazan_user.is_enabled = 1
+                yazan_user.is_primary_admin = 0
+                db.commit()
+                print("Existing Yazan account promoted to administrator.")
+            else:
+                print("Role seed skipped — demo users already exist.")
             return
 
         project = db.query(Project).first()
@@ -91,6 +105,8 @@ def seed() -> None:
             hashed_password=hash_password(DEMO_PASSWORD),
             full_name="Dr. Mohammad Alnabhan",
             role="admin",
+            access_level="write",
+            is_primary_admin=1,
         )
         client = User(
             email="client@demo.com",
@@ -102,7 +118,9 @@ def seed() -> None:
             email=_email_for(PM_NAME),
             hashed_password=hash_password(DEMO_PASSWORD),
             full_name=PM_NAME,
-            role="pm",
+            role="admin",
+            access_level="write",
+            is_primary_admin=0,
             must_change_password=1,
         )
         db.add_all([admin, client, pm_user])

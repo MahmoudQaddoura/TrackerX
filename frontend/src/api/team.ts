@@ -4,6 +4,7 @@ import type {
   AccessLevel,
   DelegateTasksOut,
   DelegateTasksPayload,
+  EmployeeAccountRole,
   TeamMember,
 } from "@/types";
 
@@ -16,6 +17,7 @@ export interface TeamMemberPayload {
 export interface EmployeeCredentialsPayload {
   email: string;
   temporary_password?: string | null;
+  account_role?: EmployeeAccountRole;
   access_level: AccessLevel;
   is_enabled: boolean;
 }
@@ -23,6 +25,7 @@ export interface EmployeeCredentialsPayload {
 export interface EmployeeCredentialsResult {
   user_id: number;
   email: string;
+  account_role: EmployeeAccountRole;
   access_level: AccessLevel;
   is_enabled: boolean;
 }

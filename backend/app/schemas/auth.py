@@ -34,6 +34,7 @@ class UserOut(BaseModel):
     role: str
     access_level: str
     is_enabled: bool
+    is_primary_admin: bool
     must_change_password: bool
 
     model_config = {"from_attributes": True}

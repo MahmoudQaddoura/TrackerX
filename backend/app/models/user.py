@@ -26,6 +26,7 @@ class User(Base):
     role = Column(Text, nullable=False, default="client")
     access_level = Column(Text, nullable=False, default="read")
     is_enabled = Column(Integer, nullable=False, default=1)
+    is_primary_admin = Column(Integer, nullable=False, default=0)
     must_change_password = Column(Integer, nullable=False, default=0)
     created_at = Column(Text, nullable=False, default=now_iso)
 
@@ -33,6 +34,7 @@ class User(Base):
         CheckConstraint("role IN ('admin','pm','developer','client')", name="ck_user_role"),
         CheckConstraint("access_level IN ('read','write')", name="ck_user_access_level"),
         CheckConstraint("is_enabled IN (0,1)", name="ck_user_is_enabled"),
+        CheckConstraint("is_primary_admin IN (0,1)", name="ck_user_is_primary_admin"),
         CheckConstraint(
             "must_change_password IN (0,1)", name="ck_user_must_change_password"
         ),

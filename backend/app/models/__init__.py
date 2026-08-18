@@ -16,6 +16,7 @@ from app.models.document import Document
 from app.models.meeting import Meeting
 from app.models.comment import Comment
 from app.models.attendance import AttendanceRecord
+from app.models.leave_request import LeaveRequest
 
 __all__ = [
     "User",
@@ -29,4 +30,5 @@ __all__ = [
     "Meeting",
     "Comment",
     "AttendanceRecord",
+    "LeaveRequest",
 ]

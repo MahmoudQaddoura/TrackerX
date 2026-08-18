@@ -27,11 +27,20 @@ def list_users(db: Session = Depends(get_db), _=Depends(require_admin)):
 
 
 @router.post("", response_model=UserOut, status_code=201)
-def create_user(inp: UserCreateInput, db: Session = Depends(get_db), _=Depends(require_admin)):
+def create_user(
+    inp: UserCreateInput,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
     if inp.role not in ROLE_VALUES:
         raise HTTPException(status_code=422, detail=f"Invalid role '{inp.role}'.")
     if inp.access_level not in ("read", "write"):
         raise HTTPException(status_code=422, detail="Access level must be 'read' or 'write'.")
+    if inp.role in ("admin", "pm") and not bool(admin.is_primary_admin):
+        raise HTTPException(
+            status_code=403,
+            detail="Only the primary administrator can create administrator or project-manager accounts.",
+        )
     email = inp.email.lower()
     if db.query(User).filter(func.lower(User.email) == email).first() is not None:
         raise HTTPException(status_code=409, detail="A user with this email already exists.")

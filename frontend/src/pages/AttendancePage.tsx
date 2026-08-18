@@ -8,6 +8,7 @@ import {
   Users,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import type { AttendanceInput } from "@/api/attendance";
 import { Badge } from "@/components/ui/badge";
@@ -65,7 +66,8 @@ function labelFor(status: AttendanceStatus): string {
 
 export function AttendancePage() {
   const { isAdmin } = useAuth();
-  const [date, setDate] = useState(localDate);
+  const [searchParams] = useSearchParams();
+  const [date, setDate] = useState(() => searchParams.get("date") ?? localDate());
   const attendance = useAttendance(date);
   const save = useSaveAttendance(date);
   const [rows, setRows] = useState<AttendanceRecord[]>([]);
@@ -253,6 +255,11 @@ export function AttendancePage() {
                       <p className="text-xs text-fg-subtle">{row.employee_role ?? "No role"}</p>
                     </td>
                     <td className="px-3 py-3">
+                      {row.leave_request_id && (
+                        <Badge variant="default" className="mb-1.5 text-[10px]">
+                          Leave request #{row.leave_request_id}
+                        </Badge>
+                      )}
                       {isAdmin ? (
                         <Select
                           className="min-w-[140px]"

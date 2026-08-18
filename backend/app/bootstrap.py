@@ -72,6 +72,7 @@ def _create_initial_admin_if_empty() -> None:
                 role="admin",
                 access_level="write",
                 is_enabled=1,
+                is_primary_admin=1,
                 must_change_password=1,
                 hashed_password=hash_password(password),
             )

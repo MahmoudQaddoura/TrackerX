@@ -41,4 +41,9 @@ class TeamMember(Base):
         back_populates="team_member",
         cascade="all, delete-orphan",
     )
+    leave_requests = relationship(
+        "LeaveRequest",
+        back_populates="team_member",
+        cascade="all, delete-orphan",
+    )
     user = relationship("User")

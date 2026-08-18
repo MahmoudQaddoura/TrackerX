@@ -13,6 +13,7 @@ import { DashboardPage } from "@/pages/DashboardPage";
 import { AttendancePage } from "@/pages/AttendancePage";
 import { ChangePasswordPage } from "@/pages/ChangePasswordPage";
 import { LoginPage } from "@/pages/LoginPage";
+import { LeaveRequestsPage } from "@/pages/LeaveRequestsPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 import { ProjectDetailPage } from "@/pages/ProjectDetailPage";
 import { ProjectsPage } from "@/pages/ProjectsPage";
@@ -35,6 +36,7 @@ export default function App() {
         <Route path="/projects" element={<ProjectsPage />} />
         <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
         <Route path="/attendance" element={<AttendancePage />} />
+        <Route path="/leave-requests" element={<LeaveRequestsPage />} />
         <Route
           path="/employees"
           element={

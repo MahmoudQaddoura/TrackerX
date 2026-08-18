@@ -74,6 +74,16 @@ def require_admin(user: User = Depends(get_current_user)) -> User:
     return user
 
 
+def require_primary_admin(user: User = Depends(require_admin)) -> User:
+    """Allow only the designated primary administrator to assign account roles."""
+    if not bool(user.is_primary_admin):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the primary administrator can change account roles.",
+        )
+    return user
+
+
 def require_manager(user: User = Depends(get_current_user)) -> User:
     """Allow admin or pm. Use on every milestone/task write endpoint."""
     if user.role not in ("admin", "pm") or (

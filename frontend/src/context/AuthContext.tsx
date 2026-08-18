@@ -14,6 +14,7 @@ interface AuthContextValue {
   user: AuthUser | null;
   loading: boolean;
   isAdmin: boolean;
+  isPrimaryAdmin: boolean;
   isPm: boolean;
   isDeveloper: boolean;
   isClient: boolean;
@@ -65,6 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       loading,
       isAdmin: user?.role === "admin",
+      isPrimaryAdmin: user?.role === "admin" && user.is_primary_admin,
       isPm: user?.role === "pm",
       isDeveloper: user?.role === "developer",
       isClient: user?.role === "client",

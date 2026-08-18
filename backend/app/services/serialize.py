@@ -113,6 +113,8 @@ def team_member_out(member) -> dict:
         "user_id": member.user_id,
         "has_login": member.user_id is not None,
         "login_email": member.user.email if member.user else None,
+        "account_role": member.user.role if member.user else None,
+        "is_primary_admin": bool(member.user.is_primary_admin) if member.user else False,
         "access_level": (
             "write" if member.user and member.user.role == "admin" else member.user.access_level
             if member.user
