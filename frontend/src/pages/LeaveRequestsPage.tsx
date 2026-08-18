@@ -1,7 +1,6 @@
 import {
   CalendarClock,
   CheckCircle2,
-  Inbox,
   Send,
   WandSparkles,
   XCircle,
@@ -25,7 +24,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -68,8 +66,7 @@ function readableDate(value: string): string {
 
 export function LeaveRequestsPage() {
   const { isAdmin } = useAuth();
-  const allRequests = useLeaveRequests(isAdmin ? "all" : "mine");
-  const myRequests = useLeaveRequests("mine");
+  const requests = useLeaveRequests(isAdmin ? "all" : "mine");
   const createRequest = useCreateLeaveRequest();
   const reviewRequest = useReviewLeaveRequest();
 
@@ -87,8 +84,8 @@ export function LeaveRequestsPage() {
   const [reviewError, setReviewError] = useState<string | null>(null);
 
   const pendingCount = useMemo(
-    () => (allRequests.data ?? []).filter((request) => request.status === "pending").length,
-    [allRequests.data],
+    () => (requests.data ?? []).filter((request) => request.status === "pending").length,
+    [requests.data],
   );
 
   async function submitRequest() {
@@ -135,15 +132,12 @@ export function LeaveRequestsPage() {
     }
   }
 
-  if (allRequests.isLoading || myRequests.isLoading) return <Spinner />;
-  if (allRequests.isError || myRequests.isError) {
+  if (requests.isLoading) return <Spinner />;
+  if (requests.isError) {
     return (
       <ErrorState
         message="Could not load leave requests."
-        onRetry={() => {
-          allRequests.refetch();
-          myRequests.refetch();
-        }}
+        onRetry={() => requests.refetch()}
       />
     );
   }
@@ -215,23 +209,11 @@ export function LeaveRequestsPage() {
       </div>
 
       {isAdmin ? (
-        <Tabs defaultValue="inbox">
-          <TabsList>
-            <TabsTrigger value="inbox"><Inbox className="mr-2 h-4 w-4" />Request inbox ({pendingCount})</TabsTrigger>
-            <TabsTrigger value="mine"><Send className="mr-2 h-4 w-4" />My requests</TabsTrigger>
-          </TabsList>
-          <TabsContent value="inbox">
-            <RequestList requests={allRequests.data ?? []} canReview onReview={openReview} />
-          </TabsContent>
-          <TabsContent value="mine" className="space-y-5">
-            {requestForm}
-            <RequestList requests={myRequests.data ?? []} />
-          </TabsContent>
-        </Tabs>
+        <RequestList requests={requests.data ?? []} canReview onReview={openReview} />
       ) : (
         <div className="space-y-5">
           {requestForm}
-          <RequestList requests={myRequests.data ?? []} />
+          <RequestList requests={requests.data ?? []} />
         </div>
       )}
 
