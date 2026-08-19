@@ -3,6 +3,7 @@ from __future__ import annotations
 """Employee absence submissions and administrator review workflow."""
 
 from datetime import date as date_type, timedelta
+import re
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -10,7 +11,11 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.deps import get_current_user, require_admin
 from app.models import AttendanceRecord, LeaveRequest, TeamMember, User
-from app.models.leave_request import LEAVE_REQUEST_STATUSES, LEAVE_REQUEST_TYPES
+from app.models.leave_request import (
+    LEAVE_DURATION_UNITS,
+    LEAVE_REQUEST_STATUSES,
+    LEAVE_REQUEST_TYPES,
+)
 from app.schemas.leave_request import (
     LeaveRequestCreate,
     LeaveRequestOut,
@@ -18,6 +23,8 @@ from app.schemas.leave_request import (
 )
 
 router = APIRouter(prefix="/leave-requests", tags=["leave requests"])
+
+_TIME_PATTERN = re.compile(r"^(?:[01]\d|2[0-3]):[0-5]\d$")
 
 
 def _parse_date(value: str, label: str) -> date_type:
@@ -44,7 +51,17 @@ def _request_or_404(db: Session, request_id: int) -> LeaveRequest:
     return request
 
 
+def _duration_hours(start_time: str, end_time: str) -> float:
+    start_hour, start_minute = (int(part) for part in start_time.split(":"))
+    end_hour, end_minute = (int(part) for part in end_time.split(":"))
+    minutes = (end_hour * 60 + end_minute) - (start_hour * 60 + start_minute)
+    return round(minutes / 60, 2)
+
+
 def _serialize(request: LeaveRequest) -> dict:
+    is_hourly = request.duration_unit == "hours"
+    start = _parse_date(request.start_date, "Start date")
+    end = _parse_date(request.end_date, "End date")
     return {
         "id": request.id,
         "team_member_id": request.team_member_id,
@@ -53,6 +70,15 @@ def _serialize(request: LeaveRequest) -> dict:
         "request_type": request.request_type,
         "start_date": request.start_date,
         "end_date": request.end_date,
+        "duration_unit": request.duration_unit,
+        "start_time": request.start_time,
+        "end_time": request.end_time,
+        "duration_days": None if is_hourly else (end - start).days + 1,
+        "duration_hours": (
+            _duration_hours(request.start_time, request.end_time)
+            if is_hourly and request.start_time and request.end_time
+            else None
+        ),
         "reason": request.reason,
         "status": request.status,
         "review_note": request.review_note,
@@ -93,12 +119,27 @@ def create_leave_request(
 ):
     if inp.request_type not in LEAVE_REQUEST_TYPES:
         raise HTTPException(status_code=422, detail=f"Invalid request type '{inp.request_type}'.")
+    if inp.duration_unit not in LEAVE_DURATION_UNITS:
+        raise HTTPException(status_code=422, detail="Duration unit must be days or hours.")
     start = _parse_date(inp.start_date, "Start date")
     end = _parse_date(inp.end_date, "End date")
     if end < start:
         raise HTTPException(status_code=422, detail="End date cannot be before start date.")
     if (end - start).days > 30:
         raise HTTPException(status_code=422, detail="A single request can cover at most 31 days.")
+    start_time = None
+    end_time = None
+    if inp.duration_unit == "hours":
+        if start != end:
+            raise HTTPException(status_code=422, detail="An hourly request must use one date.")
+        if not inp.start_time or not _TIME_PATTERN.match(inp.start_time):
+            raise HTTPException(status_code=422, detail="Start time must use HH:MM.")
+        if not inp.end_time or not _TIME_PATTERN.match(inp.end_time):
+            raise HTTPException(status_code=422, detail="End time must use HH:MM.")
+        if _duration_hours(inp.start_time, inp.end_time) <= 0:
+            raise HTTPException(status_code=422, detail="End time must be after start time.")
+        start_time = inp.start_time
+        end_time = inp.end_time
 
     member = _member_for_user(db, user)
     request = LeaveRequest(
@@ -106,6 +147,9 @@ def create_leave_request(
         request_type=inp.request_type,
         start_date=start.isoformat(),
         end_date=end.isoformat(),
+        duration_unit=inp.duration_unit,
+        start_time=start_time,
+        end_time=end_time,
         reason=inp.reason.strip(),
     )
     db.add(request)
@@ -138,7 +182,15 @@ def review_leave_request(
         current_day = _parse_date(request.start_date, "Start date")
         end_day = _parse_date(request.end_date, "End date")
         tag = f"[Leave request #{request.id}]"
-        note = f"{tag} {request.reason}"[:1000]
+        if request.duration_unit == "hours" and request.start_time and request.end_time:
+            hours = _duration_hours(request.start_time, request.end_time)
+            hours_label = f"{hours:g} hour{'s' if hours != 1 else ''}"
+            note = (
+                f"{tag} {request.start_time}-{request.end_time} ({hours_label}): "
+                f"{request.reason}"
+            )[:1000]
+        else:
+            note = f"{tag} {request.reason}"[:1000]
         while current_day <= end_day:
             day = current_day.isoformat()
             record = (
@@ -156,8 +208,9 @@ def review_leave_request(
                 )
                 db.add(record)
             record.status = request.request_type
-            record.check_in = None
-            record.check_out = None
+            if request.duration_unit == "days":
+                record.check_in = None
+                record.check_out = None
             record.notes = note
             record.recorded_by_id = admin.id
             record.leave_request_id = request.id

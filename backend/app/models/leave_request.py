@@ -9,6 +9,7 @@ from app.db import Base, now_iso
 
 LEAVE_REQUEST_TYPES = ("leave", "sick_leave", "absent")
 LEAVE_REQUEST_STATUSES = ("pending", "approved", "rejected")
+LEAVE_DURATION_UNITS = ("days", "hours")
 
 
 class LeaveRequest(Base):
@@ -21,6 +22,9 @@ class LeaveRequest(Base):
     request_type = Column(Text, nullable=False)
     start_date = Column(Text, nullable=False, index=True)
     end_date = Column(Text, nullable=False, index=True)
+    duration_unit = Column(Text, nullable=False, default="days")
+    start_time = Column(Text, nullable=True)
+    end_time = Column(Text, nullable=True)
     reason = Column(Text, nullable=False)
     status = Column(Text, nullable=False, default="pending", index=True)
     review_note = Column(Text, nullable=True)
@@ -41,6 +45,10 @@ class LeaveRequest(Base):
         CheckConstraint(
             "status IN ('pending','approved','rejected')",
             name="ck_leave_request_status",
+        ),
+        CheckConstraint(
+            "duration_unit IN ('days','hours')",
+            name="ck_leave_request_duration_unit",
         ),
         CheckConstraint(
             "attendance_autofilled IN (0,1)",

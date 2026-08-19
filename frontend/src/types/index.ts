@@ -17,6 +17,7 @@ export type MeetingType = "sprint" | "client";
 export type CommentEntity = "task" | "milestone";
 export type LeaveRequestType = "leave" | "sick_leave" | "absent";
 export type LeaveRequestStatus = "pending" | "approved" | "rejected";
+export type LeaveDurationUnit = "days" | "hours";
 
 export interface AuthUser {
   id: number;
@@ -149,6 +150,11 @@ export interface LeaveRequest {
   request_type: LeaveRequestType;
   start_date: string;
   end_date: string;
+  duration_unit: LeaveDurationUnit;
+  start_time: string | null;
+  end_time: string | null;
+  duration_days: number | null;
+  duration_hours: number | null;
   reason: string;
   status: LeaveRequestStatus;
   review_note: string | null;

@@ -1,6 +1,8 @@
 import {
+  CalendarDays,
   CalendarClock,
   CheckCircle2,
+  Clock3,
   Send,
   WandSparkles,
   XCircle,
@@ -32,7 +34,12 @@ import {
   useReviewLeaveRequest,
 } from "@/hooks/useLeaveRequests";
 import { getApiErrorMessage } from "@/lib/apiClient";
-import type { LeaveRequest, LeaveRequestStatus, LeaveRequestType } from "@/types";
+import type {
+  LeaveDurationUnit,
+  LeaveRequest,
+  LeaveRequestStatus,
+  LeaveRequestType,
+} from "@/types";
 
 const TYPE_LABELS: Record<LeaveRequestType, string> = {
   leave: "Leave",
@@ -64,6 +71,29 @@ function readableDate(value: string): string {
   }).format(new Date(`${value}T12:00:00`));
 }
 
+function calculateHours(startTime: string, endTime: string): number {
+  const [startHour, startMinute] = startTime.split(":").map(Number);
+  const [endHour, endMinute] = endTime.split(":").map(Number);
+  return Math.max(0, ((endHour * 60 + endMinute) - (startHour * 60 + startMinute)) / 60);
+}
+
+function durationLabel(request: LeaveRequest): string {
+  if (request.duration_unit === "hours") {
+    const hours = request.duration_hours ?? 0;
+    return `${hours.toLocaleString(undefined, { maximumFractionDigits: 2 })} hour${hours === 1 ? "" : "s"}`;
+  }
+  const days = request.duration_days ?? 1;
+  return `${days} day${days === 1 ? "" : "s"}`;
+}
+
+function scheduleLabel(request: LeaveRequest): string {
+  if (request.duration_unit === "hours") {
+    return `${readableDate(request.start_date)} · ${request.start_time}–${request.end_time}`;
+  }
+  if (request.start_date === request.end_date) return readableDate(request.start_date);
+  return `${readableDate(request.start_date)} – ${readableDate(request.end_date)}`;
+}
+
 export function LeaveRequestsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { isAdmin } = useAuth();
   const requests = useLeaveRequests(isAdmin ? "all" : "mine");
@@ -71,8 +101,11 @@ export function LeaveRequestsPage({ embedded = false }: { embedded?: boolean } =
   const reviewRequest = useReviewLeaveRequest();
 
   const [requestType, setRequestType] = useState<LeaveRequestType>("leave");
+  const [durationUnit, setDurationUnit] = useState<LeaveDurationUnit>("days");
   const [startDate, setStartDate] = useState(localDate);
   const [endDate, setEndDate] = useState(localDate);
+  const [startTime, setStartTime] = useState("09:00");
+  const [endTime, setEndTime] = useState("17:00");
   const [reason, setReason] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [reviewing, setReviewing] = useState<{
@@ -93,12 +126,19 @@ export function LeaveRequestsPage({ embedded = false }: { embedded?: boolean } =
       setFormError("Please add a short reason for the request.");
       return;
     }
+    if (durationUnit === "hours" && calculateHours(startTime, endTime) <= 0) {
+      setFormError("End time must be after start time.");
+      return;
+    }
     setFormError(null);
     try {
       await createRequest.mutateAsync({
         request_type: requestType,
         start_date: startDate,
-        end_date: endDate,
+        end_date: durationUnit === "hours" ? startDate : endDate,
+        duration_unit: durationUnit,
+        start_time: durationUnit === "hours" ? startTime : null,
+        end_time: durationUnit === "hours" ? endTime : null,
         reason: reason.trim(),
       });
       setReason("");
@@ -150,7 +190,7 @@ export function LeaveRequestsPage({ embedded = false }: { embedded?: boolean } =
           Your administrator will receive this note and decide whether to add it to attendance.
         </p>
       </div>
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="leave-type">Request type</Label>
           <Select
@@ -164,14 +204,66 @@ export function LeaveRequestsPage({ embedded = false }: { embedded?: boolean } =
           </Select>
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="leave-start">From</Label>
-          <Input id="leave-start" type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="leave-end">To</Label>
-          <Input id="leave-end" type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+          <Label>Duration</Label>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setDurationUnit("days")}
+              className={`flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
+                durationUnit === "days"
+                  ? "border-accent bg-accent-soft text-accent"
+                  : "border-border text-fg-muted hover:bg-raised"
+              }`}
+            >
+              <CalendarDays className="h-4 w-4" /> Full day(s)
+            </button>
+            <button
+              type="button"
+              onClick={() => setDurationUnit("hours")}
+              className={`flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
+                durationUnit === "hours"
+                  ? "border-accent bg-accent-soft text-accent"
+                  : "border-border text-fg-muted hover:bg-raised"
+              }`}
+            >
+              <Clock3 className="h-4 w-4" /> Hours
+            </button>
+          </div>
         </div>
       </div>
+      {durationUnit === "days" ? (
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="leave-start">First day</Label>
+            <Input id="leave-start" type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="leave-end">Last day</Label>
+            <Input id="leave-end" type="date" min={startDate} value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+          </div>
+        </div>
+      ) : (
+        <div className="mt-4 grid gap-4 sm:grid-cols-3">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="leave-hour-date">Date</Label>
+            <Input id="leave-hour-date" type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="leave-start-time">Start time</Label>
+            <Input id="leave-start-time" type="time" value={startTime} onChange={(event) => setStartTime(event.target.value)} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="leave-end-time">End time</Label>
+            <Input id="leave-end-time" type="time" value={endTime} onChange={(event) => setEndTime(event.target.value)} />
+          </div>
+          <div className="sm:col-span-3 flex items-center justify-between rounded-lg bg-raised/60 px-3 py-2 text-sm">
+            <span className="text-fg-muted">Requested time</span>
+            <span className="font-semibold text-fg">
+              {calculateHours(startTime, endTime).toLocaleString(undefined, { maximumFractionDigits: 2 })} hours
+            </span>
+          </div>
+        </div>
+      )}
       <div className="mt-4 flex flex-col gap-1.5">
         <Label htmlFor="leave-reason">Reason or note</Label>
         <Textarea
@@ -229,8 +321,14 @@ export function LeaveRequestsPage({ embedded = false }: { embedded?: boolean } =
             </DialogHeader>
             <div className="space-y-4">
               <div className="rounded-lg border border-border bg-raised/50 p-3 text-sm">
-                <p className="font-medium text-fg">{reviewing.request.employee_name}</p>
-                <p className="text-fg-muted">{TYPE_LABELS[reviewing.request.request_type]} · {readableDate(reviewing.request.start_date)} to {readableDate(reviewing.request.end_date)}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="font-medium text-fg">{reviewing.request.employee_name}</p>
+                  <Badge variant="default">
+                    {reviewing.request.duration_unit === "hours" ? <Clock3 className="h-3 w-3" /> : <CalendarDays className="h-3 w-3" />}
+                    {durationLabel(reviewing.request)}
+                  </Badge>
+                </div>
+                <p className="mt-1 text-fg-muted">{TYPE_LABELS[reviewing.request.request_type]} · {scheduleLabel(reviewing.request)}</p>
                 <p className="mt-2 text-fg">{reviewing.request.reason}</p>
               </div>
               <div className="flex flex-col gap-1.5">
@@ -242,7 +340,11 @@ export function LeaveRequestsPage({ embedded = false }: { embedded?: boolean } =
                   <input type="checkbox" checked={autofill} onChange={(event) => setAutofill(event.target.checked)} />
                   <span>
                     <span className="flex items-center gap-1 font-medium"><WandSparkles className="h-4 w-4 text-accent" />Autofill attendance</span>
-                    <span className="mt-1 block text-xs text-fg-muted">Fill every date in this request and tag each row with request #{reviewing.request.id}.</span>
+                    <span className="mt-1 block text-xs text-fg-muted">
+                      {reviewing.request.duration_unit === "hours"
+                        ? `Add the ${reviewing.request.start_time}–${reviewing.request.end_time} time window to attendance and tag it with request #${reviewing.request.id}.`
+                        : `Fill every date in this request and tag each row with request #${reviewing.request.id}.`}
+                    </span>
                   </span>
                 </label>
               )}
@@ -275,23 +377,70 @@ function RequestList({
   canReview?: boolean;
   onReview?: (request: LeaveRequest, status: "approved" | "rejected") => void;
 }) {
+  const [statusFilter, setStatusFilter] = useState<LeaveRequestStatus | "all">("all");
   if (requests.length === 0) {
     return <EmptyState title="No requests yet" description="New leave and absence notes will appear here." />;
   }
+  const filteredRequests = statusFilter === "all"
+    ? requests
+    : requests.filter((request) => request.status === statusFilter);
+  const filterOptions: { value: LeaveRequestStatus | "all"; label: string }[] = [
+    { value: "all", label: "All" },
+    { value: "pending", label: "Pending" },
+    { value: "approved", label: "Approved" },
+    { value: "rejected", label: "Rejected" },
+  ];
   return (
-    <div className="space-y-3">
-      {requests.map((request) => (
+    <div className="space-y-4">
+      {canReview && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface p-3">
+          <div>
+            <p className="text-sm font-semibold text-fg">Request inbox</p>
+            <p className="text-xs text-fg-muted">Review full-day and hourly requests from the team.</p>
+          </div>
+          <div className="flex flex-wrap gap-1 rounded-lg bg-raised/60 p-1">
+            {filterOptions.map((option) => {
+              const count = option.value === "all"
+                ? requests.length
+                : requests.filter((request) => request.status === option.value).length;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setStatusFilter(option.value)}
+                  className={`rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                    statusFilter === option.value
+                      ? "bg-surface text-fg shadow-sm"
+                      : "text-fg-muted hover:text-fg"
+                  }`}
+                >
+                  {option.label} {count}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {filteredRequests.length === 0 && (
+        <EmptyState title={`No ${statusFilter} requests`} description="Choose another filter to view request history." />
+      )}
+      {filteredRequests.map((request) => (
         <Card key={request.id} className="p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <p className="font-semibold text-fg">{request.employee_name}</p>
                 <Badge variant="outline">{TYPE_LABELS[request.request_type]}</Badge>
+                <Badge variant="default">
+                  {request.duration_unit === "hours" ? <Clock3 className="h-3 w-3" /> : <CalendarDays className="h-3 w-3" />}
+                  {durationLabel(request)}
+                </Badge>
                 <Badge variant={STATUS_VARIANTS[request.status]} className="capitalize">{request.status}</Badge>
                 {request.attendance_autofilled && <Badge variant="default"><WandSparkles className="h-3 w-3" />Attendance tagged</Badge>}
               </div>
-              <p className="mt-1 text-sm font-medium text-fg-muted">
-                {readableDate(request.start_date)} – {readableDate(request.end_date)}
+              <p className="mt-2 flex items-center gap-1.5 text-sm font-medium text-fg-muted">
+                {request.duration_unit === "hours" ? <Clock3 className="h-4 w-4" /> : <CalendarDays className="h-4 w-4" />}
+                {scheduleLabel(request)}
               </p>
               <p className="mt-3 whitespace-pre-wrap text-sm text-fg">{request.reason}</p>
               {request.review_note && (

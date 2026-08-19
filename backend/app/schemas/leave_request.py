@@ -9,6 +9,9 @@ class LeaveRequestCreate(BaseModel):
     request_type: str
     start_date: str
     end_date: str
+    duration_unit: str = "days"
+    start_time: str | None = None
+    end_time: str | None = None
     reason: str = Field(min_length=3, max_length=1000)
 
 
@@ -26,6 +29,11 @@ class LeaveRequestOut(BaseModel):
     request_type: str
     start_date: str
     end_date: str
+    duration_unit: str
+    start_time: str | None
+    end_time: str | None
+    duration_days: int | None
+    duration_hours: float | None
     reason: str
     status: str
     review_note: str | None

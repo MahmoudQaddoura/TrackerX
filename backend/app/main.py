@@ -50,6 +50,9 @@ def _migrate_local_schema() -> None:
     attendance_columns = {
         column["name"] for column in inspect(engine).get_columns("attendance_records")
     }
+    leave_request_columns = {
+        column["name"] for column in inspect(engine).get_columns("leave_requests")
+    }
     with engine.begin() as connection:
         if "workstream" not in milestone_columns:
             connection.exec_driver_sql(
@@ -124,6 +127,18 @@ def _migrate_local_schema() -> None:
             "CREATE INDEX IF NOT EXISTS ix_attendance_records_leave_request_id "
             "ON attendance_records (leave_request_id)"
         )
+        if "duration_unit" not in leave_request_columns:
+            connection.exec_driver_sql(
+                "ALTER TABLE leave_requests ADD COLUMN duration_unit TEXT NOT NULL DEFAULT 'days'"
+            )
+        if "start_time" not in leave_request_columns:
+            connection.exec_driver_sql(
+                "ALTER TABLE leave_requests ADD COLUMN start_time TEXT"
+            )
+        if "end_time" not in leave_request_columns:
+            connection.exec_driver_sql(
+                "ALTER TABLE leave_requests ADD COLUMN end_time TEXT"
+            )
         connection.exec_driver_sql("PRAGMA optimize")
 
 app.add_middleware(
