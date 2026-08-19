@@ -7,7 +7,7 @@ so `Base.metadata.create_all()` sees all tables. One model = one file.
 """
 
 from app.models.user import User
-from app.models.team import project_clients
+from app.models.team import project_clients, team_member_projects
 from app.models.project import Project
 from app.models.milestone import Milestone
 from app.models.task import Task, task_assignees
@@ -21,6 +21,7 @@ from app.models.leave_request import LeaveRequest
 __all__ = [
     "User",
     "project_clients",
+    "team_member_projects",
     "Project",
     "Milestone",
     "Task",

@@ -47,6 +47,16 @@ export async function updateMember(id: number, payload: TeamMemberPayload): Prom
   return data;
 }
 
+export async function assignMemberProjects(
+  memberId: number,
+  projectIds: number[],
+): Promise<TeamMember> {
+  const { data } = await api.put<TeamMember>(`/team-members/${memberId}/projects`, {
+    project_ids: projectIds,
+  });
+  return data;
+}
+
 export async function deleteMember(id: number): Promise<void> {
   await api.delete(`/team-members/${id}`);
 }

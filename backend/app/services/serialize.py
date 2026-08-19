@@ -88,18 +88,33 @@ def project_out(project) -> dict:
 
 
 def team_member_out(member) -> dict:
-    # Derive distinct projects this member is assigned to via their tasks.
-    project_map: dict[int, str] = {}
+    # Combine projects explicitly assigned by an administrator with legacy
+    # task-linked access. The source is returned so the UI can explain why an
+    # employee can open a workspace.
+    project_map: dict[int, dict] = {}
+    assigned_project_ids = {project.id for project in member.assigned_projects}
+    for project in member.assigned_projects:
+        project_map[project.id] = {
+            "id": project.id,
+            "name": project.name,
+            "assignment_source": "admin",
+        }
     total_est = 0.0
     tasks = list(member.assigned_tasks)
     for t in tasks:
         if t.milestone and t.milestone.project:
             pid = t.milestone.project.id
-            if pid not in project_map:
-                project_map[pid] = t.milestone.project.name
+            if pid in project_map:
+                project_map[pid]["assignment_source"] = "admin_and_task"
+            else:
+                project_map[pid] = {
+                    "id": pid,
+                    "name": t.milestone.project.name,
+                    "assignment_source": "task",
+                }
         if t.status != "done" and t.est_days:
             total_est += t.est_days
-    projects = [{"id": pid, "name": pname} for pid, pname in project_map.items()]
+    projects = sorted(project_map.values(), key=lambda project: project["name"].lower())
     return {
         "id": member.id,
         "name": member.name,
@@ -110,6 +125,7 @@ def team_member_out(member) -> dict:
         "done_tasks": sum(1 for t in tasks if t.status == "done"),
         "active_est_days": round(total_est, 1),
         "projects": projects,
+        "assigned_project_ids": sorted(assigned_project_ids),
         "user_id": member.user_id,
         "has_login": member.user_id is not None,
         "login_email": member.user.email if member.user else None,

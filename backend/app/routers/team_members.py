@@ -17,10 +17,11 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.deps import get_current_user, require_admin
-from app.models import TeamMember, User
+from app.models import Project, TeamMember, User
 from app.schemas.team_member import (
     EmployeeCredentialsInput,
     EmployeeCredentialsOut,
+    EmployeeProjectsInput,
     TeamMemberInput,
     TeamMemberOut,
     TeamMemberUpdate,
@@ -105,6 +106,42 @@ def update_member(
     db.commit()
     db.refresh(m)
     return team_member_out(m)
+
+
+@router.put("/{member_id}/projects", response_model=TeamMemberOut)
+def assign_member_projects(
+    member_id: int,
+    inp: EmployeeProjectsInput,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """Replace an employee's direct project assignments. Admin-only."""
+    member = _member_or_404(db, member_id)
+    if not bool(member.is_active):
+        raise HTTPException(status_code=422, detail="Reactivate the employee before assigning projects.")
+    if len(inp.project_ids) != len(set(inp.project_ids)):
+        raise HTTPException(status_code=422, detail="Project assignments cannot contain duplicates.")
+
+    projects = (
+        db.query(Project)
+        .filter(Project.id.in_(inp.project_ids))
+        .order_by(Project.name)
+        .all()
+        if inp.project_ids
+        else []
+    )
+    found_ids = {project.id for project in projects}
+    missing_ids = sorted(set(inp.project_ids) - found_ids)
+    if missing_ids:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unknown project IDs: {', '.join(str(project_id) for project_id in missing_ids)}.",
+        )
+
+    member.assigned_projects = projects
+    db.commit()
+    db.refresh(member)
+    return team_member_out(member)
 
 
 @router.delete("/{member_id}", status_code=204)

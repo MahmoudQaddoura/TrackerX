@@ -20,7 +20,15 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import Milestone, Project, Task, TeamMember, User, task_assignees
+from app.models import (
+    Milestone,
+    Project,
+    Task,
+    TeamMember,
+    User,
+    task_assignees,
+    team_member_projects,
+)
 from app.models.team import project_clients
 from app.security import decode_access_token
 
@@ -126,13 +134,14 @@ def get_accessible_project_ids(user: User, db: Session) -> set[int] | None:
     if user.role in ("admin", "pm"):
         return None
     if user.role == "developer":
-        # Developer sees projects where they have at least one assigned task.
+        # Direct admin assignments grant workspace access before task work is
+        # created. Existing task assignments remain a compatible access path.
         member = db.query(TeamMember).filter(TeamMember.user_id == user.id).first()
         if member is None:
             return set()
         # Query distinct project IDs directly. This is the security boundary
         # for every downstream project tool, including Gantt and documents.
-        rows = (
+        task_rows = (
             db.query(Milestone.project_id)
             .join(Task, Task.milestone_id == Milestone.id)
             .join(task_assignees, task_assignees.c.task_id == Task.id)
@@ -140,7 +149,12 @@ def get_accessible_project_ids(user: User, db: Session) -> set[int] | None:
             .distinct()
             .all()
         )
-        return {row[0] for row in rows}
+        direct_rows = (
+            db.query(team_member_projects.c.project_id)
+            .filter(team_member_projects.c.team_member_id == member.id)
+            .all()
+        )
+        return {row[0] for row in task_rows} | {row[0] for row in direct_rows}
     if user.role == "client":
         rows = db.query(project_clients.c.project_id).filter(project_clients.c.user_id == user.id).all()
         return {r[0] for r in rows}

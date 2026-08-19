@@ -101,7 +101,12 @@ export interface TeamMember {
   total_tasks: number;
   done_tasks: number;
   active_est_days: number;
-  projects: { id: number; name: string }[];
+  projects: {
+    id: number;
+    name: string;
+    assignment_source: "admin" | "task" | "admin_and_task";
+  }[];
+  assigned_project_ids: number[];
   user_id: number | null;
   has_login: boolean;
   login_email: string | null;

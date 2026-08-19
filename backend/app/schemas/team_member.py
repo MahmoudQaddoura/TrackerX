@@ -36,6 +36,10 @@ class EmployeeCredentialsOut(BaseModel):
     is_enabled: bool
 
 
+class EmployeeProjectsInput(BaseModel):
+    project_ids: list[int] = Field(default_factory=list, max_length=500)
+
+
 class TeamMemberOut(BaseModel):
     id: int
     name: str
@@ -46,6 +50,7 @@ class TeamMemberOut(BaseModel):
     done_tasks: int
     active_est_days: float
     projects: list[dict]
+    assigned_project_ids: list[int]
     user_id: int | None
     has_login: bool
     login_email: EmailStr | None

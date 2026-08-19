@@ -20,6 +20,7 @@ import {
   ChevronRight,
   FileArchive,
   FolderKanban,
+  FolderPlus,
   KeyRound,
   ListChecks,
   MessagesSquare,
@@ -36,6 +37,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 
 import {
+  assignMemberProjects,
   createMember,
   delegateMemberTasks,
   deleteMember,
@@ -63,6 +65,7 @@ import { Select } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { useAuth } from "@/context/AuthContext";
 import { useTeam } from "@/hooks/useTeam";
+import { useProjects } from "@/hooks/useProjects";
 import { getApiErrorMessage } from "@/lib/apiClient";
 import { timeGreeting } from "@/lib/greeting";
 import { useQueryClient } from "@tanstack/react-query";
@@ -74,6 +77,7 @@ export function EmployeeListPage() {
   const { isAdmin, isPrimaryAdmin, user } = useAuth();
   const qc = useQueryClient();
   const { data: members, isLoading, isError, refetch } = useTeam();
+  const projectsQuery = useProjects();
   const [profile, setProfile] = useState<ProfileView>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<TeamMember | null>(null);
@@ -91,6 +95,12 @@ export function EmployeeListPage() {
   const [loginEnabled, setLoginEnabled] = useState(true);
   const [credentialSaving, setCredentialSaving] = useState(false);
   const [credentialError, setCredentialError] = useState<string | null>(null);
+
+  // Direct project assignments (admin only)
+  const [projectTarget, setProjectTarget] = useState<TeamMember | null>(null);
+  const [selectedProjectIds, setSelectedProjectIds] = useState<number[]>([]);
+  const [projectSaving, setProjectSaving] = useState(false);
+  const [projectError, setProjectError] = useState<string | null>(null);
 
   // Delegate state
   const [delegateTarget, setDelegateTarget] = useState<TeamMember | null>(null);
@@ -145,6 +155,37 @@ export function EmployeeListPage() {
     setAccessLevel(member.access_level ?? "read");
     setLoginEnabled(member.has_login ? member.login_enabled : true);
     setCredentialError(null);
+  }
+
+  function openProjectAssignments(member: TeamMember) {
+    setProjectTarget(member);
+    setSelectedProjectIds(member.assigned_project_ids);
+    setProjectError(null);
+  }
+
+  function toggleProject(projectId: number) {
+    setSelectedProjectIds((current) =>
+      current.includes(projectId)
+        ? current.filter((id) => id !== projectId)
+        : [...current, projectId],
+    );
+    setProjectError(null);
+  }
+
+  async function handleProjectAssignments() {
+    if (!projectTarget) return;
+    setProjectSaving(true);
+    setProjectError(null);
+    try {
+      await assignMemberProjects(projectTarget.id, selectedProjectIds);
+      setProjectTarget(null);
+      qc.invalidateQueries({ queryKey: ["team"] });
+      qc.invalidateQueries({ queryKey: ["projects"] });
+    } catch (error) {
+      setProjectError(getApiErrorMessage(error, "Could not update project assignments."));
+    } finally {
+      setProjectSaving(false);
+    }
   }
 
   async function handleCredentials() {
@@ -246,7 +287,7 @@ export function EmployeeListPage() {
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard label="Active employees" value={allActiveMembers.length} description="Current team members" icon={UserCheck} />
-        <KpiCard label="Assigned projects" value={assignedProjectCount} description="Projects linked through tasks" icon={BriefcaseBusiness} />
+        <KpiCard label="Assigned projects" value={assignedProjectCount} description="Admin and task-linked access" icon={BriefcaseBusiness} />
         <KpiCard label="Enabled logins" value={`${linkedLogins}/${rows.length}`} description="Employees with TrackerX access" icon={KeyRound} accent="success" />
         <KpiCard label="Open assignments" value={openTasks} description="Tasks not completed" icon={ListChecks} />
       </div>
@@ -294,6 +335,7 @@ export function EmployeeListPage() {
               onDelete={() => handleDelete(m)}
               onDelegate={() => openDelegate(m)}
               onCredentials={() => openCredentials(m)}
+              onProjects={() => openProjectAssignments(m)}
             />
           ))}
         </div>
@@ -328,6 +370,7 @@ export function EmployeeListPage() {
                   onDelete={() => handleDelete(m)}
                   onDelegate={() => openDelegate(m)}
                   onCredentials={() => openCredentials(m)}
+                  onProjects={() => openProjectAssignments(m)}
                 />
               ))}
             </div>
@@ -414,6 +457,77 @@ export function EmployeeListPage() {
               </Button>
               <Button onClick={handleDelegate} disabled={toMemberId == null || delegating}>
                 {delegating && <Spinner />} Delegate
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Direct project assignment dialog */}
+      {projectTarget && (
+        <Dialog open onOpenChange={() => setProjectTarget(null)}>
+          <DialogContent className="sm:max-w-xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FolderPlus className="h-5 w-5" />
+                Assign projects · {projectTarget.name}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="rounded-lg border border-accent/15 bg-accent-soft p-3 text-sm text-fg-muted">
+                Selected projects become available in this employee’s TrackerX workspace. Task-linked access is shown separately and remains available while the employee has assigned work.
+              </div>
+              {projectsQuery.isLoading ? (
+                <div className="flex justify-center py-8"><Spinner /></div>
+              ) : projectsQuery.isError ? (
+                <ErrorState message="Could not load projects." onRetry={() => projectsQuery.refetch()} />
+              ) : (projectsQuery.data ?? []).length === 0 ? (
+                <EmptyState title="No projects available" description="Create a project before assigning employee access." />
+              ) : (
+                <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
+                  {(projectsQuery.data ?? []).map((project) => {
+                    const checked = selectedProjectIds.includes(project.id);
+                    const taskLinked = projectTarget.projects.some(
+                      (item) => item.id === project.id && item.assignment_source !== "admin",
+                    );
+                    return (
+                      <label
+                        key={project.id}
+                        className={`flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-colors ${
+                          checked ? "border-accent bg-accent-soft" : "border-border hover:bg-raised/50"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleProject(project.id)}
+                          className="h-4 w-4 accent-[var(--accent)]"
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-medium text-fg">{project.name}</span>
+                          <span className="mt-0.5 block text-xs capitalize text-fg-muted">{project.status.replace("_", " ")}</span>
+                        </span>
+                        {taskLinked && <Badge variant="outline" className="text-[10px]">Task-linked</Badge>}
+                        {checked && <Badge variant="success" className="text-[10px]">Admin assigned</Badge>}
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+              <div className="flex items-center justify-between rounded-lg bg-raised/60 px-3 py-2 text-sm">
+                <span className="text-fg-muted">Direct workspace access</span>
+                <span className="font-semibold text-fg">{selectedProjectIds.length} selected</span>
+              </div>
+              {projectError && <p className="text-sm text-danger">{projectError}</p>}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setProjectTarget(null)}>Cancel</Button>
+              <Button
+                onClick={handleProjectAssignments}
+                disabled={projectSaving || projectsQuery.isLoading || projectsQuery.isError}
+              >
+                {projectSaving ? <Spinner /> : <FolderPlus className="h-4 w-4" />}
+                Save assignments
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -537,6 +651,7 @@ function EmployeeCard({
   onDelete,
   onDelegate,
   onCredentials,
+  onProjects,
 }: {
   member: TeamMember;
   isDeactivated: boolean;
@@ -546,6 +661,7 @@ function EmployeeCard({
   onDelete: () => void;
   onDelegate: () => void;
   onCredentials: () => void;
+  onProjects: () => void;
 }) {
   const isOwner = member.role === "Owner";
 
@@ -615,6 +731,14 @@ function EmployeeCard({
               </Button>
             ) : (
               <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  title="Assign project workspaces"
+                  onClick={onProjects}
+                >
+                  <FolderPlus className="h-3.5 w-3.5" /> Projects
+                </Button>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -707,7 +831,7 @@ function ProfileDialog({ member, onClose }: { member: TeamMember; onClose: () =>
             <div className="mb-2 flex items-center justify-between">
               <div>
                 <p className="font-semibold text-fg">Assigned project workspaces</p>
-                <p className="text-xs text-fg-muted">Access is derived from this employee’s task assignments.</p>
+                <p className="text-xs text-fg-muted">Access assigned by an admin or linked through active task work.</p>
               </div>
               <Badge variant="neutral">{member.projects.length} projects</Badge>
             </div>
@@ -717,6 +841,9 @@ function ProfileDialog({ member, onClose }: { member: TeamMember; onClose: () =>
                   <div key={project.id} className="rounded-lg border border-border p-3">
                     <div className="flex items-center gap-2 font-medium text-fg">
                       <FolderKanban className="h-4 w-4 text-accent" /> {project.name}
+                      <Badge variant={project.assignment_source === "task" ? "outline" : "success"} className="text-[10px]">
+                        {project.assignment_source === "task" ? "Task-linked" : project.assignment_source === "admin_and_task" ? "Admin + task" : "Admin assigned"}
+                      </Badge>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {[
@@ -738,7 +865,7 @@ function ProfileDialog({ member, onClose }: { member: TeamMember; onClose: () =>
               </div>
             ) : (
               <div className="rounded-lg border border-dashed border-border p-5 text-center text-fg-muted">
-                No project is linked yet. Assign this employee to a task to grant project access.
+                No project access yet. An admin can assign a workspace from this employee’s card.
               </div>
             )}
           </div>

@@ -35,6 +35,11 @@ class Project(Base):
     meetings = relationship("Meeting", back_populates="project", cascade="all, delete-orphan")
     documents = relationship("Document", back_populates="project", cascade="all, delete-orphan")
     clients = relationship("User", secondary="project_clients")
+    assigned_members = relationship(
+        "TeamMember",
+        secondary="team_member_projects",
+        back_populates="assigned_projects",
+    )
 
     __table_args__ = (
         CheckConstraint(

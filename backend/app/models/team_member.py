@@ -36,6 +36,11 @@ class TeamMember(Base):
         secondary="task_assignees",
         back_populates="assigned_members",
     )
+    assigned_projects = relationship(
+        "Project",
+        secondary="team_member_projects",
+        back_populates="assigned_members",
+    )
     attendance_records = relationship(
         "AttendanceRecord",
         back_populates="team_member",
