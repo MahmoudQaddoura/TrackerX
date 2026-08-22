@@ -5,6 +5,7 @@ import {
   Send,
   UserRoundCheck,
   WandSparkles,
+  XCircle,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
@@ -13,6 +14,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { CoveragePlanningDialog } from "@/components/attendance/CoveragePlanningDialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { Input } from "@/components/ui/input";
@@ -24,6 +32,7 @@ import { useAuth } from "@/context/AuthContext";
 import {
   useCreateLeaveRequest,
   useLeaveRequests,
+  useReviewLeaveRequest,
 } from "@/hooks/useLeaveRequests";
 import { getApiErrorMessage } from "@/lib/apiClient";
 import type {
@@ -90,6 +99,7 @@ export function LeaveRequestsPage({ embedded = false }: { embedded?: boolean } =
   const { isAdmin } = useAuth();
   const requests = useLeaveRequests(isAdmin ? "all" : "mine");
   const createRequest = useCreateLeaveRequest();
+  const reviewRequest = useReviewLeaveRequest();
 
   const [requestType, setRequestType] = useState<LeaveRequestType>("leave");
   const [durationUnit, setDurationUnit] = useState<LeaveDurationUnit>("days");
@@ -100,6 +110,9 @@ export function LeaveRequestsPage({ embedded = false }: { embedded?: boolean } =
   const [reason, setReason] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [coverageRequest, setCoverageRequest] = useState<LeaveRequest | null>(null);
+  const [rejectingRequest, setRejectingRequest] = useState<LeaveRequest | null>(null);
+  const [rejectionNote, setRejectionNote] = useState("");
+  const [rejectionError, setRejectionError] = useState<string | null>(null);
 
   const pendingCount = useMemo(
     () => (requests.data ?? []).filter((request) => request.status === "pending").length,
@@ -129,6 +142,30 @@ export function LeaveRequestsPage({ embedded = false }: { embedded?: boolean } =
       setReason("");
     } catch (error) {
       setFormError(getApiErrorMessage(error, "Could not submit this request."));
+    }
+  }
+
+  function openRejection(request: LeaveRequest) {
+    setRejectingRequest(request);
+    setRejectionNote("");
+    setRejectionError(null);
+  }
+
+  async function submitRejection() {
+    if (!rejectingRequest) return;
+    setRejectionError(null);
+    try {
+      await reviewRequest.mutateAsync({
+        requestId: rejectingRequest.id,
+        payload: {
+          status: "rejected",
+          review_note: rejectionNote.trim() || null,
+          autofill_attendance: false,
+        },
+      });
+      setRejectingRequest(null);
+    } catch (error) {
+      setRejectionError(getApiErrorMessage(error, "Could not reject this request."));
     }
   }
 
@@ -263,7 +300,12 @@ export function LeaveRequestsPage({ embedded = false }: { embedded?: boolean } =
       )}
 
       {isAdmin ? (
-        <RequestList requests={requests.data ?? []} canReview onManageCoverage={setCoverageRequest} />
+        <RequestList
+          requests={requests.data ?? []}
+          canReview
+          onManageCoverage={setCoverageRequest}
+          onReject={openRejection}
+        />
       ) : (
         <div className="space-y-5">
           {requestForm}
@@ -272,6 +314,49 @@ export function LeaveRequestsPage({ embedded = false }: { embedded?: boolean } =
       )}
 
       <CoveragePlanningDialog request={coverageRequest} onClose={() => setCoverageRequest(null)} />
+
+      <Dialog open={!!rejectingRequest} onOpenChange={(open) => !open && setRejectingRequest(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reject leave request</DialogTitle>
+          </DialogHeader>
+          {rejectingRequest && (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-border bg-raised/50 p-3 text-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="font-medium text-fg">{rejectingRequest.employee_name}</p>
+                  <Badge variant="default">
+                    {rejectingRequest.duration_unit === "hours" ? <Clock3 className="h-3 w-3" /> : <CalendarDays className="h-3 w-3" />}
+                    {durationLabel(rejectingRequest)}
+                  </Badge>
+                </div>
+                <p className="mt-1 text-fg-muted">{TYPE_LABELS[rejectingRequest.request_type]} · {scheduleLabel(rejectingRequest)}</p>
+                <p className="mt-2 text-fg">{rejectingRequest.reason}</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="rejection-note">Admin note</Label>
+                <Textarea
+                  id="rejection-note"
+                  rows={3}
+                  maxLength={1000}
+                  value={rejectionNote}
+                  onChange={(event) => setRejectionNote(event.target.value)}
+                  placeholder="Optional reason or next step for the employee."
+                />
+              </div>
+              <p className="text-xs text-fg-muted">Rejecting this request will not change attendance or task assignments.</p>
+              {rejectionError && <p className="text-sm text-danger">{rejectionError}</p>}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRejectingRequest(null)}>Cancel</Button>
+            <Button variant="danger" onClick={submitRejection} disabled={reviewRequest.isPending}>
+              {reviewRequest.isPending ? <Spinner /> : <XCircle className="h-4 w-4" />}
+              Confirm rejection
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -280,10 +365,12 @@ function RequestList({
   requests,
   canReview = false,
   onManageCoverage,
+  onReject,
 }: {
   requests: LeaveRequest[];
   canReview?: boolean;
   onManageCoverage?: (request: LeaveRequest) => void;
+  onReject?: (request: LeaveRequest) => void;
 }) {
   const [statusFilter, setStatusFilter] = useState<LeaveRequestStatus | "all">("all");
   if (requests.length === 0) {
@@ -368,7 +455,10 @@ function RequestList({
                 </Button>
               )}
               {canReview && onManageCoverage && request.status === "pending" && (
-                <Button size="sm" onClick={() => onManageCoverage(request)}><UserRoundCheck className="h-4 w-4" />Assign &amp; approve</Button>
+                <>
+                  {onReject && <Button variant="outline" size="sm" onClick={() => onReject(request)}><XCircle className="h-4 w-4" />Reject</Button>}
+                  <Button size="sm" onClick={() => onManageCoverage(request)}><UserRoundCheck className="h-4 w-4" />Assign &amp; approve</Button>
+                </>
               )}
               {canReview && onManageCoverage && request.status === "approved" && request.coverage_declined > 0 && (
                 <Button variant="outline" size="sm" onClick={() => onManageCoverage(request)}><UserRoundCheck className="h-4 w-4" />Manage coverage</Button>
