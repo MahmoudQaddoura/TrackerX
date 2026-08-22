@@ -40,4 +40,6 @@ def rollup(tasks: Iterable) -> dict:
 
 def project_tasks(project) -> list:
     """Flatten every task across a project's milestones."""
-    return [t for m in project.milestones for t in m.tasks]
+    if getattr(project, "project_type", "actual_project") == "maintenance_support":
+        return []
+    return [t for m in project.milestones if m.workstream == "project" for t in m.tasks]

@@ -26,6 +26,7 @@ from app.routers import (
     meetings,
     milestones,
     projects,
+    support,
     tasks,
     team_members,
     users,
@@ -189,6 +190,7 @@ for r in (
     attendance.router,
     leave_requests.router,
     gantt.router,
+    support.router,
 ):
     app.include_router(r, prefix="/api")
 

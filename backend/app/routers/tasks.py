@@ -220,6 +220,12 @@ def list_project_tasks(
     if user.role not in ("admin", "pm", "developer"):
         raise HTTPException(status_code=403, detail="This account cannot view the Kanban board.")
 
-    rows = [t for m in project.milestones for t in m.tasks]
+    if project.project_type == "maintenance_support":
+        raise HTTPException(
+            status_code=422,
+            detail="Maintenance & Support uses proactive reports and reactive incidents.",
+        )
+
+    rows = [t for m in project.milestones if m.workstream == "project" for t in m.tasks]
     rows.sort(key=lambda t: (t.milestone_id, t.sort_order, t.id))
     return [task_out(t) for t in rows]

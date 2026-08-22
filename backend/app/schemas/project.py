@@ -41,6 +41,8 @@ class ProjectOut(BaseModel):
     project_type: str
     parent_project_id: int | None
     parent_project_name: str | None
+    support_workspace_id: int | None
+    support_workspace_name: str | None
     start_date: str | None
     end_date: str | None
     github_repo_url: str | None

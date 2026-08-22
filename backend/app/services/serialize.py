@@ -68,6 +68,15 @@ def project_out(project) -> dict:
     """Serialize a Project with portfolio roll-ups across all its tasks."""
     tasks = prog.project_tasks(project)
     r = prog.rollup(tasks)
+    support_workspace = next(
+        (
+            candidate
+            for candidate in project.support_projects
+            if candidate.project_type == "maintenance_support"
+            and candidate.status not in ("completed", "archived")
+        ),
+        None,
+    )
     return {
         "id": project.id,
         "name": project.name,
@@ -76,6 +85,8 @@ def project_out(project) -> dict:
         "project_type": project.project_type,
         "parent_project_id": project.parent_project_id,
         "parent_project_name": project.parent_project.name if project.parent_project else None,
+        "support_workspace_id": support_workspace.id if support_workspace else None,
+        "support_workspace_name": support_workspace.name if support_workspace else None,
         "start_date": project.start_date,
         "end_date": project.end_date,
         "github_repo_url": project.github_repo_url,

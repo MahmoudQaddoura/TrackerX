@@ -21,7 +21,8 @@ from app.deps import (
     require_project_access,
     require_project_manage_access,
 )
-from app.models import Milestone, Project, Task, User
+from app.models import Project, ProactiveServiceReport, User
+from app.models.support import PROACTIVE_CATEGORY_TEMPLATES
 from app.schemas.project import (
     ProjectInput,
     ProjectOut,
@@ -32,30 +33,6 @@ from app.schemas.project import (
 from app.services.serialize import project_out
 
 router = APIRouter(tags=["projects"])
-
-
-PROACTIVE_TASK_TEMPLATES = (
-    (
-        "System health check",
-        "Review service availability, infrastructure health, logs, backups, and capacity signals.",
-    ),
-    (
-        "Patch update",
-        "Review, test, schedule, and apply approved operating-system and application patches.",
-    ),
-    (
-        "Penetration testing",
-        "Plan and execute security testing, document findings, and track remediation actions.",
-    ),
-    (
-        "Performance review",
-        "Measure response time, throughput, resource consumption, and optimization opportunities.",
-    ),
-    (
-        "KPI review",
-        "Review service KPIs, SLA performance, trends, exceptions, and the client reporting summary.",
-    ),
-)
 
 
 def _validate(
@@ -102,36 +79,24 @@ def list_projects(db: Session = Depends(get_db), user: User = Depends(get_curren
 
 
 @router.post("/projects", response_model=ProjectOut, status_code=201)
-def create_project(inp: ProjectInput, db: Session = Depends(get_db), _=Depends(require_admin)):
+def create_project(
+    inp: ProjectInput,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+):
     _validate(inp, db)
     project = Project(**inp.model_dump())
     db.add(project)
     db.flush()
     if project.project_type == "maintenance_support":
-        proactive = Milestone(
-            project_id=project.id,
-            title="Proactive Maintenance",
-            description="Planned service health, security, performance, patching, and KPI work.",
-            workstream="operations",
-            sort_order=0,
-        )
-        reactive = Milestone(
-            project_id=project.id,
-            title="Reactive Support",
-            description="Unplanned incidents, service requests, defects, and corrective actions.",
-            workstream="project",
-            sort_order=1,
-        )
-        db.add_all([proactive, reactive])
-        db.flush()
-        for sort_order, (title, description) in enumerate(PROACTIVE_TASK_TEMPLATES):
+        for category, title in PROACTIVE_CATEGORY_TEMPLATES:
             db.add(
-                Task(
-                    milestone_id=proactive.id,
+                ProactiveServiceReport(
+                    project_id=project.id,
+                    category=category,
                     title=title,
-                    description=description,
-                    status="todo",
-                    sort_order=sort_order,
+                    status="pending",
+                    created_by_id=user.id,
                 )
             )
     db.commit()

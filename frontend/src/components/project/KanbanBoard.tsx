@@ -7,12 +7,9 @@
  * Done (server-enforced too — this is UX, not the source of truth).
  */
 import {
-  Activity,
   AlertTriangle,
   Download,
   FileText,
-  Headphones,
-  LifeBuoy,
   MessageSquare,
   Paperclip,
   Pencil,
@@ -20,7 +17,6 @@ import {
   Rocket,
   Search,
   Trash2,
-  Wrench,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -72,8 +68,6 @@ type WorkstreamSection = {
   description: string;
   addLabel: string;
   icon: LucideIcon;
-  canAdd?: boolean;
-  primary?: boolean;
   emptyDescription: string;
 };
 
@@ -84,40 +78,8 @@ const DELIVERY_SECTION: WorkstreamSection =
     description: "Implementation milestones that deliver the project scope.",
     addLabel: "Add delivery milestone",
     icon: Rocket,
-    primary: true,
     emptyDescription: "Add a delivery milestone to start planning the project.",
   };
-
-const LEGACY_OPERATIONS_SECTION: WorkstreamSection =
-  {
-    key: "operations",
-    title: "Legacy Operations",
-    description: "Existing operational milestones retained from before Maintenance & Support workspaces.",
-    addLabel: "Add operations milestone",
-    icon: Wrench,
-    canAdd: false,
-    emptyDescription: "Create a separate Maintenance & Support workspace for ongoing service work.",
-  };
-
-const SUPPORT_SECTIONS: WorkstreamSection[] = [
-  {
-    key: "operations",
-    title: "Proactive Maintenance",
-    description: "Planned health checks, patching, security testing, performance, and KPI reviews.",
-    addLabel: "Add proactive cycle",
-    icon: Activity,
-    primary: true,
-    emptyDescription: "Add a planned maintenance cycle for recurring preventive work.",
-  },
-  {
-    key: "project",
-    title: "Reactive Support",
-    description: "Incidents, client requests, defects, escalations, and corrective actions.",
-    addLabel: "Add reactive queue",
-    icon: Headphones,
-    emptyDescription: "Add a reactive queue for incidents and on-demand support requests.",
-  },
-];
 
 export function KanbanBoard({ project }: { project: Project }) {
   const { canManage, canWrite, isDeveloper } = useAuth();
@@ -136,15 +98,7 @@ export function KanbanBoard({ project }: { project: Project }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [assigneeFilter, setAssigneeFilter] = useState("");
 
-  const isSupport = project.project_type === "maintenance_support";
-  const hasLegacyOperations = (milestones.data ?? []).some(
-    (milestone) => milestone.workstream === "operations",
-  );
-  const workstreamSections = isSupport
-    ? SUPPORT_SECTIONS
-    : hasLegacyOperations
-      ? [DELIVERY_SECTION, LEGACY_OPERATIONS_SECTION]
-      : [DELIVERY_SECTION];
+  const workstreamSections = [DELIVERY_SECTION];
 
   const assigneeOptions = useMemo(() => {
     const options = new Map<number, string>();
@@ -244,25 +198,6 @@ export function KanbanBoard({ project }: { project: Project }) {
         </div>
       )}
 
-      {isSupport && (
-        <div className="grid gap-3 rounded-xl border border-accent/25 bg-accent-soft/35 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-          <div>
-            <div className="flex items-center gap-2">
-              <LifeBuoy className="h-5 w-5 text-accent" />
-              <h2 className="font-display font-semibold text-fg">Maintenance &amp; Support workspace</h2>
-            </div>
-            <p className="mt-1 text-sm text-fg-muted">
-              Plan preventive work under Proactive Maintenance and capture on-demand work under
-              Reactive Support. Click any task to assign people, set dates, or update details.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Badge variant="success"><Activity className="h-3.5 w-3.5" /> Proactive · planned</Badge>
-            <Badge variant="warning"><Headphones className="h-3.5 w-3.5" /> Reactive · on demand</Badge>
-          </div>
-        </div>
-      )}
-
       <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-3 shadow-sm lg:flex-row lg:items-center lg:justify-between">
         <div className="grid flex-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,0.45fr)]">
           <div className="relative">
@@ -334,10 +269,10 @@ export function KanbanBoard({ project }: { project: Project }) {
                   <p className="mt-0.5 text-xs text-fg-muted">{section.description}</p>
                 </div>
               </div>
-              {canManage && section.canAdd !== false && (
+              {canManage && (
                 <Button
                   size="sm"
-                  variant={section.primary ? "default" : "outline"}
+                  variant="default"
                   onClick={() => {
                     setEditingMs(undefined);
                     setNewMilestoneWorkstream(section.key);
@@ -627,7 +562,7 @@ function MilestoneDocumentsButton({
                       <p className="truncate text-sm font-medium text-fg">{document.title}</p>
                       <div className="mt-1 flex flex-wrap items-center gap-1.5">
                         <Badge variant="outline">
-                          {placement.collection === "project" ? "Actual Project" : "Maintenance & Operations"}
+                          {placement.collection === "project" ? "Actual Project" : "Maintenance & Support"}
                         </Badge>
                         <Badge variant="neutral">{folder?.label ?? "Document"}</Badge>
                       </div>

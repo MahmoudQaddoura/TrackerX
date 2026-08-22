@@ -11,7 +11,6 @@ import {
   BriefcaseBusiness,
   CheckCircle2,
   LifeBuoy,
-  Link2,
   ListChecks,
   Percent,
   Pencil,
@@ -34,6 +33,7 @@ import { KanbanBoard } from "@/components/project/KanbanBoard";
 import { MeetingsPanel } from "@/components/meetings/MeetingsPanel";
 import { ProjectGitHubButton } from "@/components/project/ProjectGitHubButton";
 import { MilestonesTasksBoard } from "@/components/project/MilestonesTasksBoard";
+import { MaintenanceSupportDashboard } from "@/components/support/MaintenanceSupportDashboard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -97,7 +97,34 @@ export function ProjectDetailPage() {
     return <ErrorState message="Could not load this project." onRetry={() => refetch()} />;
 
   const isSupport = project.project_type === "maintenance_support";
-  const ProjectTypeIcon = isSupport ? LifeBuoy : BriefcaseBusiness;
+
+  if (isSupport) {
+    return (
+      <>
+        <MaintenanceSupportDashboard
+          project={project}
+          onEditProject={() => setEditOpen(true)}
+          onDeleteProject={() => setDeleteOpen(true)}
+        />
+        <ProjectFormDialog
+          open={editOpen}
+          onOpenChange={setEditOpen}
+          project={project}
+          availableProjects={availableProjects ?? []}
+          isPending={update.isPending}
+          onSubmit={(payload) => update.mutateAsync({ id, payload })}
+        />
+        <DeleteConfirmDialog
+          open={deleteOpen}
+          onOpenChange={setDeleteOpen}
+          title="Delete Maintenance & Support workspace"
+          description={`Delete "${project.name}" and all of its service records?`}
+          isPending={remove.isPending}
+          onConfirm={() => remove.mutate(id, { onSuccess: () => navigate("/projects") })}
+        />
+      </>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -111,7 +138,7 @@ export function ProjectDetailPage() {
         <div>
           <div className="flex items-center gap-2">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
-              <ProjectTypeIcon className="h-4 w-4" />
+              <BriefcaseBusiness className="h-4 w-4" />
             </span>
             <h1 className="font-display text-2xl font-bold text-fg">{project.name}</h1>
             <ProjectStatusBadge status={project.status} />
@@ -123,18 +150,16 @@ export function ProjectDetailPage() {
             />
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <Badge variant={isSupport ? "success" : "default"}>
-              {isSupport ? "Maintenance & Support" : "Actual Project"}
-            </Badge>
-            {isSupport && project.parent_project_id && (
+            <Badge variant="default">Actual Project</Badge>
+            {project.support_workspace_id && (
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-6 gap-1 px-2 text-xs"
-                onClick={() => navigate(`/projects/${project.parent_project_id}`)}
+                className="h-7 gap-1.5 px-2 text-xs"
+                onClick={() => navigate(`/projects/${project.support_workspace_id}`)}
               >
-                <Link2 className="h-3.5 w-3.5" />
-                {project.parent_project_name ?? "Related actual project"}
+                <LifeBuoy className="h-3.5 w-3.5" />
+                {project.support_workspace_name ?? "Open Maintenance & Support"}
               </Button>
             )}
           </div>
@@ -160,9 +185,7 @@ export function ProjectDetailPage() {
       <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
             <TabsTrigger value="overview">Overview</TabsTrigger>
-            {canEditProjectContent && (
-              <TabsTrigger value="kanban">{isSupport ? "Support board" : "Kanban"}</TabsTrigger>
-            )}
+            {canEditProjectContent && <TabsTrigger value="kanban">Kanban</TabsTrigger>}
             {!canEditProjectContent && <TabsTrigger value="board">Milestones &amp; Tasks</TabsTrigger>}
             <TabsTrigger value="gantt">Gantt</TabsTrigger>
             <TabsTrigger value="documents">Documents</TabsTrigger>
@@ -186,7 +209,7 @@ export function ProjectDetailPage() {
             <GanttTab projectId={id} onOpenMilestone={openMilestoneFromGantt} />
           </TabsContent>
           <TabsContent value="documents">
-            <DocumentRepository projectId={id} />
+            <DocumentRepository projectId={id} workspace="project" />
           </TabsContent>
           <TabsContent value="meetings">
             <MeetingsPanel projectId={id} />

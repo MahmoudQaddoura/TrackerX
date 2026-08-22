@@ -153,3 +153,26 @@ h1, h2, h3, h4 {
   stroke: hsl(var(--fg));
   stroke-width: 3px;
 }
+
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+
+  [data-support-print-area],
+  [data-support-print-area] * {
+    visibility: visible !important;
+  }
+
+  [data-support-print-area] {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    color: #111827;
+    background: #ffffff;
+  }
+
+  [data-no-print] {
+    display: none !important;
+  }
+}

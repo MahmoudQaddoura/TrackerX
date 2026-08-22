@@ -49,6 +49,8 @@ def _task_assignees(task) -> list[str]:
 @router.get("/projects/{project_id}/gantt", response_model=list[GanttTask])
 def project_gantt(project: Project = Depends(require_project_access)):
     """Return milestone parents followed by their task schedule rows."""
+    if project.project_type == "maintenance_support":
+        return []
     anchor = (
         _parse_date(project.start_date)
         or _parse_date(project.created_at)
@@ -57,7 +59,10 @@ def project_gantt(project: Project = Depends(require_project_access)):
     current_date = anchor
     rows: list[GanttTask] = []
 
-    for milestone in sorted(project.milestones, key=lambda item: (item.sort_order, item.id)):
+    delivery_milestones = [
+        milestone for milestone in project.milestones if milestone.workstream == "project"
+    ]
+    for milestone in sorted(delivery_milestones, key=lambda item: (item.sort_order, item.id)):
         tasks = sorted(milestone.tasks, key=lambda item: (item.sort_order, item.id))
         milestone_start_input = _parse_date(milestone.start_date)
         milestone_end_input = _parse_date(milestone.end_date)

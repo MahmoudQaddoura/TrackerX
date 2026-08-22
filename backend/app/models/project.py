@@ -54,6 +54,16 @@ class Project(Base):
         back_populates="support_projects",
     )
     support_projects = relationship("Project", back_populates="parent_project")
+    proactive_reports = relationship(
+        "ProactiveServiceReport",
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
+    support_incidents = relationship(
+        "SupportIncident",
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
 
     __table_args__ = (
         CheckConstraint(

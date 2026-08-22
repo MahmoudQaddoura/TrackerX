@@ -19,6 +19,20 @@ export type CommentEntity = "task" | "milestone";
 export type LeaveRequestType = "leave" | "sick_leave" | "absent";
 export type LeaveRequestStatus = "pending" | "approved" | "rejected";
 export type LeaveDurationUnit = "days" | "hours";
+export type ProactiveReportCategory =
+  | "health_check"
+  | "patch_update"
+  | "penetration_testing"
+  | "updates"
+  | "performance"
+  | "kpi";
+export type ProactiveReportStatus =
+  | "pending"
+  | "in_progress"
+  | "completed"
+  | "attention_required";
+export type SupportIncidentStatus = "reported" | "investigating" | "resolved" | "unresolved";
+export type SupportIncidentSeverity = "low" | "medium" | "high" | "critical";
 
 export interface AuthUser {
   id: number;
@@ -39,6 +53,8 @@ export interface Project {
   project_type: ProjectType;
   parent_project_id: number | null;
   parent_project_name: string | null;
+  support_workspace_id: number | null;
+  support_workspace_name: string | null;
   start_date: string | null;
   end_date: string | null;
   github_repo_url: string | null;
@@ -269,4 +285,45 @@ export interface DelayedTaskItem {
   end_date: string | null;
   trigger_type: "manual" | "schedule";
   days_overdue: number | null;
+}
+
+export interface ProactiveServiceReport {
+  id: number;
+  project_id: number;
+  category: ProactiveReportCategory;
+  title: string;
+  status: ProactiveReportStatus;
+  period_start: string | null;
+  period_end: string | null;
+  due_date: string | null;
+  executive_summary: string | null;
+  findings: string | null;
+  work_completed: string | null;
+  recommendations: string | null;
+  next_action_date: string | null;
+  assigned_members: TaskAssignee[];
+  created_by_name: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SupportIncident {
+  id: number;
+  project_id: number;
+  title: string;
+  client_report: string | null;
+  reason: string | null;
+  description: string | null;
+  reported_at: string;
+  severity: SupportIncidentSeverity;
+  recommendation: string | null;
+  investigation: string | null;
+  response_at: string | null;
+  response_description: string | null;
+  status: SupportIncidentStatus;
+  resolution_notes: string | null;
+  assigned_members: TaskAssignee[];
+  created_by_name: string | null;
+  created_at: string;
+  updated_at: string;
 }

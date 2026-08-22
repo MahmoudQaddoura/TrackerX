@@ -42,12 +42,18 @@ def _check_workstream(workstream: str) -> None:
 def list_milestones(
     project_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)
 ):
-    if db.get(Project, project_id) is None:
+    project = db.get(Project, project_id)
+    if project is None:
         raise HTTPException(status_code=404, detail="Project not found.")
     check_project_access(db, user, project_id)
+    if project.project_type == "maintenance_support":
+        return []
     rows = (
         db.query(Milestone)
-        .filter(Milestone.project_id == project_id)
+        .filter(
+            Milestone.project_id == project_id,
+            Milestone.workstream == "project",
+        )
         .order_by(Milestone.sort_order, Milestone.id)
         .all()
     )
@@ -61,9 +67,20 @@ def create_milestone(
     db: Session = Depends(get_db),
     user: User = Depends(require_manager),
 ):
-    if db.get(Project, project_id) is None:
+    project = db.get(Project, project_id)
+    if project is None:
         raise HTTPException(status_code=404, detail="Project not found.")
     check_project_access(db, user, project_id)
+    if project.project_type == "maintenance_support":
+        raise HTTPException(
+            status_code=422,
+            detail="Maintenance & Support uses service reports instead of milestones.",
+        )
+    if inp.workstream != "project":
+        raise HTTPException(
+            status_code=422,
+            detail="Actual projects contain delivery milestones only.",
+        )
     _check_dates(inp.start_date, inp.end_date)
     _check_workstream(inp.workstream)
     ms = Milestone(project_id=project_id, **inp.model_dump())

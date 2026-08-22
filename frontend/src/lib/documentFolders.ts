@@ -44,8 +44,8 @@ export const DOCUMENT_COLLECTIONS: DocumentCollectionDefinition[] = [
   },
   {
     key: "operations",
-    label: "Maintenance & Operations",
-    shortLabel: "Maintenance & Operations",
+    label: "Maintenance & Support",
+    shortLabel: "Maintenance & Support",
     description: "Service continuity, support, maintenance, and operational records.",
   },
 ];

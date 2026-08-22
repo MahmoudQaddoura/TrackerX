@@ -216,8 +216,8 @@ export function ProjectFormDialog({
               </Select>
               <p className="flex items-start gap-1.5 text-xs leading-5 text-fg-muted">
                 <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" />
-                A Proactive Maintenance area with five starter tasks and a Reactive Support area
-                will be created automatically.
+                Six structured proactive report templates and a reactive incident register will
+                be created automatically.
               </p>
             </div>
           )}

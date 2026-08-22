@@ -17,6 +17,12 @@ from app.models.meeting import Meeting
 from app.models.comment import Comment
 from app.models.attendance import AttendanceRecord
 from app.models.leave_request import LeaveRequest
+from app.models.support import (
+    ProactiveServiceReport,
+    SupportIncident,
+    proactive_report_assignees,
+    support_incident_assignees,
+)
 
 __all__ = [
     "User",
@@ -32,4 +38,8 @@ __all__ = [
     "Comment",
     "AttendanceRecord",
     "LeaveRequest",
+    "ProactiveServiceReport",
+    "SupportIncident",
+    "proactive_report_assignees",
+    "support_incident_assignees",
 ]
