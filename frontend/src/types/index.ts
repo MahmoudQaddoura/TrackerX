@@ -327,3 +327,69 @@ export interface SupportIncident {
   created_at: string;
   updated_at: string;
 }
+
+export interface ClientProject {
+  id: number;
+  name: string;
+  description: string | null;
+  status: ProjectStatus;
+  project_type: ProjectType;
+  parent_project_id: number | null;
+  start_date: string | null;
+  end_date: string | null;
+  progress_pct: number;
+  total_tasks: number;
+  done_tasks: number;
+  is_delayed: boolean;
+}
+
+export interface ClientProfile {
+  id: number;
+  email: string;
+  full_name: string;
+  organization: string | null;
+  job_title: string | null;
+  phone: string | null;
+  notes: string | null;
+  is_enabled: boolean;
+  must_change_password: boolean;
+  projects: ClientProject[];
+  shared_report_count: number;
+  unread_report_count: number;
+  last_shared_at: string | null;
+  created_at: string;
+}
+
+export interface ShareableClientReport {
+  report_type: "proactive" | "incident";
+  report_id: number;
+  project_id: number;
+  project_name: string;
+  title: string;
+  status: string;
+  category: string | null;
+  date: string | null;
+  already_shared: boolean;
+}
+
+export interface ClientReportShare {
+  id: number;
+  client_user_id: number;
+  project_id: number;
+  project_name: string;
+  report_type: "proactive" | "incident";
+  report_id: number;
+  title: string;
+  status: string;
+  category: string | null;
+  message: string | null;
+  shared_by_name: string | null;
+  shared_at: string;
+  read_at: string | null;
+  report: Record<string, string | number | boolean | null>;
+}
+
+export interface ClientPortal {
+  profile: ClientProfile;
+  reports: ClientReportShare[];
+}

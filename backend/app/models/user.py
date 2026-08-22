@@ -10,6 +10,7 @@ Auth account. Four roles:
 """
 
 from sqlalchemy import CheckConstraint, Column, Integer, String, Text
+from sqlalchemy.orm import relationship
 
 from app.db import Base, now_iso
 
@@ -29,6 +30,19 @@ class User(Base):
     is_primary_admin = Column(Integer, nullable=False, default=0)
     must_change_password = Column(Integer, nullable=False, default=0)
     created_at = Column(Text, nullable=False, default=now_iso)
+
+    client_profile = relationship(
+        "ClientProfile",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+    report_shares = relationship(
+        "ClientReportShare",
+        foreign_keys="ClientReportShare.client_user_id",
+        back_populates="client",
+        cascade="all, delete-orphan",
+    )
 
     __table_args__ = (
         CheckConstraint("role IN ('admin','pm','developer','client')", name="ck_user_role"),

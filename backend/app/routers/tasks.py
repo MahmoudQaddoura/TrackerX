@@ -116,7 +116,7 @@ def list_tasks(
         .order_by(Task.sort_order, Task.id)
         .all()
     )
-    return [task_out(t) for t in rows]
+    return [task_out(t, include_assignees=user.role != "client") for t in rows]
 
 
 @router.post("/milestones/{milestone_id}/tasks", response_model=TaskOut, status_code=201)
@@ -138,14 +138,14 @@ def create_task(
     db.add(task)
     db.commit()
     db.refresh(task)
-    return task_out(task)
+    return task_out(task, include_assignees=user.role != "client")
 
 
 @router.get("/tasks/{task_id}", response_model=TaskOut)
 def get_task(task_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     task = _task_or_404(db, task_id)
     check_project_access(db, user, _project_id_of(db, task))
-    return task_out(task)
+    return task_out(task, include_assignees=user.role != "client")
 
 
 @router.put("/tasks/{task_id}", response_model=TaskOut)

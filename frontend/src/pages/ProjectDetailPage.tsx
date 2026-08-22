@@ -50,13 +50,14 @@ import {
 import { useMilestones } from "@/hooks/useMilestones";
 import { useProject, useProjectMutations, useProjects } from "@/hooks/useProjects";
 import { formatDate } from "@/lib/utils";
+import { ClientProjectWorkspace } from "@/pages/ClientProjectWorkspace";
 
 export function ProjectDetailPage() {
   const { projectId } = useParams();
   const id = Number(projectId);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { isAdmin, canManage, canEditProjectContent } = useAuth();
+  const { isAdmin, isClient, canManage, canEditProjectContent } = useAuth();
   const { data: project, isLoading, isError, refetch } = useProject(id);
   const { data: availableProjects } = useProjects();
   const { update, remove } = useProjectMutations();
@@ -97,6 +98,8 @@ export function ProjectDetailPage() {
     return <ErrorState message="Could not load this project." onRetry={() => refetch()} />;
 
   const isSupport = project.project_type === "maintenance_support";
+
+  if (isClient) return <ClientProjectWorkspace project={project} />;
 
   if (isSupport) {
     return (

@@ -23,6 +23,7 @@ from app.models.support import (
     proactive_report_assignees,
     support_incident_assignees,
 )
+from app.models.client import ClientProfile, ClientReportShare
 
 __all__ = [
     "User",
@@ -42,4 +43,6 @@ __all__ = [
     "SupportIncident",
     "proactive_report_assignees",
     "support_incident_assignees",
+    "ClientProfile",
+    "ClientReportShare",
 ]

@@ -27,7 +27,13 @@ import { useTasks } from "@/hooks/useTasks";
 import { formatDate } from "@/lib/utils";
 import type { Milestone, Project, Task } from "@/types";
 
-export function MilestonesTasksBoard({ project }: { project: Project }) {
+export function MilestonesTasksBoard({
+  project,
+  hideTeamDetails = false,
+}: {
+  project: Project;
+  hideTeamDetails?: boolean;
+}) {
   const { data: milestones, isLoading, isError, refetch } = useMilestones(project.id);
 
   if (isLoading) return <Skeleton className="h-64 w-full" />;
@@ -38,13 +44,19 @@ export function MilestonesTasksBoard({ project }: { project: Project }) {
       {milestones && milestones.length === 0 && <EmptyState title="No milestones yet" />}
 
       {milestones?.map((milestone) => (
-        <MilestoneCard key={milestone.id} milestone={milestone} />
+        <MilestoneCard key={milestone.id} milestone={milestone} hideTeamDetails={hideTeamDetails} />
       ))}
     </div>
   );
 }
 
-function MilestoneCard({ milestone }: { milestone: Milestone }) {
+function MilestoneCard({
+  milestone,
+  hideTeamDetails,
+}: {
+  milestone: Milestone;
+  hideTeamDetails: boolean;
+}) {
   const { data: tasks, isLoading } = useTasks(milestone.id);
   const [commentTask, setCommentTask] = useState<Task | null>(null);
 
@@ -80,23 +92,30 @@ function MilestoneCard({ milestone }: { milestone: Milestone }) {
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-fg">{task.title}</p>
               <p className="text-xs text-fg-subtle">
-                {task.assigned_members?.length
-                  ? task.assigned_members.map((member) => member.name).join(", ")
-                  : task.assigned_member_name ?? "Unassigned"}
-                {task.end_date ? ` · due ${formatDate(task.end_date)}` : ""}
+                {!hideTeamDetails && (
+                  <>
+                    {task.assigned_members?.length
+                      ? task.assigned_members.map((member) => member.name).join(", ")
+                      : task.assigned_member_name ?? "Unassigned"}
+                    {task.end_date ? " · " : ""}
+                  </>
+                )}
+                {task.end_date ? `Due ${formatDate(task.end_date)}` : ""}
               </p>
             </div>
             <div className="flex items-center gap-2">
               <TaskStatusBadge status={task.status} />
               <RiskBadge risk={task.risk_level} />
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Comments"
-                onClick={() => setCommentTask(task)}
-              >
-                <MessageSquare className="h-4 w-4" />
-              </Button>
+              {!hideTeamDetails && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Comments"
+                  onClick={() => setCommentTask(task)}
+                >
+                  <MessageSquare className="h-4 w-4" />
+                </Button>
+              )}
             </div>
           </div>
         ))}

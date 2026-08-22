@@ -17,10 +17,17 @@ import { NotFoundPage } from "@/pages/NotFoundPage";
 import { ProjectDetailPage } from "@/pages/ProjectDetailPage";
 import { ProjectsPage } from "@/pages/ProjectsPage";
 import { EmployeeListPage } from "@/pages/EmployeeListPage";
+import { ClientsPage } from "@/pages/ClientsPage";
 
 function RequireManage({ children }: { children: React.ReactNode }) {
   const { canViewManagement } = useAuth();
   if (!canViewManagement) return <Navigate to="/projects" replace />;
+  return <>{children}</>;
+}
+
+function RequireAdmin({ children }: { children: React.ReactNode }) {
+  const { isAdmin } = useAuth();
+  if (!isAdmin) return <Navigate to="/dashboard" replace />;
   return <>{children}</>;
 }
 
@@ -42,6 +49,14 @@ export default function App() {
             <RequireManage>
               <EmployeeListPage />
             </RequireManage>
+          }
+        />
+        <Route
+          path="/clients"
+          element={
+            <RequireAdmin>
+              <ClientsPage />
+            </RequireAdmin>
           }
         />
         <Route path="*" element={<NotFoundPage />} />

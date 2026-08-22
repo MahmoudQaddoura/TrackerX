@@ -169,8 +169,13 @@ def _incident_out(incident: SupportIncident) -> dict:
     "/projects/{project_id}/support/proactive",
     response_model=list[ProactiveReportOut],
 )
-def list_proactive_reports(project: Project = Depends(require_project_access)):
+def list_proactive_reports(
+    project: Project = Depends(require_project_access),
+    user: User = Depends(get_current_user),
+):
     _assert_support(project)
+    if user.role == "client":
+        raise HTTPException(status_code=403, detail="Clients can access only reports forwarded by an admin.")
     rows = sorted(project.proactive_reports, key=lambda report: (report.id, report.created_at))
     return [_report_out(report) for report in rows]
 
@@ -248,8 +253,13 @@ def delete_proactive_report(
     "/projects/{project_id}/support/incidents",
     response_model=list[SupportIncidentOut],
 )
-def list_support_incidents(project: Project = Depends(require_project_access)):
+def list_support_incidents(
+    project: Project = Depends(require_project_access),
+    user: User = Depends(get_current_user),
+):
     _assert_support(project)
+    if user.role == "client":
+        raise HTTPException(status_code=403, detail="Clients can access only reports forwarded by an admin.")
     rows = sorted(project.support_incidents, key=lambda incident: incident.reported_at, reverse=True)
     return [_incident_out(incident) for incident in rows]
 

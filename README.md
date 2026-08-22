@@ -67,6 +67,20 @@ npm run dev
 Open `http://127.0.0.1:5173`. The Vite development server proxies `/api` to the
 backend on port 8000.
 
+### Initial client organizations
+
+To add the approved MODEE, Alawneh Exchange, PSUT, and JAF client profiles to an
+existing database, run this once from `backend/`:
+
+```bash
+python scripts/seed_main_clients.py
+```
+
+The operation is idempotent. It links PSUT to both PSUT LLM Engine and
+VerifyX-PSUT. Generated portal accounts remain disabled until an administrator
+enters the official contact email, issues a temporary password, and enables the
+login from the Clients page.
+
 ## Release checks
 
 ```bash

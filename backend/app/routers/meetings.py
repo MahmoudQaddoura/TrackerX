@@ -42,6 +42,8 @@ def list_meetings(
         raise HTTPException(status_code=404, detail="Project not found.")
     check_project_access(db, user, project_id)
     q = db.query(Meeting).filter(Meeting.project_id == project_id)
+    if user.role == "client":
+        q = q.filter(Meeting.meeting_type == "client")
     if meeting_type:
         q = q.filter(Meeting.meeting_type == meeting_type)
     return q.order_by(Meeting.meeting_date.desc(), Meeting.id.desc()).all()

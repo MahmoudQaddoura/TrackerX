@@ -25,9 +25,9 @@ const FILTERS = [
   { key: "client", label: "Client" },
 ] as const;
 
-export function MeetingsPanel({ projectId }: { projectId: number }) {
+export function MeetingsPanel({ projectId, clientOnly = false }: { projectId: number; clientOnly?: boolean }) {
   const { canManage } = useAuth();
-  const [filter, setFilter] = useState<string | undefined>(undefined);
+  const [filter, setFilter] = useState<string | undefined>(clientOnly ? "client" : undefined);
   const { data, isLoading, isError, refetch } = useMeetings(projectId, filter);
   const { create, update, remove } = useMeetingMutations(projectId);
   const [formOpen, setFormOpen] = useState(false);
@@ -37,7 +37,7 @@ export function MeetingsPanel({ projectId }: { projectId: number }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex gap-1">
+        {!clientOnly && <div className="flex gap-1">
           {FILTERS.map((f) => (
             <Button
               key={f.label}
@@ -48,7 +48,7 @@ export function MeetingsPanel({ projectId }: { projectId: number }) {
               {f.label}
             </Button>
           ))}
-        </div>
+        </div>}
         {canManage && (
           <Button
             size="sm"

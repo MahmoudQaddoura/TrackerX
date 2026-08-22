@@ -7,8 +7,8 @@ from math import ceil
 
 from fastapi import APIRouter, Depends
 
-from app.deps import require_project_access
-from app.models import Project
+from app.deps import get_current_user, require_project_access
+from app.models import Project, User
 from app.schemas.gantt import GanttTask
 
 router = APIRouter(tags=["gantt"])
@@ -47,7 +47,10 @@ def _task_assignees(task) -> list[str]:
 
 
 @router.get("/projects/{project_id}/gantt", response_model=list[GanttTask])
-def project_gantt(project: Project = Depends(require_project_access)):
+def project_gantt(
+    project: Project = Depends(require_project_access),
+    user: User = Depends(get_current_user),
+):
     """Return milestone parents followed by their task schedule rows."""
     if project.project_type == "maintenance_support":
         return []
@@ -113,7 +116,7 @@ def project_gantt(project: Project = Depends(require_project_access)):
                     status=task.status,
                     is_delayed=bool(task.is_delayed),
                     is_auto_scheduled=is_auto,
-                    assignee_names=_task_assignees(task),
+                    assignee_names=_task_assignees(task) if user.role != "client" else [],
                 )
             )
 

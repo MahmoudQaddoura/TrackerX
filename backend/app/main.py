@@ -19,6 +19,7 @@ from app.routers import (
     attendance,
     auth,
     comments,
+    clients,
     csv_import,
     documents,
     gantt,
@@ -191,6 +192,7 @@ for r in (
     leave_requests.router,
     gantt.router,
     support.router,
+    clients.router,
 ):
     app.include_router(r, prefix="/api")
 

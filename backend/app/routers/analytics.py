@@ -68,4 +68,8 @@ def get_project_timelines(
 def get_delayed_tasks(
     project_id: int | None = None, db: Session = Depends(get_db), user: User = Depends(get_current_user)
 ):
-    return analytics.delayed_tasks(_scope(db, user, project_id))
+    rows = analytics.delayed_tasks(_scope(db, user, project_id))
+    if user.role == "client":
+        for row in rows:
+            row["owner"] = None
+    return rows

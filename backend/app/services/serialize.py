@@ -11,8 +11,8 @@ from app.services import progress as prog
 from app.services.risk import task_risk, worst_risk
 
 
-def task_out(task) -> dict:
-    """Serialize a Task, including its computed risk and all assignees."""
+def task_out(task, include_assignees: bool = True) -> dict:
+    """Serialize a task, with employee identity removed for client-facing reads."""
     members = list(task.assigned_members)
     if not members and task.assigned_member:
         members = [task.assigned_member]
@@ -29,12 +29,12 @@ def task_out(task) -> dict:
         "delay_cause": task.delay_cause,
         "delay_comment": task.delay_comment,
         "est_days": task.est_days,
-        "assigned_member_id": primary_member.id if primary_member else None,
-        "assigned_member_name": primary_member.name if primary_member else None,
+        "assigned_member_id": primary_member.id if primary_member and include_assignees else None,
+        "assigned_member_name": primary_member.name if primary_member and include_assignees else None,
         "assigned_members": [
             {"id": member.id, "name": member.name, "role": member.role}
             for member in members
-        ],
+        ] if include_assignees else [],
         "sort_order": task.sort_order,
         "created_at": task.created_at,
         "updated_at": task.updated_at,

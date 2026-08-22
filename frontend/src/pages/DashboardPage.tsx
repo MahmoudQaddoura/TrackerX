@@ -36,6 +36,7 @@ import { useAttendance } from "@/hooks/useAttendance";
 import { useProjects } from "@/hooks/useProjects";
 import { timeGreeting } from "@/lib/greeting";
 import type { AttendanceStatus, Project } from "@/types";
+import { ClientDashboardPage } from "@/pages/ClientDashboardPage";
 
 function localDate(): string {
   const now = new Date();
@@ -54,6 +55,11 @@ const ATTENDANCE_LABEL: Record<AttendanceStatus, string> = {
 };
 
 export function DashboardPage() {
+  const { isClient } = useAuth();
+  return isClient ? <ClientDashboardPage /> : <TeamDashboardPage />;
+}
+
+function TeamDashboardPage() {
   const navigate = useNavigate();
   const { user, canViewManagement, canManage } = useAuth();
   const summary = useSummary();
