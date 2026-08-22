@@ -85,6 +85,14 @@ def project_out(project) -> dict:
         "project_type": project.project_type,
         "parent_project_id": project.parent_project_id,
         "parent_project_name": project.parent_project.name if project.parent_project else None,
+        "project_manager_id": project.project_manager_id,
+        "project_manager_name": project.project_manager.name if project.project_manager else None,
+        "assistant_project_manager_id": project.assistant_project_manager_id,
+        "assistant_project_manager_name": (
+            project.assistant_project_manager.name
+            if project.assistant_project_manager
+            else None
+        ),
         "support_workspace_id": support_workspace.id if support_workspace else None,
         "support_workspace_name": support_workspace.name if support_workspace else None,
         "start_date": project.start_date,
@@ -112,7 +120,30 @@ def team_member_out(member) -> dict:
             "id": project.id,
             "name": project.name,
             "assignment_source": "admin",
+            "leadership_role": None,
         }
+    for project in member.managed_projects:
+        item = project_map.setdefault(
+            project.id,
+            {
+                "id": project.id,
+                "name": project.name,
+                "assignment_source": "leadership",
+                "leadership_role": None,
+            },
+        )
+        item["leadership_role"] = "project_manager"
+    for project in member.assistant_managed_projects:
+        item = project_map.setdefault(
+            project.id,
+            {
+                "id": project.id,
+                "name": project.name,
+                "assignment_source": "leadership",
+                "leadership_role": None,
+            },
+        )
+        item["leadership_role"] = "assistant_project_manager"
     total_est = 0.0
     tasks = list(member.assigned_tasks)
     for t in tasks:
@@ -125,6 +156,7 @@ def team_member_out(member) -> dict:
                     "id": pid,
                     "name": t.milestone.project.name,
                     "assignment_source": "task",
+                    "leadership_role": None,
                 }
         if t.status != "done" and t.est_days:
             total_est += t.est_days

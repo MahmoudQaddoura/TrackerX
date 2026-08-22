@@ -15,6 +15,7 @@ import {
   Percent,
   Pencil,
   Trash2,
+  UserRoundCog,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
@@ -154,6 +155,13 @@ export function ProjectDetailPage() {
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <Badge variant="default">Actual Project</Badge>
+            <Badge variant={project.project_manager_name ? "success" : "warning"}>
+              <UserRoundCog className="h-3.5 w-3.5" />
+              PM: {project.project_manager_name ?? "Not assigned"}
+            </Badge>
+            {project.assistant_project_manager_name && (
+              <Badge variant="outline">Assistant PM: {project.assistant_project_manager_name}</Badge>
+            )}
             {project.support_workspace_id && (
               <Button
                 variant="ghost"

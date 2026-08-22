@@ -28,6 +28,18 @@ class Project(Base):
         nullable=True,
         index=True,
     )
+    project_manager_id = Column(
+        Integer,
+        ForeignKey("team_members.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    assistant_project_manager_id = Column(
+        Integer,
+        ForeignKey("team_members.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     start_date = Column(Text, nullable=True)  # ISO date string
     end_date = Column(Text, nullable=True)
     github_repo_url = Column(Text, nullable=True)  # optional GitHub repo link
@@ -47,6 +59,16 @@ class Project(Base):
         "TeamMember",
         secondary="team_member_projects",
         back_populates="assigned_projects",
+    )
+    project_manager = relationship(
+        "TeamMember",
+        foreign_keys=[project_manager_id],
+        back_populates="managed_projects",
+    )
+    assistant_project_manager = relationship(
+        "TeamMember",
+        foreign_keys=[assistant_project_manager_id],
+        back_populates="assistant_managed_projects",
     )
     parent_project = relationship(
         "Project",

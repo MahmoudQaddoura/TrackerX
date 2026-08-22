@@ -10,6 +10,7 @@ _database_file = Path(tempfile.gettempdir()) / "trackerx_leave_coverage_test.db"
 os.environ["DATABASE_URL"] = f"sqlite:///{_database_file.as_posix()}"
 
 from app.db import Base, SessionLocal, engine
+from app.deps import get_accessible_project_ids
 from app.models import LeaveRequest, Milestone, Project, Task, TeamMember, User
 from app.routers.coverage import (
     assign_leave_coverage,
@@ -22,6 +23,8 @@ from app.schemas.coverage import (
     CoverageAssignmentInput,
     CoverageResponseInput,
 )
+from app.routers.projects import update_project_leadership
+from app.schemas.project import ProjectLeadershipInput
 from app.security import hash_password
 
 
@@ -47,6 +50,7 @@ class LeaveCoverageWorkflowTest(unittest.TestCase):
                 role="admin",
                 access_level="write",
                 is_enabled=1,
+                is_primary_admin=1,
             )
             source_user = User(
                 email="source@trackerx.test",
@@ -60,7 +64,7 @@ class LeaveCoverageWorkflowTest(unittest.TestCase):
                 email="recipient@trackerx.test",
                 hashed_password=hash_password("RecipientPassword123!"),
                 full_name="Available Employee",
-                role="developer",
+                role="pm",
                 access_level="write",
                 is_enabled=1,
             )
@@ -114,6 +118,7 @@ class LeaveCoverageWorkflowTest(unittest.TestCase):
             self.recipient_id = recipient.id
             self.task_id = task.id
             self.leave_id = leave.id
+            self.project_id = project.id
 
     def test_offer_is_not_reassigned_until_recipient_accepts(self) -> None:
         with SessionLocal() as db:
@@ -158,6 +163,25 @@ class LeaveCoverageWorkflowTest(unittest.TestCase):
             task = db.get(Task, self.task_id)
             self.assertEqual([member.id for member in task.assigned_members], [self.recipient_id])
             self.assertEqual(task.assigned_member_id, self.recipient_id)
+
+    def test_owner_assigns_project_manager_and_pm_is_scoped_to_project(self) -> None:
+        with SessionLocal() as db:
+            admin = db.get(User, self.admin_id)
+            manager_user = db.get(User, self.recipient_user_id)
+            result = update_project_leadership(
+                self.project_id,
+                ProjectLeadershipInput(project_manager_id=self.recipient_id),
+                db=db,
+                _owner=admin,
+            )
+
+            self.assertEqual(result["project_manager_id"], self.recipient_id)
+            self.assertEqual(result["project_manager_name"], "Available Employee")
+            self.assertEqual(result["assistant_project_manager_id"], None)
+            self.assertEqual(
+                get_accessible_project_ids(manager_user, db),
+                {self.project_id},
+            )
 
 
 if __name__ == "__main__":

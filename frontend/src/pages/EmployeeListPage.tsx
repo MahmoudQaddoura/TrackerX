@@ -49,6 +49,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { KpiCard } from "@/components/dashboard/KpiCard";
+import { ProjectLeadershipPanel } from "@/components/employees/ProjectLeadershipPanel";
 import {
   Dialog,
   DialogContent,
@@ -291,6 +292,19 @@ export function EmployeeListPage() {
         <KpiCard label="Enabled logins" value={`${linkedLogins}/${rows.length}`} description="Employees with TrackerX access" icon={KeyRound} accent="success" />
         <KpiCard label="Open assignments" value={openTasks} description="Tasks not completed" icon={ListChecks} />
       </div>
+
+      {projectsQuery.isLoading ? (
+        <Card className="flex min-h-40 items-center justify-center"><Spinner /></Card>
+      ) : projectsQuery.isError ? (
+        <ErrorState message="Could not load project leadership." onRetry={() => projectsQuery.refetch()} />
+      ) : (
+        <ProjectLeadershipPanel
+          projects={projectsQuery.data ?? []}
+          members={rows}
+          canEdit={isPrimaryAdmin}
+        />
+      )}
+
       <div className="relative sm:hidden">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-subtle" />
         <Input className="pl-9" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search people, roles, or projects" />
@@ -715,6 +729,7 @@ function EmployeeCard({
               <div className="mt-1.5 flex flex-wrap gap-1">
                 {member.projects.slice(0, 2).map((project) => (
                   <Badge key={project.id} variant="outline" className="max-w-[150px] truncate text-[10px]">
+                    {project.leadership_role === "project_manager" ? "PM · " : project.leadership_role === "assistant_project_manager" ? "Assistant PM · " : ""}
                     {project.name}
                   </Badge>
                 ))}
@@ -842,8 +857,13 @@ function ProfileDialog({ member, onClose }: { member: TeamMember; onClose: () =>
                     <div className="flex items-center gap-2 font-medium text-fg">
                       <FolderKanban className="h-4 w-4 text-accent" /> {project.name}
                       <Badge variant={project.assignment_source === "task" ? "outline" : "success"} className="text-[10px]">
-                        {project.assignment_source === "task" ? "Task-linked" : project.assignment_source === "admin_and_task" ? "Admin + task" : "Admin assigned"}
+                        {project.assignment_source === "task" ? "Task-linked" : project.assignment_source === "admin_and_task" ? "Admin + task" : project.assignment_source === "leadership" ? "Leadership access" : "Admin assigned"}
                       </Badge>
+                      {project.leadership_role && (
+                        <Badge variant="default" className="text-[10px]">
+                          {project.leadership_role === "project_manager" ? "Project Manager" : "Assistant Project Manager"}
+                        </Badge>
+                      )}
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {[

@@ -33,6 +33,11 @@ class ProjectUpdate(BaseModel):
     github_repo_url: str | None = None
 
 
+class ProjectLeadershipInput(BaseModel):
+    project_manager_id: int
+    assistant_project_manager_id: int | None = None
+
+
 class ProjectOut(BaseModel):
     id: int
     name: str
@@ -41,6 +46,10 @@ class ProjectOut(BaseModel):
     project_type: str
     parent_project_id: int | None
     parent_project_name: str | None
+    project_manager_id: int | None
+    project_manager_name: str | None
+    assistant_project_manager_id: int | None
+    assistant_project_manager_name: str | None
     support_workspace_id: int | None
     support_workspace_name: str | None
     start_date: str | None

@@ -13,6 +13,11 @@ export interface ProjectPayload {
   github_repo_url?: string | null;
 }
 
+export interface ProjectLeadershipPayload {
+  project_manager_id: number;
+  assistant_project_manager_id?: number | null;
+}
+
 export async function fetchProjects(): Promise<Project[]> {
   const { data } = await api.get<Project[]>("/projects");
   return data;
@@ -30,6 +35,14 @@ export async function createProject(payload: ProjectPayload): Promise<Project> {
 
 export async function updateProject(id: number, payload: ProjectPayload): Promise<Project> {
   const { data } = await api.put<Project>(`/projects/${id}`, payload);
+  return data;
+}
+
+export async function updateProjectLeadership(
+  id: number,
+  payload: ProjectLeadershipPayload,
+): Promise<Project> {
+  const { data } = await api.put<Project>(`/projects/${id}/leadership`, payload);
   return data;
 }
 

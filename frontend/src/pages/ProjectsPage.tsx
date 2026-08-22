@@ -7,6 +7,7 @@ import {
   Link2,
   Plus,
   Upload,
+  UserRoundCog,
   type LucideIcon,
 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -252,6 +253,16 @@ function ProjectCollection({
                   </span>
                 </div>
               )}
+
+              <div className="mb-3 grid gap-1.5 rounded-md bg-raised/60 px-2.5 py-2 text-xs text-fg-muted">
+                <span className="flex items-center gap-1.5">
+                  <UserRoundCog className="h-3.5 w-3.5 text-accent" />
+                  <span className="font-medium text-fg">PM:</span> {project.project_manager_name ?? "Not assigned"}
+                </span>
+                {project.assistant_project_manager_name && (
+                  <span className="pl-5"><span className="font-medium text-fg">Assistant PM:</span> {project.assistant_project_manager_name}</span>
+                )}
+              </div>
 
               {project.description && (
                 <p className="mb-3 line-clamp-2 text-sm text-fg-muted">{project.description}</p>

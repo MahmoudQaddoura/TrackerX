@@ -178,6 +178,13 @@ export function MaintenanceSupportDashboard({
         </div>
         <div className="flex flex-wrap items-center gap-3 px-5 py-3 sm:px-7">
           <ProjectStatusBadge status={project.status} />
+          <Badge variant={project.project_manager_name ? "success" : "warning"}>
+            <UserRoundCheck className="h-3.5 w-3.5" />
+            PM: {project.project_manager_name ?? "Not assigned"}
+          </Badge>
+          {project.assistant_project_manager_name && (
+            <Badge variant="outline">Assistant PM: {project.assistant_project_manager_name}</Badge>
+          )}
           <span className="text-xs text-fg-muted">
             {reportMetrics.completed}/{reportMetrics.total} proactive reports completed
           </span>

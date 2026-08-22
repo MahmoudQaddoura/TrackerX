@@ -6,7 +6,7 @@ FastAPI dependencies for authentication and role/scope enforcement.
 
 Four roles:
   admin     — everything, company-wide (no project filter).
-  pm        — all projects (full management across the org).
+  pm        — management access only to assigned or task-linked projects.
   developer — only projects they're directly assigned tasks on (Kanban-only).
   client    — only projects they're a client on (read + comment + download).
 
@@ -128,12 +128,12 @@ def require_project_content_editor(user: User = Depends(get_current_user)) -> Us
 def get_accessible_project_ids(user: User, db: Session) -> set[int] | None:
     """
     The set of project ids `user` may see, or `None` meaning "no filter"
-    (admin/pm see everything). An empty set means the user is legitimately
+    (admin sees everything). An empty set means the user is legitimately
     scoped to nothing yet.
     """
-    if user.role in ("admin", "pm"):
+    if user.role == "admin":
         return None
-    if user.role == "developer":
+    if user.role in ("pm", "developer"):
         # Direct admin assignments grant workspace access before task work is
         # created. Existing task assignments remain a compatible access path.
         member = db.query(TeamMember).filter(TeamMember.user_id == user.id).first()
@@ -154,7 +154,18 @@ def get_accessible_project_ids(user: User, db: Session) -> set[int] | None:
             .filter(team_member_projects.c.team_member_id == member.id)
             .all()
         )
-        return {row[0] for row in task_rows} | {row[0] for row in direct_rows}
+        leadership_ids: set[int] = set()
+        if user.role == "pm":
+            leadership_rows = (
+                db.query(Project.id)
+                .filter(
+                    (Project.project_manager_id == member.id)
+                    | (Project.assistant_project_manager_id == member.id)
+                )
+                .all()
+            )
+            leadership_ids = {row[0] for row in leadership_rows}
+        return {row[0] for row in task_rows} | {row[0] for row in direct_rows} | leadership_ids
     if user.role == "client":
         rows = db.query(project_clients.c.project_id).filter(project_clients.c.user_id == user.id).all()
         return {r[0] for r in rows}
@@ -162,7 +173,7 @@ def get_accessible_project_ids(user: User, db: Session) -> set[int] | None:
 
 
 def check_project_access(db: Session, user: User, project_id: int) -> None:
-    """Raise 403 if `user` may not see the given project. No-op for admin/pm."""
+    """Raise 403 if `user` may not see the given project. No-op for admins."""
     ids = get_accessible_project_ids(user, db)
     if ids is not None and project_id not in ids:
         raise _FORBIDDEN_PROJECT
