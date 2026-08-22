@@ -1,11 +1,10 @@
 import {
   CalendarDays,
   CalendarClock,
-  CheckCircle2,
   Clock3,
   Send,
+  UserRoundCheck,
   WandSparkles,
-  XCircle,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
@@ -13,13 +12,7 @@ import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { CoveragePlanningDialog } from "@/components/attendance/CoveragePlanningDialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { Input } from "@/components/ui/input";
@@ -31,7 +24,6 @@ import { useAuth } from "@/context/AuthContext";
 import {
   useCreateLeaveRequest,
   useLeaveRequests,
-  useReviewLeaveRequest,
 } from "@/hooks/useLeaveRequests";
 import { getApiErrorMessage } from "@/lib/apiClient";
 import type {
@@ -98,7 +90,6 @@ export function LeaveRequestsPage({ embedded = false }: { embedded?: boolean } =
   const { isAdmin } = useAuth();
   const requests = useLeaveRequests(isAdmin ? "all" : "mine");
   const createRequest = useCreateLeaveRequest();
-  const reviewRequest = useReviewLeaveRequest();
 
   const [requestType, setRequestType] = useState<LeaveRequestType>("leave");
   const [durationUnit, setDurationUnit] = useState<LeaveDurationUnit>("days");
@@ -108,13 +99,7 @@ export function LeaveRequestsPage({ embedded = false }: { embedded?: boolean } =
   const [endTime, setEndTime] = useState("17:00");
   const [reason, setReason] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
-  const [reviewing, setReviewing] = useState<{
-    request: LeaveRequest;
-    status: "approved" | "rejected";
-  } | null>(null);
-  const [reviewNote, setReviewNote] = useState("");
-  const [autofill, setAutofill] = useState(true);
-  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [coverageRequest, setCoverageRequest] = useState<LeaveRequest | null>(null);
 
   const pendingCount = useMemo(
     () => (requests.data ?? []).filter((request) => request.status === "pending").length,
@@ -144,31 +129,6 @@ export function LeaveRequestsPage({ embedded = false }: { embedded?: boolean } =
       setReason("");
     } catch (error) {
       setFormError(getApiErrorMessage(error, "Could not submit this request."));
-    }
-  }
-
-  function openReview(request: LeaveRequest, status: "approved" | "rejected") {
-    setReviewing({ request, status });
-    setReviewNote("");
-    setAutofill(status === "approved");
-    setReviewError(null);
-  }
-
-  async function submitReview() {
-    if (!reviewing) return;
-    setReviewError(null);
-    try {
-      await reviewRequest.mutateAsync({
-        requestId: reviewing.request.id,
-        payload: {
-          status: reviewing.status,
-          review_note: reviewNote.trim() || null,
-          autofill_attendance: reviewing.status === "approved" && autofill,
-        },
-      });
-      setReviewing(null);
-    } catch (error) {
-      setReviewError(getApiErrorMessage(error, "Could not review this request."));
     }
   }
 
@@ -303,7 +263,7 @@ export function LeaveRequestsPage({ embedded = false }: { embedded?: boolean } =
       )}
 
       {isAdmin ? (
-        <RequestList requests={requests.data ?? []} canReview onReview={openReview} />
+        <RequestList requests={requests.data ?? []} canReview onManageCoverage={setCoverageRequest} />
       ) : (
         <div className="space-y-5">
           {requestForm}
@@ -311,59 +271,7 @@ export function LeaveRequestsPage({ embedded = false }: { embedded?: boolean } =
         </div>
       )}
 
-      {reviewing && (
-        <Dialog open onOpenChange={() => setReviewing(null)}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>
-                {reviewing.status === "approved" ? "Approve" : "Reject"} request #{reviewing.request.id}
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="rounded-lg border border-border bg-raised/50 p-3 text-sm">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="font-medium text-fg">{reviewing.request.employee_name}</p>
-                  <Badge variant="default">
-                    {reviewing.request.duration_unit === "hours" ? <Clock3 className="h-3 w-3" /> : <CalendarDays className="h-3 w-3" />}
-                    {durationLabel(reviewing.request)}
-                  </Badge>
-                </div>
-                <p className="mt-1 text-fg-muted">{TYPE_LABELS[reviewing.request.request_type]} · {scheduleLabel(reviewing.request)}</p>
-                <p className="mt-2 text-fg">{reviewing.request.reason}</p>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="review-note">Admin note (optional)</Label>
-                <Textarea id="review-note" rows={3} maxLength={1000} value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} />
-              </div>
-              {reviewing.status === "approved" && (
-                <label className="flex gap-3 rounded-lg border border-border p-3 text-sm text-fg">
-                  <input type="checkbox" checked={autofill} onChange={(event) => setAutofill(event.target.checked)} />
-                  <span>
-                    <span className="flex items-center gap-1 font-medium"><WandSparkles className="h-4 w-4 text-accent" />Autofill attendance</span>
-                    <span className="mt-1 block text-xs text-fg-muted">
-                      {reviewing.request.duration_unit === "hours"
-                        ? `Add the ${reviewing.request.start_time}–${reviewing.request.end_time} time window to attendance and tag it with request #${reviewing.request.id}.`
-                        : `Fill every date in this request and tag each row with request #${reviewing.request.id}.`}
-                    </span>
-                  </span>
-                </label>
-              )}
-              {reviewError && <p className="text-sm text-danger">{reviewError}</p>}
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setReviewing(null)}>Cancel</Button>
-              <Button
-                variant={reviewing.status === "rejected" ? "danger" : "default"}
-                onClick={submitReview}
-                disabled={reviewRequest.isPending}
-              >
-                {reviewRequest.isPending ? <Spinner /> : reviewing.status === "approved" ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
-                Confirm {reviewing.status === "approved" ? "approval" : "rejection"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
+      <CoveragePlanningDialog request={coverageRequest} onClose={() => setCoverageRequest(null)} />
     </div>
   );
 }
@@ -371,11 +279,11 @@ export function LeaveRequestsPage({ embedded = false }: { embedded?: boolean } =
 function RequestList({
   requests,
   canReview = false,
-  onReview,
+  onManageCoverage,
 }: {
   requests: LeaveRequest[];
   canReview?: boolean;
-  onReview?: (request: LeaveRequest, status: "approved" | "rejected") => void;
+  onManageCoverage?: (request: LeaveRequest) => void;
 }) {
   const [statusFilter, setStatusFilter] = useState<LeaveRequestStatus | "all">("all");
   if (requests.length === 0) {
@@ -437,6 +345,9 @@ function RequestList({
                 </Badge>
                 <Badge variant={STATUS_VARIANTS[request.status]} className="capitalize">{request.status}</Badge>
                 {request.attendance_autofilled && <Badge variant="default"><WandSparkles className="h-3 w-3" />Attendance tagged</Badge>}
+                {request.coverage_pending > 0 && <Badge variant="warning">{request.coverage_pending} coverage pending</Badge>}
+                {request.coverage_accepted > 0 && <Badge variant="success">{request.coverage_accepted} accepted</Badge>}
+                {request.coverage_declined > 0 && <Badge variant="danger">{request.coverage_declined} declined</Badge>}
               </div>
               <p className="mt-2 flex items-center gap-1.5 text-sm font-medium text-fg-muted">
                 {request.duration_unit === "hours" ? <Clock3 className="h-4 w-4" /> : <CalendarDays className="h-4 w-4" />}
@@ -456,11 +367,11 @@ function RequestList({
                   <Link to={`/attendance?date=${request.start_date}`}>Open attendance</Link>
                 </Button>
               )}
-              {canReview && request.status === "pending" && onReview && (
-                <>
-                  <Button variant="outline" size="sm" onClick={() => onReview(request, "rejected")}><XCircle className="h-4 w-4" />Reject</Button>
-                  <Button size="sm" onClick={() => onReview(request, "approved")}><CheckCircle2 className="h-4 w-4" />Approve</Button>
-                </>
+              {canReview && onManageCoverage && request.status === "pending" && (
+                <Button size="sm" onClick={() => onManageCoverage(request)}><UserRoundCheck className="h-4 w-4" />Assign &amp; approve</Button>
+              )}
+              {canReview && onManageCoverage && request.status === "approved" && request.coverage_declined > 0 && (
+                <Button variant="outline" size="sm" onClick={() => onManageCoverage(request)}><UserRoundCheck className="h-4 w-4" />Manage coverage</Button>
               )}
             </div>
           </div>

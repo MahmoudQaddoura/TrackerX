@@ -20,6 +20,7 @@ import { DelaysTable } from "@/components/dashboard/DelaysTable";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { ProjectProgressChart } from "@/components/dashboard/ProjectProgressChart";
 import { StatusBreakdownChart } from "@/components/dashboard/StatusBreakdownChart";
+import { CoverageInbox } from "@/components/attendance/CoverageInbox";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -111,6 +112,8 @@ function TeamDashboardPage() {
           </div>
         </div>
       </Card>
+
+      <CoverageInbox compact />
 
       {delayed.isLoading ? (
         <Skeleton className="h-20" />

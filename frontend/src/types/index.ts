@@ -180,8 +180,89 @@ export interface LeaveRequest {
   review_note: string | null;
   reviewed_by_name: string | null;
   attendance_autofilled: boolean;
+  coverage_total: number;
+  coverage_pending: number;
+  coverage_accepted: number;
+  coverage_declined: number;
   created_at: string;
   updated_at: string;
+}
+
+export type CoverageSeverity = "low" | "medium" | "high" | "critical";
+export type CoverageOfferStatus = "pending" | "accepted" | "declined" | "cancelled";
+
+export interface CoverageTaskPreview {
+  id: number;
+  title: string;
+  project_id: number;
+  project_name: string;
+  milestone_name: string;
+  status: TaskStatus;
+  severity: CoverageSeverity;
+  risk_level: RiskLevel;
+  due_date: string | null;
+  est_days: number | null;
+}
+
+export interface CoverageTask extends CoverageTaskPreview {
+  current_assignees: string[];
+  requires_assignment: boolean;
+  coverage_status: CoverageOfferStatus | null;
+  coverage_assignee_id: number | null;
+  coverage_assignee_name: string | null;
+}
+
+export interface CoverageCandidate {
+  id: number;
+  name: string;
+  role: string | null;
+  eligible: boolean;
+  availability: "available" | "on_leave" | "leave_pending" | "no_login";
+  availability_note: string | null;
+  open_task_count: number;
+  high_severity_count: number;
+  active_est_days: number;
+  workload_level: "light" | "balanced" | "high";
+  current_tasks: CoverageTaskPreview[];
+}
+
+export interface CoveragePlan {
+  leave_request_id: number;
+  employee_id: number;
+  employee_name: string;
+  start_date: string;
+  end_date: string;
+  duration_unit: LeaveDurationUnit;
+  reason: string;
+  request_status: LeaveRequestStatus;
+  tasks: CoverageTask[];
+  candidates: CoverageCandidate[];
+}
+
+export interface CoverageOffer {
+  id: number;
+  leave_request_id: number;
+  task_id: number;
+  task_title: string;
+  project_id: number;
+  project_name: string;
+  milestone_name: string;
+  from_member_id: number;
+  from_member_name: string;
+  to_member_id: number;
+  to_member_name: string;
+  assigned_by_name: string | null;
+  status: CoverageOfferStatus;
+  severity: CoverageSeverity;
+  risk_level: RiskLevel;
+  due_date: string | null;
+  est_days: number | null;
+  leave_start_date: string;
+  leave_end_date: string;
+  admin_note: string | null;
+  response_note: string | null;
+  created_at: string;
+  responded_at: string | null;
 }
 
 export interface DelegateTasksPayload {

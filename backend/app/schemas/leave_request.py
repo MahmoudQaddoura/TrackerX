@@ -39,5 +39,9 @@ class LeaveRequestOut(BaseModel):
     review_note: str | None
     reviewed_by_name: str | None
     attendance_autofilled: bool
+    coverage_total: int
+    coverage_pending: int
+    coverage_accepted: int
+    coverage_declined: int
     created_at: str
     updated_at: str

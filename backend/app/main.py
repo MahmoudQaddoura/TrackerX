@@ -20,6 +20,7 @@ from app.routers import (
     auth,
     comments,
     clients,
+    coverage,
     csv_import,
     documents,
     gantt,
@@ -193,6 +194,7 @@ for r in (
     gantt.router,
     support.router,
     clients.router,
+    coverage.router,
 ):
     app.include_router(r, prefix="/api")
 

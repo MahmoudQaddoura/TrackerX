@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """Employee absence submissions and administrator review workflow."""
 
-from datetime import date as date_type, timedelta
+from datetime import date as date_type
 import re
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.deps import get_current_user, require_admin
-from app.models import AttendanceRecord, LeaveRequest, TeamMember, User
+from app.models import LeaveRequest, TeamMember, User
 from app.models.leave_request import (
     LEAVE_DURATION_UNITS,
     LEAVE_REQUEST_STATUSES,
@@ -21,6 +21,7 @@ from app.schemas.leave_request import (
     LeaveRequestOut,
     LeaveRequestReview,
 )
+from app.services.leave import approve_leave_request, duration_hours
 
 router = APIRouter(prefix="/leave-requests", tags=["leave requests"])
 
@@ -52,16 +53,14 @@ def _request_or_404(db: Session, request_id: int) -> LeaveRequest:
 
 
 def _duration_hours(start_time: str, end_time: str) -> float:
-    start_hour, start_minute = (int(part) for part in start_time.split(":"))
-    end_hour, end_minute = (int(part) for part in end_time.split(":"))
-    minutes = (end_hour * 60 + end_minute) - (start_hour * 60 + start_minute)
-    return round(minutes / 60, 2)
+    return duration_hours(start_time, end_time)
 
 
 def _serialize(request: LeaveRequest) -> dict:
     is_hourly = request.duration_unit == "hours"
     start = _parse_date(request.start_date, "Start date")
     end = _parse_date(request.end_date, "End date")
+    offers = list(request.coverage_offers)
     return {
         "id": request.id,
         "team_member_id": request.team_member_id,
@@ -84,6 +83,10 @@ def _serialize(request: LeaveRequest) -> dict:
         "review_note": request.review_note,
         "reviewed_by_name": request.reviewed_by.full_name if request.reviewed_by else None,
         "attendance_autofilled": bool(request.attendance_autofilled),
+        "coverage_total": len(offers),
+        "coverage_pending": sum(1 for offer in offers if offer.status == "pending"),
+        "coverage_accepted": sum(1 for offer in offers if offer.status == "accepted"),
+        "coverage_declined": sum(1 for offer in offers if offer.status == "declined"),
         "created_at": request.created_at,
         "updated_at": request.updated_at,
     }
@@ -174,48 +177,20 @@ def review_leave_request(
     if request.status != "pending":
         raise HTTPException(status_code=409, detail="This request has already been reviewed.")
 
-    request.status = inp.status
-    request.review_note = inp.review_note.strip() if inp.review_note and inp.review_note.strip() else None
-    request.reviewed_by_id = admin.id
-
-    if inp.status == "approved" and inp.autofill_attendance:
-        current_day = _parse_date(request.start_date, "Start date")
-        end_day = _parse_date(request.end_date, "End date")
-        tag = f"[Leave request #{request.id}]"
-        if request.duration_unit == "hours" and request.start_time and request.end_time:
-            hours = _duration_hours(request.start_time, request.end_time)
-            hours_label = f"{hours:g} hour{'s' if hours != 1 else ''}"
-            note = (
-                f"{tag} {request.start_time}-{request.end_time} ({hours_label}): "
-                f"{request.reason}"
-            )[:1000]
-        else:
-            note = f"{tag} {request.reason}"[:1000]
-        while current_day <= end_day:
-            day = current_day.isoformat()
-            record = (
-                db.query(AttendanceRecord)
-                .filter(
-                    AttendanceRecord.team_member_id == request.team_member_id,
-                    AttendanceRecord.attendance_date == day,
-                )
-                .first()
-            )
-            if record is None:
-                record = AttendanceRecord(
-                    team_member_id=request.team_member_id,
-                    attendance_date=day,
-                )
-                db.add(record)
-            record.status = request.request_type
-            if request.duration_unit == "days":
-                record.check_in = None
-                record.check_out = None
-            record.notes = note
-            record.recorded_by_id = admin.id
-            record.leave_request_id = request.id
-            current_day += timedelta(days=1)
-        request.attendance_autofilled = 1
+    if inp.status == "approved":
+        approve_leave_request(
+            db,
+            request,
+            admin,
+            inp.review_note,
+            inp.autofill_attendance,
+        )
+    else:
+        request.status = "rejected"
+        request.review_note = (
+            inp.review_note.strip() if inp.review_note and inp.review_note.strip() else None
+        )
+        request.reviewed_by_id = admin.id
 
     db.commit()
     db.refresh(request)

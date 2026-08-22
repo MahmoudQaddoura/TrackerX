@@ -36,6 +36,12 @@ class LeaveRequest(Base):
     team_member = relationship("TeamMember", back_populates="leave_requests")
     reviewed_by = relationship("User")
     attendance_records = relationship("AttendanceRecord", back_populates="leave_request")
+    coverage_offers = relationship(
+        "LeaveCoverageOffer",
+        back_populates="leave_request",
+        cascade="all, delete-orphan",
+        order_by="LeaveCoverageOffer.created_at",
+    )
 
     __table_args__ = (
         CheckConstraint(

@@ -24,6 +24,7 @@ from app.models.support import (
     support_incident_assignees,
 )
 from app.models.client import ClientProfile, ClientReportShare
+from app.models.coverage import LeaveCoverageOffer
 
 __all__ = [
     "User",
@@ -45,4 +46,5 @@ __all__ = [
     "support_incident_assignees",
     "ClientProfile",
     "ClientReportShare",
+    "LeaveCoverageOffer",
 ]
