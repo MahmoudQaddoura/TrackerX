@@ -1,11 +1,13 @@
 /** api/projects.ts — project CRUD + CSV import. */
 import { api } from "@/lib/apiClient";
-import type { Project } from "@/types";
+import type { Project, ProjectType } from "@/types";
 
 export interface ProjectPayload {
   name: string;
   description?: string | null;
   status?: string;
+  project_type?: ProjectType;
+  parent_project_id?: number | null;
   start_date?: string | null;
   end_date?: string | null;
   github_repo_url?: string | null;

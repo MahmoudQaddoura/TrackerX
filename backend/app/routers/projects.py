@@ -21,18 +21,72 @@ from app.deps import (
     require_project_access,
     require_project_manage_access,
 )
-from app.models import Project, User
-from app.schemas.project import ProjectInput, ProjectOut, ProjectUpdate, STATUS_VALUES
+from app.models import Milestone, Project, Task, User
+from app.schemas.project import (
+    ProjectInput,
+    ProjectOut,
+    ProjectUpdate,
+    STATUS_VALUES,
+    TYPE_VALUES,
+)
 from app.services.serialize import project_out
 
 router = APIRouter(tags=["projects"])
 
 
-def _validate(inp: ProjectInput | ProjectUpdate) -> None:
+PROACTIVE_TASK_TEMPLATES = (
+    (
+        "System health check",
+        "Review service availability, infrastructure health, logs, backups, and capacity signals.",
+    ),
+    (
+        "Patch update",
+        "Review, test, schedule, and apply approved operating-system and application patches.",
+    ),
+    (
+        "Penetration testing",
+        "Plan and execute security testing, document findings, and track remediation actions.",
+    ),
+    (
+        "Performance review",
+        "Measure response time, throughput, resource consumption, and optimization opportunities.",
+    ),
+    (
+        "KPI review",
+        "Review service KPIs, SLA performance, trends, exceptions, and the client reporting summary.",
+    ),
+)
+
+
+def _validate(
+    inp: ProjectInput | ProjectUpdate,
+    db: Session,
+    existing: Project | None = None,
+) -> None:
     if inp.status is not None and inp.status not in STATUS_VALUES:
         raise HTTPException(status_code=422, detail=f"Invalid status '{inp.status}'.")
     if inp.start_date and inp.end_date and inp.start_date > inp.end_date:
         raise HTTPException(status_code=422, detail="Start date must be on or before end date.")
+    project_type = inp.project_type or (existing.project_type if existing else "actual_project")
+    if project_type not in TYPE_VALUES:
+        raise HTTPException(status_code=422, detail=f"Invalid project type '{project_type}'.")
+    if existing and inp.project_type and inp.project_type != existing.project_type:
+        raise HTTPException(status_code=422, detail="Project type cannot be changed after creation.")
+    parent_project_id = (
+        inp.parent_project_id
+        if "parent_project_id" in inp.model_fields_set
+        else existing.parent_project_id if existing else None
+    )
+    if project_type == "actual_project" and parent_project_id is not None:
+        raise HTTPException(status_code=422, detail="An actual project cannot link to another project.")
+    if parent_project_id is not None:
+        parent = db.get(Project, parent_project_id)
+        if parent is None:
+            raise HTTPException(status_code=422, detail="The linked actual project no longer exists.")
+        if parent.project_type != "actual_project":
+            raise HTTPException(status_code=422, detail="Maintenance & Support can link only to an actual project.")
+        if existing and parent.id == existing.id:
+            raise HTTPException(status_code=422, detail="A project cannot link to itself.")
 
 
 @router.get("/projects", response_model=list[ProjectOut])
@@ -49,9 +103,37 @@ def list_projects(db: Session = Depends(get_db), user: User = Depends(get_curren
 
 @router.post("/projects", response_model=ProjectOut, status_code=201)
 def create_project(inp: ProjectInput, db: Session = Depends(get_db), _=Depends(require_admin)):
-    _validate(inp)
+    _validate(inp, db)
     project = Project(**inp.model_dump())
     db.add(project)
+    db.flush()
+    if project.project_type == "maintenance_support":
+        proactive = Milestone(
+            project_id=project.id,
+            title="Proactive Maintenance",
+            description="Planned service health, security, performance, patching, and KPI work.",
+            workstream="operations",
+            sort_order=0,
+        )
+        reactive = Milestone(
+            project_id=project.id,
+            title="Reactive Support",
+            description="Unplanned incidents, service requests, defects, and corrective actions.",
+            workstream="project",
+            sort_order=1,
+        )
+        db.add_all([proactive, reactive])
+        db.flush()
+        for sort_order, (title, description) in enumerate(PROACTIVE_TASK_TEMPLATES):
+            db.add(
+                Task(
+                    milestone_id=proactive.id,
+                    title=title,
+                    description=description,
+                    status="todo",
+                    sort_order=sort_order,
+                )
+            )
     db.commit()
     db.refresh(project)
     return project_out(project)
@@ -66,7 +148,7 @@ def get_project(project: Project = Depends(require_project_access)):
 def update_project(
     inp: ProjectUpdate, db: Session = Depends(get_db), project: Project = Depends(require_project_manage_access)
 ):
-    _validate(inp)
+    _validate(inp, db, project)
     for field, value in inp.model_dump(exclude_unset=True).items():
         setattr(project, field, value)
     db.commit()

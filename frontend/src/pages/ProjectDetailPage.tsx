@@ -5,7 +5,18 @@
  *   developer/client: every approved project tool in read-only mode
  * Admin/pm get edit/delete on the project header; only admin can delete.
  */
-import { AlertTriangle, ArrowLeft, CheckCircle2, ListChecks, Percent, Pencil, Trash2 } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  BriefcaseBusiness,
+  CheckCircle2,
+  LifeBuoy,
+  Link2,
+  ListChecks,
+  Percent,
+  Pencil,
+  Trash2,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
@@ -24,6 +35,7 @@ import { MeetingsPanel } from "@/components/meetings/MeetingsPanel";
 import { ProjectGitHubButton } from "@/components/project/ProjectGitHubButton";
 import { MilestonesTasksBoard } from "@/components/project/MilestonesTasksBoard";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ErrorState } from "@/components/ui/error-state";
 import { FullPageSpinner } from "@/components/ui/spinner";
@@ -36,7 +48,7 @@ import {
   useSummary,
 } from "@/hooks/useAnalytics";
 import { useMilestones } from "@/hooks/useMilestones";
-import { useProject, useProjectMutations } from "@/hooks/useProjects";
+import { useProject, useProjectMutations, useProjects } from "@/hooks/useProjects";
 import { formatDate } from "@/lib/utils";
 
 export function ProjectDetailPage() {
@@ -46,6 +58,7 @@ export function ProjectDetailPage() {
   const [searchParams] = useSearchParams();
   const { isAdmin, canManage, canEditProjectContent } = useAuth();
   const { data: project, isLoading, isError, refetch } = useProject(id);
+  const { data: availableProjects } = useProjects();
   const { update, remove } = useProjectMutations();
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -83,6 +96,9 @@ export function ProjectDetailPage() {
   if (isError || !project)
     return <ErrorState message="Could not load this project." onRetry={() => refetch()} />;
 
+  const isSupport = project.project_type === "maintenance_support";
+  const ProjectTypeIcon = isSupport ? LifeBuoy : BriefcaseBusiness;
+
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -94,6 +110,9 @@ export function ProjectDetailPage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+              <ProjectTypeIcon className="h-4 w-4" />
+            </span>
             <h1 className="font-display text-2xl font-bold text-fg">{project.name}</h1>
             <ProjectStatusBadge status={project.status} />
             <RiskBadge risk={project.risk_level} />
@@ -102,6 +121,22 @@ export function ProjectDetailPage() {
               isAdmin={isAdmin}
               onSave={(payload) => update.mutateAsync({ id, payload })}
             />
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <Badge variant={isSupport ? "success" : "default"}>
+              {isSupport ? "Maintenance & Support" : "Actual Project"}
+            </Badge>
+            {isSupport && project.parent_project_id && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 gap-1 px-2 text-xs"
+                onClick={() => navigate(`/projects/${project.parent_project_id}`)}
+              >
+                <Link2 className="h-3.5 w-3.5" />
+                {project.parent_project_name ?? "Related actual project"}
+              </Button>
+            )}
           </div>
           {project.description && <p className="mt-1 text-sm text-fg-muted">{project.description}</p>}
           <p className="mt-1 text-xs text-fg-subtle">
@@ -125,7 +160,9 @@ export function ProjectDetailPage() {
       <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
             <TabsTrigger value="overview">Overview</TabsTrigger>
-            {canEditProjectContent && <TabsTrigger value="kanban">Kanban</TabsTrigger>}
+            {canEditProjectContent && (
+              <TabsTrigger value="kanban">{isSupport ? "Support board" : "Kanban"}</TabsTrigger>
+            )}
             {!canEditProjectContent && <TabsTrigger value="board">Milestones &amp; Tasks</TabsTrigger>}
             <TabsTrigger value="gantt">Gantt</TabsTrigger>
             <TabsTrigger value="documents">Documents</TabsTrigger>
@@ -160,6 +197,7 @@ export function ProjectDetailPage() {
         open={editOpen}
         onOpenChange={setEditOpen}
         project={project}
+        availableProjects={availableProjects ?? []}
         isPending={update.isPending}
         onSubmit={(payload) => update.mutateAsync({ id, payload })}
       />

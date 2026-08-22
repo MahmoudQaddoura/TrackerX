@@ -8,6 +8,7 @@ export type Role = "admin" | "pm" | "developer" | "client";
 export type EmployeeAccountRole = Exclude<Role, "client">;
 export type AccessLevel = "read" | "write";
 export type ProjectStatus = "active" | "on_hold" | "completed" | "archived";
+export type ProjectType = "actual_project" | "maintenance_support";
 export type TaskStatus = "todo" | "in_progress" | "in_review" | "blocked" | "done";
 export type RiskLevel = "on_track" | "at_risk" | "overdue" | "unknown";
 export type MilestoneWorkstream = "project" | "operations";
@@ -35,6 +36,9 @@ export interface Project {
   name: string;
   description: string | null;
   status: ProjectStatus;
+  project_type: ProjectType;
+  parent_project_id: number | null;
+  parent_project_name: string | null;
   start_date: string | null;
   end_date: string | null;
   github_repo_url: string | null;

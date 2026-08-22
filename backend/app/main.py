@@ -47,6 +47,7 @@ def _migrate_local_schema() -> None:
 
     milestone_columns = {column["name"] for column in inspect(engine).get_columns("milestones")}
     user_columns = {column["name"] for column in inspect(engine).get_columns("users")}
+    project_columns = {column["name"] for column in inspect(engine).get_columns("projects")}
     attendance_columns = {
         column["name"] for column in inspect(engine).get_columns("attendance_records")
     }
@@ -60,6 +61,20 @@ def _migrate_local_schema() -> None:
             )
         connection.exec_driver_sql(
             "CREATE INDEX IF NOT EXISTS ix_milestones_workstream ON milestones (workstream)"
+        )
+        if "project_type" not in project_columns:
+            connection.exec_driver_sql(
+                "ALTER TABLE projects ADD COLUMN project_type TEXT NOT NULL DEFAULT 'actual_project'"
+            )
+        if "parent_project_id" not in project_columns:
+            connection.exec_driver_sql(
+                "ALTER TABLE projects ADD COLUMN parent_project_id INTEGER REFERENCES projects(id)"
+            )
+        connection.exec_driver_sql(
+            "CREATE INDEX IF NOT EXISTS ix_projects_project_type ON projects (project_type)"
+        )
+        connection.exec_driver_sql(
+            "CREATE INDEX IF NOT EXISTS ix_projects_parent_project_id ON projects (parent_project_id)"
         )
         connection.exec_driver_sql(
             "CREATE INDEX IF NOT EXISTS ix_task_assignees_team_member_id "
