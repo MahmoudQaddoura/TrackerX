@@ -158,10 +158,7 @@ def get_accessible_project_ids(user: User, db: Session) -> set[int] | None:
         if user.role == "pm":
             leadership_rows = (
                 db.query(Project.id)
-                .filter(
-                    (Project.project_manager_id == member.id)
-                    | (Project.assistant_project_manager_id == member.id)
-                )
+                .filter(Project.project_manager_id == member.id)
                 .all()
             )
             leadership_ids = {row[0] for row in leadership_rows}

@@ -55,8 +55,6 @@ export interface Project {
   parent_project_name: string | null;
   project_manager_id: number | null;
   project_manager_name: string | null;
-  assistant_project_manager_id: number | null;
-  assistant_project_manager_name: string | null;
   support_workspace_id: number | null;
   support_workspace_name: string | null;
   start_date: string | null;
@@ -130,7 +128,7 @@ export interface TeamMember {
     id: number;
     name: string;
     assignment_source: "admin" | "task" | "admin_and_task" | "leadership";
-    leadership_role: "project_manager" | "assistant_project_manager" | null;
+    leadership_role: "project_manager" | null;
   }[];
   assigned_project_ids: number[];
   user_id: number | null;

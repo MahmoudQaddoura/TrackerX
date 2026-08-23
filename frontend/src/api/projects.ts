@@ -13,9 +13,8 @@ export interface ProjectPayload {
   github_repo_url?: string | null;
 }
 
-export interface ProjectLeadershipPayload {
+export interface ProjectManagerPayload {
   project_manager_id: number;
-  assistant_project_manager_id?: number | null;
 }
 
 export async function fetchProjects(): Promise<Project[]> {
@@ -38,11 +37,11 @@ export async function updateProject(id: number, payload: ProjectPayload): Promis
   return data;
 }
 
-export async function updateProjectLeadership(
+export async function updateProjectManager(
   id: number,
-  payload: ProjectLeadershipPayload,
+  payload: ProjectManagerPayload,
 ): Promise<Project> {
-  const { data } = await api.put<Project>(`/projects/${id}/leadership`, payload);
+  const { data } = await api.put<Project>(`/projects/${id}/project-manager`, payload);
   return data;
 }
 

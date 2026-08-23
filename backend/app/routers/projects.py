@@ -26,7 +26,7 @@ from app.models import Project, ProactiveServiceReport, TeamMember, User
 from app.models.support import PROACTIVE_CATEGORY_TEMPLATES
 from app.schemas.project import (
     ProjectInput,
-    ProjectLeadershipInput,
+    ProjectManagerInput,
     ProjectOut,
     ProjectUpdate,
     STATUS_VALUES,
@@ -123,61 +123,26 @@ def update_project(
     return project_out(project)
 
 
-@router.put("/projects/{project_id}/leadership", response_model=ProjectOut)
-def update_project_leadership(
+@router.put("/projects/{project_id}/project-manager", response_model=ProjectOut)
+def update_project_manager(
     project_id: int,
-    inp: ProjectLeadershipInput,
+    inp: ProjectManagerInput,
     db: Session = Depends(get_db),
     _owner: User = Depends(require_primary_admin),
 ):
-    """Assign one PM and an optional assistant PM. Owner-only."""
+    """Assign one active employee as the project's PM. Owner-only."""
     project = db.get(Project, project_id)
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found.")
-    if inp.assistant_project_manager_id == inp.project_manager_id:
-        raise HTTPException(
-            status_code=422,
-            detail="The Project Manager and Assistant Project Manager must be different employees.",
-        )
+    manager = db.get(TeamMember, inp.project_manager_id)
+    if manager is None:
+        raise HTTPException(status_code=422, detail="The selected employee no longer exists.")
+    if not bool(manager.is_active):
+        raise HTTPException(status_code=422, detail=f"{manager.name} is not an active employee.")
 
-    member_ids = [inp.project_manager_id]
-    if inp.assistant_project_manager_id is not None:
-        member_ids.append(inp.assistant_project_manager_id)
-    members = {
-        member.id: member
-        for member in db.query(TeamMember).filter(TeamMember.id.in_(member_ids)).all()
-    }
-    if set(member_ids) != set(members):
-        raise HTTPException(status_code=422, detail="A selected employee no longer exists.")
-
-    for member in members.values():
-        if not bool(member.is_active):
-            raise HTTPException(status_code=422, detail=f"{member.name} is not an active employee.")
-        if (
-            member.user is None
-            or not bool(member.user.is_enabled)
-            or member.user.role not in ("admin", "pm")
-            or member.user.access_level != "write"
-        ):
-            raise HTTPException(
-                status_code=422,
-                detail=(
-                    f"{member.name} needs an enabled Administrator or Project Manager "
-                    "account with read and write permission."
-                ),
-            )
-
-    manager = members[inp.project_manager_id]
-    assistant = (
-        members[inp.assistant_project_manager_id]
-        if inp.assistant_project_manager_id is not None
-        else None
-    )
     project.project_manager = manager
-    project.assistant_project_manager = assistant
-    for member in (manager, assistant):
-        if member is not None and all(item.id != project.id for item in member.assigned_projects):
-            member.assigned_projects.append(project)
+    if all(item.id != project.id for item in manager.assigned_projects):
+        manager.assigned_projects.append(project)
 
     db.commit()
     db.refresh(project)

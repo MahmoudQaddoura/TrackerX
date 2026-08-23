@@ -8,8 +8,8 @@ import {
   fetchProjects,
   importProjectCsv,
   updateProject,
-  updateProjectLeadership,
-  type ProjectLeadershipPayload,
+  updateProjectManager,
+  type ProjectManagerPayload,
   type ProjectPayload,
 } from "@/api/projects";
 
@@ -36,9 +36,9 @@ export function useProjectMutations() {
   });
   const remove = useMutation({ mutationFn: (id: number) => deleteProject(id), onSuccess: invalidate });
   const importCsv = useMutation({ mutationFn: (file: File) => importProjectCsv(file), onSuccess: invalidate });
-  const updateLeadership = useMutation({
-    mutationFn: ({ id, payload }: { id: number; payload: ProjectLeadershipPayload }) =>
-      updateProjectLeadership(id, payload),
+  const updateManager = useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: ProjectManagerPayload }) =>
+      updateProjectManager(id, payload),
     onSuccess: (_data, variables) => {
       invalidate();
       qc.invalidateQueries({ queryKey: ["project", variables.id] });
@@ -46,5 +46,5 @@ export function useProjectMutations() {
     },
   });
 
-  return { create, update, remove, importCsv, updateLeadership };
+  return { create, update, remove, importCsv, updateManager };
 }

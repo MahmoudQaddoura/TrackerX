@@ -159,9 +159,6 @@ export function ProjectDetailPage() {
               <UserRoundCog className="h-3.5 w-3.5" />
               PM: {project.project_manager_name ?? "Not assigned"}
             </Badge>
-            {project.assistant_project_manager_name && (
-              <Badge variant="outline">Assistant PM: {project.assistant_project_manager_name}</Badge>
-            )}
             {project.support_workspace_id && (
               <Button
                 variant="ghost"

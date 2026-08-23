@@ -49,7 +49,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { KpiCard } from "@/components/dashboard/KpiCard";
-import { ProjectLeadershipPanel } from "@/components/employees/ProjectLeadershipPanel";
 import {
   Dialog,
   DialogContent,
@@ -292,18 +291,6 @@ export function EmployeeListPage() {
         <KpiCard label="Enabled logins" value={`${linkedLogins}/${rows.length}`} description="Employees with TrackerX access" icon={KeyRound} accent="success" />
         <KpiCard label="Open assignments" value={openTasks} description="Tasks not completed" icon={ListChecks} />
       </div>
-
-      {projectsQuery.isLoading ? (
-        <Card className="flex min-h-40 items-center justify-center"><Spinner /></Card>
-      ) : projectsQuery.isError ? (
-        <ErrorState message="Could not load project leadership." onRetry={() => projectsQuery.refetch()} />
-      ) : (
-        <ProjectLeadershipPanel
-          projects={projectsQuery.data ?? []}
-          members={rows}
-          canEdit={isPrimaryAdmin}
-        />
-      )}
 
       <div className="relative sm:hidden">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-subtle" />
@@ -729,7 +716,7 @@ function EmployeeCard({
               <div className="mt-1.5 flex flex-wrap gap-1">
                 {member.projects.slice(0, 2).map((project) => (
                   <Badge key={project.id} variant="outline" className="max-w-[150px] truncate text-[10px]">
-                    {project.leadership_role === "project_manager" ? "PM · " : project.leadership_role === "assistant_project_manager" ? "Assistant PM · " : ""}
+                    {project.leadership_role === "project_manager" ? "PM · " : ""}
                     {project.name}
                   </Badge>
                 ))}
@@ -861,7 +848,7 @@ function ProfileDialog({ member, onClose }: { member: TeamMember; onClose: () =>
                       </Badge>
                       {project.leadership_role && (
                         <Badge variant="default" className="text-[10px]">
-                          {project.leadership_role === "project_manager" ? "Project Manager" : "Assistant Project Manager"}
+                          Project Manager
                         </Badge>
                       )}
                     </div>

@@ -182,9 +182,6 @@ export function MaintenanceSupportDashboard({
             <UserRoundCheck className="h-3.5 w-3.5" />
             PM: {project.project_manager_name ?? "Not assigned"}
           </Badge>
-          {project.assistant_project_manager_name && (
-            <Badge variant="outline">Assistant PM: {project.assistant_project_manager_name}</Badge>
-          )}
           <span className="text-xs text-fg-muted">
             {reportMetrics.completed}/{reportMetrics.total} proactive reports completed
           </span>

@@ -5,6 +5,7 @@ import {
   FolderKanban,
   LifeBuoy,
   Link2,
+  MoreHorizontal,
   Plus,
   Upload,
   UserRoundCog,
@@ -19,6 +20,7 @@ import { ProjectStatusBadge } from "@/components/common/StatusBadge";
 import { CsvImportDialog } from "@/components/forms/CsvImportDialog";
 import { ProjectFormDialog } from "@/components/forms/ProjectFormDialog";
 import { ProjectGitHubButton } from "@/components/project/ProjectGitHubButton";
+import { ProjectManagerDialog } from "@/components/project/ProjectManagerDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -29,18 +31,21 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/context/AuthContext";
 import { useProjectMutations, useProjects } from "@/hooks/useProjects";
+import { useTeam } from "@/hooks/useTeam";
 import { formatDate } from "@/lib/utils";
 import type { Project } from "@/types";
 
 const FINISHED_STATUSES = new Set(["completed", "archived"]);
 
 export function ProjectsPage() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, isPrimaryAdmin } = useAuth();
   const navigate = useNavigate();
   const { data, isLoading, isError, refetch } = useProjects();
   const { create, update, importCsv } = useProjectMutations();
+  const team = useTeam(true, isPrimaryAdmin);
   const [formOpen, setFormOpen] = useState(false);
   const [csvOpen, setCsvOpen] = useState(false);
+  const [managerProject, setManagerProject] = useState<Project | null>(null);
 
   const portfolio = useMemo(() => {
     const projects = data ?? [];
@@ -108,6 +113,8 @@ export function ProjectsPage() {
               }
               onOpen={(id) => navigate(`/projects/${id}`)}
               isAdmin={isAdmin}
+              canAssignManager={isPrimaryAdmin}
+              onAssignManager={setManagerProject}
               onGitHubSave={(project, payload) =>
                 update.mutateAsync({ id: project.id, payload })
               }
@@ -126,6 +133,8 @@ export function ProjectsPage() {
               }
               onOpen={(id) => navigate(`/projects/${id}`)}
               isAdmin={isAdmin}
+              canAssignManager={isPrimaryAdmin}
+              onAssignManager={setManagerProject}
               onGitHubSave={(project, payload) =>
                 update.mutateAsync({ id: project.id, payload })
               }
@@ -140,6 +149,8 @@ export function ProjectsPage() {
               emptyDescription="Completed and archived projects will appear here automatically."
               onOpen={(id) => navigate(`/projects/${id}`)}
               isAdmin={isAdmin}
+              canAssignManager={isPrimaryAdmin}
+              onAssignManager={setManagerProject}
               onGitHubSave={(project, payload) =>
                 update.mutateAsync({ id: project.id, payload })
               }
@@ -160,6 +171,11 @@ export function ProjectsPage() {
         onOpenChange={setCsvOpen}
         onImport={(file) => importCsv.mutateAsync(file)}
         isPending={importCsv.isPending}
+      />
+      <ProjectManagerDialog
+        project={managerProject}
+        members={team.data ?? []}
+        onClose={() => setManagerProject(null)}
       />
     </div>
   );
@@ -194,6 +210,8 @@ function ProjectCollection({
   emptyDescription,
   onOpen,
   isAdmin,
+  canAssignManager,
+  onAssignManager,
   onGitHubSave,
 }: {
   projects: Project[];
@@ -202,6 +220,8 @@ function ProjectCollection({
   emptyDescription: string;
   onOpen: (id: number) => void;
   isAdmin: boolean;
+  canAssignManager: boolean;
+  onAssignManager: (project: Project) => void;
   onGitHubSave: (project: Project, payload: ProjectPayload) => Promise<unknown>;
 }) {
   if (projects.length === 0) {
@@ -234,6 +254,21 @@ function ProjectCollection({
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
+                  {canAssignManager && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Assign Project Manager for ${project.name}`}
+                      title="Assign Project Manager"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onAssignManager(project);
+                      }}
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  )}
                   <ProjectGitHubButton
                     project={project}
                     isAdmin={isAdmin}
@@ -259,9 +294,6 @@ function ProjectCollection({
                   <UserRoundCog className="h-3.5 w-3.5 text-accent" />
                   <span className="font-medium text-fg">PM:</span> {project.project_manager_name ?? "Not assigned"}
                 </span>
-                {project.assistant_project_manager_name && (
-                  <span className="pl-5"><span className="font-medium text-fg">Assistant PM:</span> {project.assistant_project_manager_name}</span>
-                )}
               </div>
 
               {project.description && (

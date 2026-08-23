@@ -9,8 +9,12 @@ import {
   type TeamMemberPayload,
 } from "@/api/team";
 
-export function useTeam(activeOnly = false) {
-  return useQuery({ queryKey: ["team", activeOnly], queryFn: () => fetchTeam(activeOnly) });
+export function useTeam(activeOnly = false, enabled = true) {
+  return useQuery({
+    queryKey: ["team", activeOnly],
+    queryFn: () => fetchTeam(activeOnly),
+    enabled,
+  });
 }
 
 export function useTeamMutations() {

@@ -23,8 +23,8 @@ from app.schemas.coverage import (
     CoverageAssignmentInput,
     CoverageResponseInput,
 )
-from app.routers.projects import update_project_leadership
-from app.schemas.project import ProjectLeadershipInput
+from app.routers.projects import update_project_manager
+from app.schemas.project import ProjectManagerInput
 from app.security import hash_password
 
 
@@ -64,7 +64,7 @@ class LeaveCoverageWorkflowTest(unittest.TestCase):
                 email="recipient@trackerx.test",
                 hashed_password=hash_password("RecipientPassword123!"),
                 full_name="Available Employee",
-                role="pm",
+                role="developer",
                 access_level="write",
                 is_enabled=1,
             )
@@ -164,20 +164,19 @@ class LeaveCoverageWorkflowTest(unittest.TestCase):
             self.assertEqual([member.id for member in task.assigned_members], [self.recipient_id])
             self.assertEqual(task.assigned_member_id, self.recipient_id)
 
-    def test_owner_assigns_project_manager_and_pm_is_scoped_to_project(self) -> None:
+    def test_owner_can_assign_any_active_employee_as_project_manager(self) -> None:
         with SessionLocal() as db:
             admin = db.get(User, self.admin_id)
             manager_user = db.get(User, self.recipient_user_id)
-            result = update_project_leadership(
+            result = update_project_manager(
                 self.project_id,
-                ProjectLeadershipInput(project_manager_id=self.recipient_id),
+                ProjectManagerInput(project_manager_id=self.recipient_id),
                 db=db,
                 _owner=admin,
             )
 
             self.assertEqual(result["project_manager_id"], self.recipient_id)
             self.assertEqual(result["project_manager_name"], "Available Employee")
-            self.assertEqual(result["assistant_project_manager_id"], None)
             self.assertEqual(
                 get_accessible_project_ids(manager_user, db),
                 {self.project_id},

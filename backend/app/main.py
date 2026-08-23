@@ -77,10 +77,6 @@ def _migrate_local_schema() -> None:
             connection.exec_driver_sql(
                 "ALTER TABLE projects ADD COLUMN project_manager_id INTEGER"
             )
-        if "assistant_project_manager_id" not in project_columns:
-            connection.exec_driver_sql(
-                "ALTER TABLE projects ADD COLUMN assistant_project_manager_id INTEGER"
-            )
         connection.exec_driver_sql(
             "CREATE INDEX IF NOT EXISTS ix_projects_project_type ON projects (project_type)"
         )
@@ -90,10 +86,6 @@ def _migrate_local_schema() -> None:
         connection.exec_driver_sql(
             "CREATE INDEX IF NOT EXISTS ix_projects_project_manager_id "
             "ON projects (project_manager_id)"
-        )
-        connection.exec_driver_sql(
-            "CREATE INDEX IF NOT EXISTS ix_projects_assistant_project_manager_id "
-            "ON projects (assistant_project_manager_id)"
         )
         connection.exec_driver_sql(
             "CREATE INDEX IF NOT EXISTS ix_task_assignees_team_member_id "
