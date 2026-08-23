@@ -1,8 +1,7 @@
-import { CalendarCheck2, ClipboardCheck, Inbox, UserRoundCheck } from "lucide-react";
+import { ClipboardCheck, Inbox, UserRoundCheck } from "lucide-react";
 import { useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 
-import { Badge } from "@/components/ui/badge";
 import { CoverageInbox } from "@/components/attendance/CoverageInbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/context/AuthContext";
@@ -35,29 +34,6 @@ export function AttendanceHubPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="rounded-xl border border-accent/15 bg-gradient-to-r from-accent-soft via-surface to-surface p-5 shadow-card">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-fg shadow-sm">
-              <CalendarCheck2 className="h-5 w-5" />
-            </span>
-            <div>
-              <h1 className="font-display text-2xl font-bold text-fg">Attendance &amp; leave</h1>
-              <p className="mt-1 text-sm text-fg-muted">
-                {isAdmin
-                  ? "Manage the daily sheet, absence requests, and project task coverage in one workspace."
-                  : "Review attendance, submit leave, and respond to task coverage requests in one place."}
-              </p>
-            </div>
-          </div>
-          {isAdmin && pendingCount > 0 && (
-            <Badge variant="warning" className="px-3 py-1.5">
-              {pendingCount} request{pendingCount === 1 ? "" : "s"} waiting
-            </Badge>
-          )}
-        </div>
-      </div>
-
       <Tabs value={section} onValueChange={selectSection}>
         <TabsList className="w-full justify-start p-1.5 sm:w-auto">
           <TabsTrigger value="attendance" className="flex-1 gap-2 px-4 sm:flex-none">
