@@ -1,23 +1,13 @@
 import {
   AlertTriangle,
   ArrowRight,
-  CalendarRange,
-  CalendarCheck2,
   CheckCircle2,
-  ClipboardList,
-  FileArchive,
   FolderKanban,
-  LayoutDashboard,
-  MessagesSquare,
   Radio,
-  TrendingUp,
-  Users,
-  type LucideIcon,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { DelaysTable } from "@/components/dashboard/DelaysTable";
-import { KpiCard } from "@/components/dashboard/KpiCard";
 import { ProjectProgressChart } from "@/components/dashboard/ProjectProgressChart";
 import { StatusBreakdownChart } from "@/components/dashboard/StatusBreakdownChart";
 import { CoverageInbox } from "@/components/attendance/CoverageInbox";
@@ -72,9 +62,6 @@ function TeamDashboardPage() {
   const attendance = useAttendance(today);
   const delayedCount = delayed.data?.length ?? summary.data?.delayed_tasks ?? 0;
   const displayName = user?.full_name ?? "Team member";
-  const singleAssignedProject = projects.data?.length === 1 ? projects.data[0] : null;
-  const assignedToolPath = (tab: string) =>
-    singleAssignedProject ? `/projects/${singleAssignedProject.id}?tab=${tab}` : "/projects";
   const todayLabel = new Intl.DateTimeFormat(undefined, {
     weekday: "long",
     month: "long",
@@ -154,80 +141,6 @@ function TeamDashboardPage() {
           </div>
         </Card>
       )}
-
-      {summary.isLoading ? (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-32" />)}
-        </div>
-      ) : summary.isError ? (
-        <ErrorState onRetry={() => summary.refetch()} />
-      ) : summary.data && (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <KpiCard
-            label={canViewManagement ? "Active projects" : "Assigned projects"}
-            value={`${summary.data.active_projects}/${summary.data.total_projects}`}
-            description={canViewManagement ? "Open the project portfolio" : "Projects linked through your assignments"}
-            icon={FolderKanban}
-            to="/projects"
-          />
-          <KpiCard
-            label={canViewManagement ? "Portfolio progress" : "Project progress"}
-            value={`${summary.data.progress_pct}%`}
-            description={canViewManagement ? "Across every tracked task" : "Across your assigned project workspaces"}
-            icon={TrendingUp}
-            accent={summary.data.progress_pct >= 75 ? "success" : "default"}
-            to="/projects"
-          />
-          <KpiCard
-            label={canViewManagement ? "Completed tasks" : "Completed project tasks"}
-            value={`${summary.data.done_tasks}/${summary.data.total_tasks}`}
-            description={`${summary.data.total_tasks - summary.data.done_tasks} tasks remaining`}
-            icon={CheckCircle2}
-            accent="success"
-            to="/projects"
-          />
-          <KpiCard
-            label="Delay alerts"
-            value={delayedCount}
-            description={delayedCount > 0 ? "Requires attention" : "Your projects are on track"}
-            icon={AlertTriangle}
-            accent={delayedCount > 0 ? "danger" : "success"}
-            to="/dashboard#delay-alerts"
-          />
-        </div>
-      )}
-
-      <section>
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <div>
-            <h2 className="font-display text-lg font-semibold text-fg">
-              {canViewManagement ? "Management workspace" : "My project tools"}
-            </h2>
-            <p className="text-xs text-fg-muted">
-              {canViewManagement ? "Go directly to the tool you need" : "Only projects connected to your task assignments are available"}
-            </p>
-          </div>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {canViewManagement ? (
-            <>
-              <WorkspaceLink to="/projects" icon={LayoutDashboard} title="Kanban & Gantt" description="Tasks, milestones, delivery and operations" />
-              <WorkspaceLink to="/projects" icon={FileArchive} title="Document control" description="Project files, bulk uploads and milestone tags" />
-              <WorkspaceLink to="/attendance" icon={CalendarCheck2} title="Attendance" description="Daily sheet, check-in, status and notes" />
-              <WorkspaceLink to="/employees" icon={Users} title="Employees & access" description="Profiles, credentials and permissions" />
-            </>
-          ) : (
-            <>
-              <WorkspaceLink to="/projects" icon={FolderKanban} title="Assigned projects" description="Open only the projects connected to your tasks" />
-              <WorkspaceLink to={assignedToolPath("board")} icon={ClipboardList} title="Milestones & tasks" description="Review the Kanban work and assignments" />
-              <WorkspaceLink to={assignedToolPath("gantt")} icon={CalendarRange} title="Gantt schedules" description="See milestones, dates, and delivery sequence" />
-              <WorkspaceLink to={assignedToolPath("documents")} icon={FileArchive} title="Documents" description="Access project and operations files" />
-              <WorkspaceLink to={assignedToolPath("meetings")} icon={MessagesSquare} title="Meetings" description="Review project discussions and outcomes" />
-              <WorkspaceLink to="/attendance" icon={CalendarCheck2} title="My attendance" description="Review your daily status and working hours" />
-            </>
-          )}
-        </div>
-      </section>
 
       {!canViewManagement && (
         projects.isLoading ? (
@@ -378,34 +291,6 @@ function AssignedProjectsWorkspace({ projects }: { projects: Project[] }) {
         ))}
       </div>
     </section>
-  );
-}
-
-function WorkspaceLink({
-  to,
-  icon: Icon,
-  title,
-  description,
-}: {
-  to: string;
-  icon: LucideIcon;
-  title: string;
-  description: string;
-}) {
-  return (
-    <Link
-      to={to}
-      className="group flex items-center gap-3 rounded-xl border border-border bg-surface p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-accent/35 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-    >
-      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
-        <Icon className="h-5 w-5" />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-sm font-semibold text-fg">{title}</span>
-        <span className="mt-0.5 block text-xs leading-relaxed text-fg-muted">{description}</span>
-      </span>
-      <ArrowRight className="h-4 w-4 shrink-0 text-fg-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-accent" />
-    </Link>
   );
 }
 
