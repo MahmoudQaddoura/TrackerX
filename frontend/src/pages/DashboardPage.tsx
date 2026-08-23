@@ -9,7 +9,6 @@ import { Link, useNavigate } from "react-router-dom";
 
 import { DelaysTable } from "@/components/dashboard/DelaysTable";
 import { DeliveryMapChart } from "@/components/dashboard/DeliveryMapChart";
-import { ProjectProgressChart } from "@/components/dashboard/ProjectProgressChart";
 import { CoverageInbox } from "@/components/attendance/CoverageInbox";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,7 +19,6 @@ import { useAuth } from "@/context/AuthContext";
 import {
   useDelayedTasks,
   useDeliveryMap,
-  useProjectTimelines,
   useSummary,
 } from "@/hooks/useAnalytics";
 import { useAttendance } from "@/hooks/useAttendance";
@@ -55,7 +53,6 @@ function TeamDashboardPage() {
   const { user, canViewManagement, canManage } = useAuth();
   const summary = useSummary();
   const deliveryMap = useDeliveryMap();
-  const timelines = useProjectTimelines();
   const delayed = useDelayedTasks();
   const projects = useProjects();
   const today = localDate();
@@ -216,14 +213,6 @@ function TeamDashboardPage() {
             </div>
           )}
       </Card>
-
-      {timelines.isLoading ? (
-        <Skeleton className="h-80" />
-      ) : timelines.isError ? (
-        <ErrorState onRetry={() => timelines.refetch()} />
-      ) : timelines.data && (
-        <ProjectProgressChart data={timelines.data} onProjectSelect={(projectId) => navigate(`/projects/${projectId}`)} />
-      )}
 
       {delayed.isLoading ? (
         <Skeleton className="h-48" />
