@@ -128,8 +128,8 @@ def create_leave_request(
     end = _parse_date(inp.end_date, "End date")
     if end < start:
         raise HTTPException(status_code=422, detail="End date cannot be before start date.")
-    if (end - start).days > 30:
-        raise HTTPException(status_code=422, detail="A single request can cover at most 31 days.")
+    if inp.duration_unit == "days" and (end - start).days > 6:
+        raise HTTPException(status_code=422, detail="A leave request can cover at most 7 days.")
     start_time = None
     end_time = None
     if inp.duration_unit == "hours":

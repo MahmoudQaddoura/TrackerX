@@ -42,6 +42,10 @@ const WORKLOAD_VARIANT: Record<CoverageCandidate["workload_level"], "success" | 
   high: "danger",
 };
 
+function isUrgent(task: CoverageTask): boolean {
+  return task.severity === "critical" || task.severity === "high";
+}
+
 export function CoveragePlanningDialog({
   request,
   onClose,
@@ -52,6 +56,7 @@ export function CoveragePlanningDialog({
   const plan = useCoveragePlan(request?.id ?? null);
   const assignCoverage = useAssignLeaveCoverage();
   const [assignments, setAssignments] = useState<Record<number, number>>({});
+  const [selectedDate, setSelectedDate] = useState("");
   const [batchCandidate, setBatchCandidate] = useState("");
   const [reviewNote, setReviewNote] = useState("");
   const [coverageNote, setCoverageNote] = useState("");
@@ -60,12 +65,19 @@ export function CoveragePlanningDialog({
 
   useEffect(() => {
     setAssignments({});
+    setSelectedDate("");
     setBatchCandidate("");
     setReviewNote("");
     setCoverageNote("");
     setAutofill(true);
     setError(null);
   }, [request?.id]);
+
+  useEffect(() => {
+    if (!selectedDate && plan.data?.coverage_dates[0]) {
+      setSelectedDate(plan.data.coverage_dates[0]);
+    }
+  }, [plan.data?.coverage_dates, selectedDate]);
 
   const eligibleCandidates = useMemo(
     () => (plan.data?.candidates ?? []).filter((candidate) => candidate.eligible),
@@ -75,7 +87,12 @@ export function CoveragePlanningDialog({
     () => (plan.data?.tasks ?? []).filter((task) => task.requires_assignment),
     [plan.data?.tasks],
   );
+  const visibleTasks = useMemo(
+    () => (plan.data?.tasks ?? []).filter((task) => task.coverage_dates.includes(selectedDate)),
+    [plan.data?.tasks, selectedDate],
+  );
   const missingRequired = requiredTasks.filter((task) => !assignments[task.id]);
+  const hasAssignments = Object.keys(assignments).length > 0;
 
   function assignAllRequired() {
     const candidateId = Number(batchCandidate);
@@ -114,25 +131,26 @@ export function CoveragePlanningDialog({
 
   return (
     <Dialog open={!!request} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[94vh] overflow-y-auto sm:max-w-6xl">
+      <DialogContent className="max-h-[94vh] overflow-y-auto sm:max-w-5xl">
         <DialogHeader>
           <DialogTitle>
-            {request?.status === "pending" ? "Assign coverage & approve leave" : "Manage leave coverage"}
+            {request?.status === "pending" ? "Review leave and arrange task coverage" : "Manage leave coverage"}
           </DialogTitle>
         </DialogHeader>
 
         {plan.isLoading ? (
-          <div className="space-y-3"><Skeleton className="h-24" /><Skeleton className="h-52" /><Skeleton className="h-64" /></div>
+          <div className="space-y-3"><Skeleton className="h-24" /><Skeleton className="h-64" /><Skeleton className="h-44" /></div>
         ) : plan.isError || !plan.data ? (
-          <ErrorState message="Could not prepare the task coverage plan." onRetry={() => plan.refetch()} />
+          <ErrorState message="Could not prepare the date-based coverage plan." onRetry={() => plan.refetch()} />
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-5">
             <div className="grid gap-3 rounded-xl border border-accent/20 bg-accent-soft/40 p-4 md:grid-cols-[1fr_auto]">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
                   <h3 className="font-semibold text-fg">{plan.data.employee_name}</h3>
                   <Badge variant="default"><CalendarDays className="h-3.5 w-3.5" />{formatDate(plan.data.start_date)} — {formatDate(plan.data.end_date)}</Badge>
-                  <Badge variant="outline">{plan.data.tasks.length} active tasks</Badge>
+                  <Badge variant="outline">{plan.data.coverage_dates.length} leave day{plan.data.coverage_dates.length === 1 ? "" : "s"}</Badge>
+                  <Badge variant="outline">{plan.data.tasks.length} task{plan.data.tasks.length === 1 ? "" : "s"} during leave</Badge>
                 </div>
                 <p className="mt-2 text-sm text-fg-muted">{plan.data.reason}</p>
               </div>
@@ -142,61 +160,93 @@ export function CoveragePlanningDialog({
               </div>
             </div>
 
-            <section>
-              <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
-                <div>
-                  <h3 className="flex items-center gap-2 font-semibold text-fg"><Users className="h-4 w-4 text-accent" />Available employees</h3>
-                  <p className="mt-1 text-xs text-fg-muted">Compare current workload, high-severity work, effort, and overlapping leave before assigning.</p>
-                </div>
-                <div className="flex min-w-72 gap-2">
-                  <Select value={batchCandidate} onChange={(event) => setBatchCandidate(event.target.value)}>
-                    <option value="">Assign all required tasks to...</option>
-                    {eligibleCandidates.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name} · {candidate.open_task_count} open</option>)}
-                  </Select>
-                  <Button variant="outline" onClick={assignAllRequired} disabled={!batchCandidate}>Apply</Button>
-                </div>
+            {plan.data.excluded_task_count > 0 && (
+              <div className="rounded-lg border border-border bg-raised/50 px-3 py-2 text-xs text-fg-muted">
+                Only unfinished tasks scheduled during the requested absence are shown. {plan.data.excluded_task_count} other task{plan.data.excluded_task_count === 1 ? " was" : "s were"} excluded
+                {plan.data.unscheduled_task_count > 0 ? `, including ${plan.data.unscheduled_task_count} without task dates` : ""}.
               </div>
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {plan.data.candidates.map((candidate) => <CandidateCard key={candidate.id} candidate={candidate} />)}
-              </div>
-            </section>
+            )}
 
-            <section>
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <section className="rounded-xl border border-border bg-surface p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <h3 className="flex items-center gap-2 font-semibold text-fg"><ClipboardList className="h-4 w-4 text-accent" />Task distribution</h3>
-                  <p className="mt-1 text-xs text-fg-muted">The employee is notified first. Ownership changes only after acceptance.</p>
+                  <h3 className="flex items-center gap-2 font-semibold text-fg"><ClipboardList className="h-4 w-4 text-accent" />Task coverage by date</h3>
+                  <p className="mt-1 text-xs text-fg-muted">Each tab matches one absence date. Urgent work is listed first and must be covered before approval.</p>
                 </div>
                 <Badge variant={missingRequired.length ? "warning" : "success"}>
                   {missingRequired.length ? `${missingRequired.length} assignment${missingRequired.length === 1 ? "" : "s"} remaining` : "Coverage ready"}
                 </Badge>
               </div>
-              {plan.data.tasks.length ? (
-                <div className="space-y-2">
-                  {plan.data.tasks.map((task) => (
-                    <TaskCoverageRow
-                      key={task.id}
-                      task={task}
-                      candidates={eligibleCandidates}
-                      selectedMemberId={assignments[task.id] ?? null}
-                      onSelect={(memberId) => setAssignments((current) => {
-                        const next = { ...current };
-                        if (memberId) next[task.id] = memberId;
-                        else delete next[task.id];
-                        return next;
-                      })}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div className="rounded-lg border border-success/25 bg-success/5 p-4 text-sm text-fg-muted">
-                  <CheckCircle2 className="mr-2 inline h-4 w-4 text-success" />No active tasks require reassignment. This leave can be approved directly.
-                </div>
-              )}
+
+              <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                {plan.data.coverage_dates.map((day, index) => {
+                  const dayTasks = plan.data.tasks.filter((task) => task.coverage_dates.includes(day));
+                  const urgentCount = dayTasks.filter(isUrgent).length;
+                  const active = selectedDate === day;
+                  return (
+                    <button
+                      key={day}
+                      type="button"
+                      onClick={() => setSelectedDate(day)}
+                      className={`rounded-lg border px-3 py-2.5 text-left transition-colors ${active ? "border-accent bg-accent-soft text-accent" : "border-border hover:bg-raised"}`}
+                    >
+                      <span className="block text-xs font-medium">Day {index + 1} · {formatDate(day)}</span>
+                      <span className="mt-1 block text-xs text-fg-muted">{dayTasks.length} task{dayTasks.length === 1 ? "" : "s"}{urgentCount ? ` · ${urgentCount} urgent` : ""}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="mt-4">
+                {visibleTasks.length ? (
+                  <div className="space-y-2">
+                    {visibleTasks.map((task) => (
+                      <TaskCoverageRow
+                        key={task.id}
+                        task={task}
+                        candidates={eligibleCandidates}
+                        selectedMemberId={assignments[task.id] ?? null}
+                        onSelect={(memberId) => setAssignments((current) => {
+                          const next = { ...current };
+                          if (memberId) next[task.id] = memberId;
+                          else delete next[task.id];
+                          return next;
+                        })}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-success/25 bg-success/5 p-4 text-sm text-fg-muted">
+                    <CheckCircle2 className="mr-2 inline h-4 w-4 text-success" />
+                    {`No unfinished tasks are scheduled on ${formatDate(selectedDate)}. No reassignment is needed for this day.`}
+                  </div>
+                )}
+              </div>
             </section>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-1.5"><Label htmlFor="coverage-note">Message to receiving employees</Label><Textarea id="coverage-note" rows={3} value={coverageNote} onChange={(event) => setCoverageNote(event.target.value)} placeholder="Explain priorities, handover details, or client impact." /></div>
+            {plan.data.tasks.length > 0 && (
+              <section>
+                <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+                  <div>
+                    <h3 className="flex items-center gap-2 font-semibold text-fg"><Users className="h-4 w-4 text-accent" />Team capacity on these dates</h3>
+                    <p className="mt-1 text-xs text-fg-muted">Workload is calculated from tasks scheduled during the requested absence period.</p>
+                  </div>
+                  {requiredTasks.length > 0 && <div className="flex min-w-72 gap-2">
+                    <Select value={batchCandidate} onChange={(event) => setBatchCandidate(event.target.value)}>
+                      <option value="">Assign every required task to...</option>
+                      {eligibleCandidates.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name} · {candidate.leave_window_task_count} during leave</option>)}
+                    </Select>
+                    <Button variant="outline" onClick={assignAllRequired} disabled={!batchCandidate}>Apply</Button>
+                  </div>}
+                </div>
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {plan.data.candidates.map((candidate) => <CandidateCard key={candidate.id} candidate={candidate} />)}
+                </div>
+              </section>
+            )}
+
+            <div className={`grid gap-4 ${hasAssignments ? "md:grid-cols-2" : ""}`}>
+              {hasAssignments && <div className="space-y-1.5"><Label htmlFor="coverage-note">Message to receiving employees</Label><Textarea id="coverage-note" rows={3} value={coverageNote} onChange={(event) => setCoverageNote(event.target.value)} placeholder="Explain priorities, handover details, or client impact." /></div>}
               <div className="space-y-1.5"><Label htmlFor="approval-note">Approval note</Label><Textarea id="approval-note" rows={3} value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} placeholder="Optional note recorded with the leave approval." /></div>
             </div>
             {request?.status === "pending" && (
@@ -213,7 +263,9 @@ export function CoveragePlanningDialog({
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button onClick={submit} disabled={!plan.data || assignCoverage.isPending || missingRequired.length > 0}>
             {assignCoverage.isPending ? <Spinner /> : request?.status === "pending" ? <Send className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
-            {request?.status === "pending" ? "Send coverage & approve" : "Send coverage requests"}
+            {request?.status === "pending"
+              ? hasAssignments ? "Approve and send coverage" : "Approve leave"
+              : "Send coverage requests"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -229,14 +281,15 @@ function CandidateCard({ candidate }: { candidate: CoverageCandidate }) {
         <Badge variant={candidate.eligible ? WORKLOAD_VARIANT[candidate.workload_level] : "outline"}>{candidate.eligible ? `${candidate.workload_level} load` : candidate.availability.replace("_", " ")}</Badge>
       </div>
       <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-        <Metric label="Open" value={candidate.open_task_count} />
-        <Metric label="High risk" value={candidate.high_severity_count} />
+        <Metric label="During leave" value={candidate.leave_window_task_count} />
+        <Metric label="Urgent" value={candidate.high_severity_count} />
         <Metric label="Est. days" value={candidate.active_est_days} />
       </div>
+      <p className="mt-2 text-[11px] text-fg-subtle">{candidate.open_task_count} total unfinished task{candidate.open_task_count === 1 ? "" : "s"}</p>
       {candidate.availability_note && <p className="mt-2 text-xs text-danger">{candidate.availability_note}</p>}
       {candidate.current_tasks.length > 0 && (
-        <details className="mt-3 text-xs">
-          <summary className="cursor-pointer font-medium text-accent">View current tasks</summary>
+        <details className="mt-2 text-xs">
+          <summary className="cursor-pointer font-medium text-accent">View tasks during leave</summary>
           <div className="mt-2 space-y-1.5">{candidate.current_tasks.map((task) => <div key={task.id} className="rounded-md bg-raised px-2 py-1.5"><div className="flex items-start justify-between gap-2"><span className="line-clamp-2 text-fg">{task.title}</span><Badge variant={SEVERITY_VARIANT[task.severity]}>{task.severity}</Badge></div><p className="mt-0.5 truncate text-fg-subtle">{task.project_name}</p></div>)}</div>
         </details>
       )}
@@ -250,12 +303,15 @@ function Metric({ label, value }: { label: string; value: string | number }) {
 
 function TaskCoverageRow({ task, candidates, selectedMemberId, onSelect }: { task: CoverageTask; candidates: CoverageCandidate[]; selectedMemberId: number | null; onSelect: (memberId: number | null) => void }) {
   const activeCoverage = task.coverage_status === "pending" || task.coverage_status === "accepted";
+  const schedule = task.scheduled_start_date === task.scheduled_end_date
+    ? formatDate(task.scheduled_start_date)
+    : `${formatDate(task.scheduled_start_date)} — ${formatDate(task.scheduled_end_date)}`;
   return (
-    <div className={`grid gap-3 rounded-lg border p-3 lg:grid-cols-[minmax(0,1fr)_280px] ${task.requires_assignment ? "border-warning/35 bg-warning/5" : "border-border bg-surface"}`}>
+    <div className={`grid gap-3 rounded-lg border p-3 lg:grid-cols-[minmax(0,1fr)_300px] ${task.requires_assignment ? "border-warning/35 bg-warning/5" : "border-border bg-surface"}`}>
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2"><Badge variant={SEVERITY_VARIANT[task.severity]}>{task.severity}</Badge><p className="font-medium text-fg">{task.title}</p></div>
         <p className="mt-1 text-xs text-fg-muted">{task.project_name} · {task.milestone_name}</p>
-        <p className="mt-1 text-xs text-fg-subtle">{TASK_STATUS_LABELS[task.status]} · Due {formatDate(task.due_date)} · {task.est_days ?? "—"} est. days</p>
+        <p className="mt-1 text-xs text-fg-subtle">{TASK_STATUS_LABELS[task.status]} · Scheduled {schedule} · {task.est_days ?? "—"} est. days</p>
         {!task.requires_assignment && !activeCoverage && <p className="mt-1 text-xs text-success">Existing co-assignee remains available: {task.current_assignees.join(", ")}</p>}
       </div>
       <div className="self-center">
@@ -264,7 +320,7 @@ function TaskCoverageRow({ task, candidates, selectedMemberId, onSelect }: { tas
         ) : (
           <Select value={selectedMemberId ?? ""} onChange={(event) => onSelect(event.target.value ? Number(event.target.value) : null)}>
             <option value="">{task.requires_assignment ? "Select coverage employee..." : "Keep with existing team"}</option>
-            {candidates.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name} · {candidate.open_task_count} open · {candidate.active_est_days}d</option>)}
+            {candidates.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name} · {candidate.leave_window_task_count} during leave · {candidate.workload_level} load</option>)}
           </Select>
         )}
       </div>

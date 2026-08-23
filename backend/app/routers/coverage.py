@@ -2,6 +2,8 @@ from __future__ import annotations
 
 """Leave coverage planning, employee notifications, and acceptance workflow."""
 
+from datetime import date, timedelta
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
@@ -20,12 +22,57 @@ from app.services.risk import task_risk
 
 router = APIRouter(tags=["leave coverage"])
 
+MAX_COVERAGE_DAYS = 7
+
 
 def _request_or_404(db: Session, request_id: int) -> LeaveRequest:
     request = db.get(LeaveRequest, request_id)
     if request is None:
         raise HTTPException(status_code=404, detail="Leave request not found.")
     return request
+
+
+def _parse_date(value: str | None) -> date | None:
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value[:10])
+    except ValueError:
+        return None
+
+
+def _leave_dates(request: LeaveRequest) -> list[date]:
+    start = _parse_date(request.start_date)
+    end = _parse_date(request.end_date)
+    if start is None or end is None or end < start:
+        raise HTTPException(status_code=422, detail="This leave request has invalid dates.")
+    day_count = (end - start).days + 1
+    if day_count > MAX_COVERAGE_DAYS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Task coverage can be planned for at most {MAX_COVERAGE_DAYS} leave days.",
+        )
+    return [start + timedelta(days=offset) for offset in range(day_count)]
+
+
+def _task_schedule(task: Task) -> tuple[date, date] | None:
+    start = _parse_date(task.start_date)
+    end = _parse_date(task.end_date)
+    if start is None and end is None:
+        return None
+    start = start or end
+    end = end or start
+    if start is None or end is None or end < start:
+        return None
+    return start, end
+
+
+def _task_coverage_dates(task: Task, leave_dates: list[date]) -> list[str]:
+    schedule = _task_schedule(task)
+    if schedule is None:
+        return []
+    start, end = schedule
+    return [day.isoformat() for day in leave_dates if start <= day <= end]
 
 
 def _member_tasks(member: TeamMember) -> list[Task]:
@@ -48,9 +95,13 @@ def _task_severity(task: Task) -> str:
     return "low"
 
 
-def _task_preview(task: Task) -> dict:
+def _task_preview(
+    task: Task,
+    coverage_dates: list[str] | None = None,
+) -> dict:
     milestone = task.milestone
     project = milestone.project
+    schedule = _task_schedule(task)
     return {
         "id": task.id,
         "title": task.title,
@@ -61,6 +112,9 @@ def _task_preview(task: Task) -> dict:
         "severity": _task_severity(task),
         "risk_level": task_risk(task),
         "due_date": task.end_date,
+        "scheduled_start_date": schedule[0].isoformat() if schedule else None,
+        "scheduled_end_date": schedule[1].isoformat() if schedule else None,
+        "coverage_dates": coverage_dates or [],
         "est_days": task.est_days,
     }
 
@@ -120,13 +174,19 @@ def _availability(
 
 
 def _candidate_out(db: Session, member: TeamMember, request: LeaveRequest) -> dict:
-    tasks = _member_tasks(member)
-    previews = [_task_preview(task) for task in tasks]
+    leave_dates = _leave_dates(request)
+    all_tasks = _member_tasks(member)
+    period_tasks = [
+        (task, _task_coverage_dates(task, leave_dates))
+        for task in all_tasks
+    ]
+    period_tasks = [(task, dates) for task, dates in period_tasks if dates]
+    previews = [_task_preview(task, dates) for task, dates in period_tasks]
     high_count = sum(1 for task in previews if task["severity"] in ("critical", "high"))
-    active_est_days = round(sum(float(task.est_days or 0) for task in tasks), 1)
-    if len(tasks) >= 20 or active_est_days >= 40:
+    active_est_days = round(sum(float(task.est_days or 0) for task, _dates in period_tasks), 1)
+    if len(period_tasks) >= 8 or active_est_days >= 12:
         workload = "high"
-    elif len(tasks) >= 10 or active_est_days >= 20:
+    elif len(period_tasks) >= 4 or active_est_days >= 6:
         workload = "balanced"
     else:
         workload = "light"
@@ -140,7 +200,8 @@ def _candidate_out(db: Session, member: TeamMember, request: LeaveRequest) -> di
         "eligible": eligible,
         "availability": availability,
         "availability_note": note,
-        "open_task_count": len(tasks),
+        "open_task_count": len(all_tasks),
+        "leave_window_task_count": len(period_tasks),
         "high_severity_count": high_count,
         "active_est_days": active_est_days,
         "workload_level": workload,
@@ -149,7 +210,8 @@ def _candidate_out(db: Session, member: TeamMember, request: LeaveRequest) -> di
 
 
 def _offer_out(offer: LeaveCoverageOffer) -> dict:
-    preview = _task_preview(offer.task)
+    coverage_dates = _task_coverage_dates(offer.task, _leave_dates(offer.leave_request))
+    preview = _task_preview(offer.task, coverage_dates)
     return {
         "id": offer.id,
         "leave_request_id": offer.leave_request_id,
@@ -184,16 +246,24 @@ def coverage_plan(
     _admin: User = Depends(require_admin),
 ):
     request = _request_or_404(db, request_id)
-    source_tasks = _member_tasks(request.team_member)
+    leave_dates = _leave_dates(request)
+    all_source_tasks = _member_tasks(request.team_member)
+    source_tasks_with_dates = [
+        (task, _task_coverage_dates(task, leave_dates))
+        for task in all_source_tasks
+    ]
+    source_tasks_with_dates = [
+        (task, dates) for task, dates in source_tasks_with_dates if dates
+    ]
     latest = _latest_offer_by_task(request)
     tasks = []
-    for task in source_tasks:
+    for task, task_dates in source_tasks_with_dates:
         current_members = _current_assignees(task)
         other_members = [member for member in current_members if member.id != request.team_member_id]
         offer = latest.get(task.id)
         tasks.append(
             {
-                **_task_preview(task),
+                **_task_preview(task, task_dates),
                 "current_assignees": [member.name for member in current_members],
                 "requires_assignment": not other_members and not (
                     offer and offer.status in ("pending", "accepted")
@@ -223,7 +293,14 @@ def coverage_plan(
         )
     )
     severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
-    tasks.sort(key=lambda task: (severity_order[task["severity"]], task["due_date"] or "9999"))
+    tasks.sort(
+        key=lambda task: (
+            severity_order[task["severity"]],
+            task["coverage_dates"][0],
+            task["due_date"] or "9999",
+        )
+    )
+    unscheduled_task_count = sum(1 for task in all_source_tasks if _task_schedule(task) is None)
     return {
         "leave_request_id": request.id,
         "employee_id": request.team_member_id,
@@ -233,6 +310,9 @@ def coverage_plan(
         "duration_unit": request.duration_unit,
         "reason": request.reason,
         "request_status": request.status,
+        "coverage_dates": [day.isoformat() for day in leave_dates],
+        "excluded_task_count": len(all_source_tasks) - len(source_tasks_with_dates),
+        "unscheduled_task_count": unscheduled_task_count,
         "tasks": tasks,
         "candidates": candidates,
     }
@@ -249,13 +329,21 @@ def assign_leave_coverage(
     if request.status not in ("pending", "approved"):
         raise HTTPException(status_code=409, detail="Coverage cannot be assigned to this request.")
 
-    source_tasks = {task.id: task for task in _member_tasks(request.team_member)}
+    leave_dates = _leave_dates(request)
+    source_tasks = {
+        task.id: task
+        for task in _member_tasks(request.team_member)
+        if _task_coverage_dates(task, leave_dates)
+    }
     assignment_ids = [assignment.task_id for assignment in inp.assignments]
     if len(assignment_ids) != len(set(assignment_ids)):
         raise HTTPException(status_code=422, detail="Each task can have only one coverage recipient.")
     unknown_tasks = set(assignment_ids) - set(source_tasks)
     if unknown_tasks:
-        raise HTTPException(status_code=422, detail="A selected task is not assigned to this employee.")
+        raise HTTPException(
+            status_code=422,
+            detail="A selected task is not assigned to this employee during the leave dates.",
+        )
 
     active_offer_ids = _active_offer_task_ids(request)
     if request.status == "pending":

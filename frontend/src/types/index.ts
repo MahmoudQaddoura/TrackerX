@@ -204,6 +204,9 @@ export interface CoverageTaskPreview {
   severity: CoverageSeverity;
   risk_level: RiskLevel;
   due_date: string | null;
+  scheduled_start_date: string | null;
+  scheduled_end_date: string | null;
+  coverage_dates: string[];
   est_days: number | null;
 }
 
@@ -223,6 +226,7 @@ export interface CoverageCandidate {
   availability: "available" | "on_leave" | "leave_pending" | "no_login";
   availability_note: string | null;
   open_task_count: number;
+  leave_window_task_count: number;
   high_severity_count: number;
   active_est_days: number;
   workload_level: "light" | "balanced" | "high";
@@ -238,6 +242,9 @@ export interface CoveragePlan {
   duration_unit: LeaveDurationUnit;
   reason: string;
   request_status: LeaveRequestStatus;
+  coverage_dates: string[];
+  excluded_task_count: number;
+  unscheduled_task_count: number;
   tasks: CoverageTask[];
   candidates: CoverageCandidate[];
 }

@@ -57,6 +57,8 @@ const STATUS_VARIANTS: Record<
   rejected: "danger",
 };
 
+const MAX_LEAVE_DAYS = 7;
+
 function localDate(): string {
   const now = new Date();
   const month = String(now.getMonth() + 1).padStart(2, "0");
@@ -76,6 +78,18 @@ function calculateHours(startTime: string, endTime: string): number {
   const [startHour, startMinute] = startTime.split(":").map(Number);
   const [endHour, endMinute] = endTime.split(":").map(Number);
   return Math.max(0, ((endHour * 60 + endMinute) - (startHour * 60 + startMinute)) / 60);
+}
+
+function addCalendarDays(value: string, days: number): string {
+  const result = new Date(`${value}T12:00:00`);
+  result.setDate(result.getDate() + days);
+  return result.toISOString().slice(0, 10);
+}
+
+function leaveDayCount(startDate: string, endDate: string): number {
+  const start = new Date(`${startDate}T12:00:00`);
+  const end = new Date(`${endDate}T12:00:00`);
+  return Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1;
 }
 
 function durationLabel(request: LeaveRequest): string {
@@ -127,6 +141,13 @@ export function LeaveRequestsPage({ embedded = false }: { embedded?: boolean } =
     if (durationUnit === "hours" && calculateHours(startTime, endTime) <= 0) {
       setFormError("End time must be after start time.");
       return;
+    }
+    if (durationUnit === "days") {
+      const requestedDays = leaveDayCount(startDate, endDate);
+      if (requestedDays < 1 || requestedDays > MAX_LEAVE_DAYS) {
+        setFormError(`A leave request can cover at most ${MAX_LEAVE_DAYS} days.`);
+        return;
+      }
     }
     setFormError(null);
     try {
@@ -232,11 +253,29 @@ export function LeaveRequestsPage({ embedded = false }: { embedded?: boolean } =
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="leave-start">First day</Label>
-            <Input id="leave-start" type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+            <Input
+              id="leave-start"
+              type="date"
+              value={startDate}
+              onChange={(event) => {
+                const nextStart = event.target.value;
+                const nextMaximum = addCalendarDays(nextStart, MAX_LEAVE_DAYS - 1);
+                setStartDate(nextStart);
+                if (endDate < nextStart || endDate > nextMaximum) setEndDate(nextStart);
+              }}
+            />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="leave-end">Last day</Label>
-            <Input id="leave-end" type="date" min={startDate} value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+            <Input
+              id="leave-end"
+              type="date"
+              min={startDate}
+              max={addCalendarDays(startDate, MAX_LEAVE_DAYS - 1)}
+              value={endDate}
+              onChange={(event) => setEndDate(event.target.value)}
+            />
+            <p className="text-xs text-fg-subtle">Maximum {MAX_LEAVE_DAYS} consecutive days.</p>
           </div>
         </div>
       ) : (

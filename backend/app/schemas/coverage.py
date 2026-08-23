@@ -15,6 +15,9 @@ class CoverageTaskPreview(BaseModel):
     severity: str
     risk_level: str
     due_date: str | None
+    scheduled_start_date: str | None
+    scheduled_end_date: str | None
+    coverage_dates: list[str]
     est_days: float | None
 
 
@@ -34,6 +37,7 @@ class CoverageCandidateOut(BaseModel):
     availability: str
     availability_note: str | None
     open_task_count: int
+    leave_window_task_count: int
     high_severity_count: int
     active_est_days: float
     workload_level: str
@@ -49,6 +53,9 @@ class CoveragePlanOut(BaseModel):
     duration_unit: str
     reason: str
     request_status: str
+    coverage_dates: list[str]
+    excluded_task_count: int
+    unscheduled_task_count: int
     tasks: list[CoverageTaskOut]
     candidates: list[CoverageCandidateOut]
 

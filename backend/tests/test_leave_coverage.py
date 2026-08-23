@@ -5,6 +5,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
+from fastapi import HTTPException
 
 _database_file = Path(tempfile.gettempdir()) / "trackerx_leave_coverage_test.db"
 os.environ["DATABASE_URL"] = f"sqlite:///{_database_file.as_posix()}"
@@ -18,6 +19,8 @@ from app.routers.coverage import (
     my_coverage_offers,
     respond_to_coverage_offer,
 )
+from app.routers.leave_requests import create_leave_request
+from app.schemas.leave_request import LeaveRequestCreate
 from app.schemas.coverage import (
     CoverageAssignInput,
     CoverageAssignmentInput,
@@ -96,11 +99,39 @@ class LeaveCoverageWorkflowTest(unittest.TestCase):
                 milestone_id=milestone.id,
                 title="Production handover",
                 status="in_progress",
+                start_date="2026-08-23",
                 end_date="2026-08-25",
                 est_days=3,
                 assigned_member_id=source.id,
             )
             task.assigned_members = [source]
+            before_leave_task = Task(
+                milestone_id=milestone.id,
+                title="Pre-leave urgent check",
+                status="blocked",
+                start_date="2026-08-22",
+                end_date="2026-08-22",
+                est_days=1,
+                assigned_member_id=source.id,
+            )
+            before_leave_task.assigned_members = [source]
+            outside_task = Task(
+                milestone_id=milestone.id,
+                title="Post-leave review",
+                status="todo",
+                start_date="2026-08-26",
+                end_date="2026-08-27",
+                est_days=2,
+                assigned_member_id=source.id,
+            )
+            outside_task.assigned_members = [source]
+            unscheduled_task = Task(
+                milestone_id=milestone.id,
+                title="Unscheduled backlog item",
+                status="todo",
+                assigned_member_id=source.id,
+            )
+            unscheduled_task.assigned_members = [source]
             leave = LeaveRequest(
                 team_member_id=source.id,
                 request_type="leave",
@@ -109,16 +140,48 @@ class LeaveCoverageWorkflowTest(unittest.TestCase):
                 duration_unit="days",
                 reason="Planned leave",
             )
-            db.add_all([task, leave])
+            db.add_all([task, before_leave_task, outside_task, unscheduled_task, leave])
             db.commit()
 
             self.admin_id = admin.id
+            self.source_user_id = source_user.id
             self.recipient_user_id = recipient_user.id
             self.source_id = source.id
             self.recipient_id = recipient.id
             self.task_id = task.id
             self.leave_id = leave.id
             self.project_id = project.id
+
+    def test_plan_only_includes_tasks_during_the_leave_period(self) -> None:
+        with SessionLocal() as db:
+            admin = db.get(User, self.admin_id)
+            plan = coverage_plan(self.leave_id, db=db, _admin=admin)
+
+            self.assertEqual([task["id"] for task in plan["tasks"]], [self.task_id])
+            leave_task = plan["tasks"][0]
+            self.assertEqual(leave_task["coverage_dates"], ["2026-08-23"])
+            self.assertEqual(leave_task["requires_assignment"], True)
+            self.assertEqual(plan["coverage_dates"], ["2026-08-23"])
+            self.assertEqual(plan["excluded_task_count"], 3)
+            self.assertEqual(plan["unscheduled_task_count"], 1)
+
+    def test_day_leave_requests_are_limited_to_one_week(self) -> None:
+        with SessionLocal() as db:
+            source_user = db.get(User, self.source_user_id)
+            with self.assertRaises(HTTPException) as error:
+                create_leave_request(
+                    LeaveRequestCreate(
+                        request_type="leave",
+                        start_date="2026-08-23",
+                        end_date="2026-08-30",
+                        duration_unit="days",
+                        reason="Eight day request",
+                    ),
+                    db=db,
+                    user=source_user,
+                )
+            self.assertEqual(error.exception.status_code, 422)
+            self.assertIn("at most 7 days", error.exception.detail)
 
     def test_offer_is_not_reassigned_until_recipient_accepts(self) -> None:
         with SessionLocal() as db:
