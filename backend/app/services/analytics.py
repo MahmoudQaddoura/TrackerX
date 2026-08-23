@@ -101,3 +101,117 @@ def delayed_tasks(projects) -> list[dict]:
         key=lambda item: (item["days_overdue"] or 0, item["task_id"]),
         reverse=True,
     )
+
+
+def _task_members(task) -> list:
+    """Return the multi-assignee list, with the legacy primary assignment as fallback."""
+    members = list(getattr(task, "assigned_members", []) or [])
+    primary = getattr(task, "assigned_member", None)
+    if not members and primary is not None:
+        members = [primary]
+    return members
+
+
+def delivery_map(projects) -> list[dict]:
+    """Actionable per-project status, assignee load, and priority-task roll-up."""
+    rows = []
+    delivery_projects = [
+        project
+        for project in projects
+        if getattr(project, "project_type", "actual_project") == "actual_project"
+        and project.status != "archived"
+    ]
+
+    for project in delivery_projects:
+        tasks = prog.project_tasks(project)
+        rollup = prog.rollup(tasks)
+        counts = {status: 0 for status in TASK_STATUSES}
+        assignee_load: dict[int, dict] = {}
+        unassigned = 0
+
+        milestone_by_task = {
+            task.id: milestone
+            for milestone in project.milestones
+            if milestone.workstream == "project"
+            for task in milestone.tasks
+        }
+
+        for task in tasks:
+            counts[task.status] = counts.get(task.status, 0) + 1
+            members = _task_members(task)
+            if task.status != "done" and not members:
+                unassigned += 1
+            for member in members:
+                load = assignee_load.setdefault(
+                    member.id,
+                    {
+                        "member_id": member.id,
+                        "name": member.name,
+                        "total_tasks": 0,
+                        "open_tasks": 0,
+                        "delayed_tasks": 0,
+                    },
+                )
+                load["total_tasks"] += 1
+                if task.status != "done":
+                    load["open_tasks"] += 1
+                if _is_delayed(task):
+                    load["delayed_tasks"] += 1
+
+        attention_candidates = [task for task in tasks if task.status != "done"]
+        attention_candidates.sort(
+            key=lambda task: (
+                0 if _is_delayed(task) else 1,
+                0 if task.status == "blocked" else 1,
+                task.end_date or "9999-12-31",
+                task.id,
+            )
+        )
+        attention_tasks = []
+        for task in attention_candidates[:5]:
+            milestone = milestone_by_task[task.id]
+            attention_tasks.append(
+                {
+                    "task_id": task.id,
+                    "title": task.title,
+                    "milestone_id": milestone.id,
+                    "milestone_title": milestone.title,
+                    "status": task.status,
+                    "is_delayed": _is_delayed(task),
+                    "end_date": task.end_date,
+                    "assignee_names": [member.name for member in _task_members(task)],
+                }
+            )
+
+        rows.append(
+            {
+                "project_id": project.id,
+                "project_name": project.name,
+                "project_status": project.status,
+                "project_manager_name": getattr(
+                    getattr(project, "project_manager", None), "name", None
+                ),
+                "progress_pct": rollup["progress_pct"],
+                "total_tasks": rollup["total_tasks"],
+                "done_tasks": rollup["done_tasks"],
+                "delayed_tasks": sum(1 for task in tasks if _is_delayed(task)),
+                "blocked_tasks": counts["blocked"],
+                "unassigned_tasks": unassigned,
+                "status_counts": counts,
+                "assignees": sorted(
+                    assignee_load.values(),
+                    key=lambda item: (-item["delayed_tasks"], -item["open_tasks"], item["name"]),
+                ),
+                "attention_tasks": attention_tasks,
+            }
+        )
+
+    return sorted(
+        rows,
+        key=lambda item: (
+            -item["delayed_tasks"],
+            -item["blocked_tasks"],
+            item["progress_pct"],
+            item["project_name"],
+        ),
+    )

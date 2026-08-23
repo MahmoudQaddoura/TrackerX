@@ -84,6 +84,9 @@ export function ProjectDetailPage() {
     return () => window.clearTimeout(timer);
   }, [activeTab, searchParams]);
 
+  const focusTaskId = Number(searchParams.get("task")) || undefined;
+  const initialAssigneeId = Number(searchParams.get("assignee")) || undefined;
+
   function openMilestoneFromGantt(milestoneId: number) {
     setActiveTab(canEditProjectContent ? "kanban" : "board");
     window.setTimeout(() => {
@@ -205,7 +208,11 @@ export function ProjectDetailPage() {
           </TabsContent>
           {canEditProjectContent && (
             <TabsContent value="kanban">
-              <KanbanBoard project={project} />
+              <KanbanBoard
+                project={project}
+                focusTaskId={focusTaskId}
+                initialAssigneeId={initialAssigneeId}
+              />
             </TabsContent>
           )}
           {!canEditProjectContent && (

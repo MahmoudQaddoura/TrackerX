@@ -378,6 +378,41 @@ export interface DelayedTaskItem {
   days_overdue: number | null;
 }
 
+export interface DeliveryMapAssignee {
+  member_id: number;
+  name: string;
+  total_tasks: number;
+  open_tasks: number;
+  delayed_tasks: number;
+}
+
+export interface DeliveryMapTask {
+  task_id: number;
+  title: string;
+  milestone_id: number;
+  milestone_title: string;
+  status: TaskStatus;
+  is_delayed: boolean;
+  end_date: string | null;
+  assignee_names: string[];
+}
+
+export interface DeliveryMapProject {
+  project_id: number;
+  project_name: string;
+  project_status: ProjectStatus;
+  project_manager_name: string | null;
+  progress_pct: number;
+  total_tasks: number;
+  done_tasks: number;
+  delayed_tasks: number;
+  blocked_tasks: number;
+  unassigned_tasks: number;
+  status_counts: Record<TaskStatus, number>;
+  assignees: DeliveryMapAssignee[];
+  attention_tasks: DeliveryMapTask[];
+}
+
 export interface ProactiveServiceReport {
   id: number;
   project_id: number;

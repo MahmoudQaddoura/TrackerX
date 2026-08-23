@@ -2,6 +2,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import {
+  fetchDeliveryMap,
   fetchDelayedTasks,
   fetchProjectTimelines,
   fetchStatusBreakdown,
@@ -39,6 +40,14 @@ export function useDelayedTasks(projectId?: number) {
   return useQuery({
     queryKey: key("delayed", projectId),
     queryFn: () => fetchDelayedTasks(projectId),
+    refetchInterval: projectId == null ? 15_000 : false,
+  });
+}
+
+export function useDeliveryMap(projectId?: number) {
+  return useQuery({
+    queryKey: key("delivery-map", projectId),
+    queryFn: () => fetchDeliveryMap(projectId),
     refetchInterval: projectId == null ? 15_000 : false,
   });
 }

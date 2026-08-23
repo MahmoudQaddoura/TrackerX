@@ -42,3 +42,38 @@ class DelayedTaskItem(BaseModel):
     end_date: str | None
     trigger_type: str
     days_overdue: int | None
+
+
+class DeliveryMapAssignee(BaseModel):
+    member_id: int
+    name: str
+    total_tasks: int
+    open_tasks: int
+    delayed_tasks: int
+
+
+class DeliveryMapTask(BaseModel):
+    task_id: int
+    title: str
+    milestone_id: int
+    milestone_title: str
+    status: str
+    is_delayed: bool
+    end_date: str | None
+    assignee_names: list[str]
+
+
+class DeliveryMapProject(BaseModel):
+    project_id: int
+    project_name: str
+    project_status: str
+    project_manager_name: str | None
+    progress_pct: int
+    total_tasks: int
+    done_tasks: int
+    delayed_tasks: int
+    blocked_tasks: int
+    unassigned_tasks: int
+    status_counts: dict[str, int]
+    assignees: list[DeliveryMapAssignee]
+    attention_tasks: list[DeliveryMapTask]

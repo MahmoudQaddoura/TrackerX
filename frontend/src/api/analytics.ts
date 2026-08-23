@@ -2,6 +2,7 @@
 import { api } from "@/lib/apiClient";
 import type {
   AnalyticsSummary,
+  DeliveryMapProject,
   DelayedTaskItem,
   ProjectTimelineItem,
   StatusBreakdownItem,
@@ -34,5 +35,10 @@ export async function fetchProjectTimelines(projectId?: number): Promise<Project
 
 export async function fetchDelayedTasks(projectId?: number): Promise<DelayedTaskItem[]> {
   const { data } = await api.get<DelayedTaskItem[]>("/analytics/delayed-tasks", scope(projectId));
+  return data;
+}
+
+export async function fetchDeliveryMap(projectId?: number): Promise<DeliveryMapProject[]> {
+  const { data } = await api.get<DeliveryMapProject[]>("/analytics/delivery-map", scope(projectId));
   return data;
 }

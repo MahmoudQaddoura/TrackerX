@@ -20,7 +20,7 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { downloadDocument } from "@/api/documents";
 import { CommentThread } from "@/components/common/CommentThread";
@@ -81,7 +81,15 @@ const DELIVERY_SECTION: WorkstreamSection =
     emptyDescription: "Add a delivery milestone to start planning the project.",
   };
 
-export function KanbanBoard({ project }: { project: Project }) {
+export function KanbanBoard({
+  project,
+  focusTaskId,
+  initialAssigneeId,
+}: {
+  project: Project;
+  focusTaskId?: number;
+  initialAssigneeId?: number;
+}) {
   const { canManage, canWrite, isDeveloper } = useAuth();
   const milestones = useMilestones(project.id);
   const tasks = useProjectTasks(project.id);
@@ -96,7 +104,24 @@ export function KanbanBoard({ project }: { project: Project }) {
     useState<MilestoneWorkstream>("project");
   const [msToDelete, setMsToDelete] = useState<Milestone | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [assigneeFilter, setAssigneeFilter] = useState("");
+  const [assigneeFilter, setAssigneeFilter] = useState(
+    initialAssigneeId ? String(initialAssigneeId) : "",
+  );
+
+  useEffect(() => {
+    setAssigneeFilter(initialAssigneeId ? String(initialAssigneeId) : "");
+  }, [initialAssigneeId]);
+
+  useEffect(() => {
+    if (!focusTaskId || !tasks.data?.some((task) => task.id === focusTaskId)) return;
+    const timer = window.setTimeout(() => {
+      document.getElementById(`task-${focusTaskId}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }, 100);
+    return () => window.clearTimeout(timer);
+  }, [focusTaskId, tasks.data]);
 
   const workstreamSections = [DELIVERY_SECTION];
 
@@ -300,6 +325,7 @@ export function KanbanBoard({ project }: { project: Project }) {
                   milestone={milestone}
                   tasks={tasksByMilestone.get(milestone.id) ?? []}
                   documents={documentsByMilestone.get(milestone.id) ?? []}
+                  focusTaskId={focusTaskId}
                   canDrag={canDrag}
                   canDropIn={canDropIn}
                   onMoveTask={moveTask}
@@ -345,6 +371,7 @@ function MilestoneSwimlane({
   milestone,
   tasks,
   documents,
+  focusTaskId,
   canDrag,
   canDropIn,
   onMoveTask,
@@ -355,6 +382,7 @@ function MilestoneSwimlane({
   milestone: Milestone;
   tasks: Task[];
   documents: DocumentMeta[];
+  focusTaskId?: number;
   canDrag: (task: Task) => boolean;
   canDropIn: (status: TaskStatus) => boolean;
   onMoveTask: (taskId: number, status: TaskStatus) => void;
@@ -452,6 +480,7 @@ function MilestoneSwimlane({
                 <TaskCard
                   key={task.id}
                   task={task}
+                  highlighted={task.id === focusTaskId}
                   draggable={canDrag(task)}
                   showComments={canManage}
                   onDragStart={(e) => e.dataTransfer.setData("text/plain", String(task.id))}
@@ -590,6 +619,7 @@ function MilestoneDocumentsButton({
 
 function TaskCard({
   task,
+  highlighted,
   draggable,
   showComments,
   onDragStart,
@@ -597,6 +627,7 @@ function TaskCard({
   onComment,
 }: {
   task: Task;
+  highlighted: boolean;
   draggable: boolean;
   showComments: boolean;
   onDragStart: (e: React.DragEvent) => void;
@@ -611,6 +642,7 @@ function TaskCard({
 
   return (
     <div
+      id={`task-${task.id}`}
       role="button"
       tabIndex={0}
       draggable={draggable}
@@ -618,8 +650,9 @@ function TaskCard({
       onClick={onClick}
       onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onClick()}
       className={cn(
-        "flex flex-col gap-1.5 rounded-md border border-border bg-surface p-2.5 text-left shadow-sm transition-colors hover:border-accent/60",
+        "scroll-mt-24 flex flex-col gap-1.5 rounded-md border border-border bg-surface p-2.5 text-left shadow-sm transition-colors hover:border-accent/60",
         draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer",
+        highlighted && "border-accent ring-2 ring-accent/25",
       )}
     >
       <div className="flex items-start justify-between gap-1">

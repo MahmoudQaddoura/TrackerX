@@ -8,8 +8,8 @@ import {
 import { Link, useNavigate } from "react-router-dom";
 
 import { DelaysTable } from "@/components/dashboard/DelaysTable";
+import { DeliveryMapChart } from "@/components/dashboard/DeliveryMapChart";
 import { ProjectProgressChart } from "@/components/dashboard/ProjectProgressChart";
-import { StatusBreakdownChart } from "@/components/dashboard/StatusBreakdownChart";
 import { CoverageInbox } from "@/components/attendance/CoverageInbox";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,8 +19,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/context/AuthContext";
 import {
   useDelayedTasks,
+  useDeliveryMap,
   useProjectTimelines,
-  useStatusBreakdown,
   useSummary,
 } from "@/hooks/useAnalytics";
 import { useAttendance } from "@/hooks/useAttendance";
@@ -54,7 +54,7 @@ function TeamDashboardPage() {
   const navigate = useNavigate();
   const { user, canViewManagement, canManage } = useAuth();
   const summary = useSummary();
-  const status = useStatusBreakdown();
+  const deliveryMap = useDeliveryMap();
   const timelines = useProjectTimelines();
   const delayed = useDelayedTasks();
   const projects = useProjects();
@@ -152,14 +152,15 @@ function TeamDashboardPage() {
         )
       )}
 
-      <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
-        {status.isLoading ? (
-          <Skeleton className="h-[340px]" />
-        ) : status.isError ? (
-          <ErrorState onRetry={() => status.refetch()} />
-        ) : status.data && <StatusBreakdownChart data={status.data} />}
+      {deliveryMap.isLoading ? (
+        <Skeleton className="h-[420px]" />
+      ) : deliveryMap.isError ? (
+        <ErrorState message="Could not load the project delivery map." onRetry={() => deliveryMap.refetch()} />
+      ) : deliveryMap.data && (
+        <DeliveryMapChart data={deliveryMap.data} boardTab={canManage ? "kanban" : "board"} />
+      )}
 
-        <Card className="h-full overflow-hidden">
+      <Card className="overflow-hidden">
           <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
             <div>
               <h2 className="font-semibold text-fg">{canViewManagement ? "Attendance today" : "My attendance today"}</h2>
@@ -214,8 +215,7 @@ function TeamDashboardPage() {
               )}
             </div>
           )}
-        </Card>
-      </div>
+      </Card>
 
       {timelines.isLoading ? (
         <Skeleton className="h-80" />

@@ -15,6 +15,7 @@ from app.db import get_db
 from app.deps import check_project_access, get_accessible_project_ids, get_current_user
 from app.models import Project, User
 from app.schemas.analytics import (
+    DeliveryMapProject,
     DelayedTaskItem,
     ProjectTimelineItem,
     StatusBreakdownItem,
@@ -72,4 +73,18 @@ def get_delayed_tasks(
     if user.role == "client":
         for row in rows:
             row["owner"] = None
+    return rows
+
+
+@router.get("/delivery-map", response_model=list[DeliveryMapProject])
+def get_delivery_map(
+    project_id: int | None = None, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+):
+    rows = analytics.delivery_map(_scope(db, user, project_id))
+    if user.role == "client":
+        for row in rows:
+            row["project_manager_name"] = None
+            row["assignees"] = []
+            for task in row["attention_tasks"]:
+                task["assignee_names"] = []
     return rows
