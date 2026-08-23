@@ -1,9 +1,6 @@
 from types import SimpleNamespace
 import unittest
 
-from app.services.analytics import delivery_map
-
-
 def member(member_id: int, name: str):
     return SimpleNamespace(id=member_id, name=name)
 
@@ -23,6 +20,8 @@ def task(task_id: int, title: str, status: str, assignees, *, delayed=False, end
 
 class DeliveryMapTests(unittest.TestCase):
     def test_rolls_up_projects_assignees_and_attention_tasks(self):
+        from app.services.analytics import delivery_map
+
         lina = member(1, "Lina")
         yazan = member(2, "Yazan")
         milestone = SimpleNamespace(
@@ -61,6 +60,8 @@ class DeliveryMapTests(unittest.TestCase):
         self.assertEqual(row["attention_tasks"][0]["task_id"], 101)
 
     def test_excludes_archived_and_support_workspaces(self):
+        from app.services.analytics import delivery_map
+
         support = SimpleNamespace(
             id=1,
             name="Support",
