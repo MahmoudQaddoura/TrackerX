@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from html import escape
 from io import BytesIO
+from pathlib import Path
 from typing import Any
 
 from reportlab.lib import colors
@@ -13,7 +14,15 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.pdfgen.canvas import Canvas
-from reportlab.platypus import KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import (
+    Image as PlatypusImage,
+    KeepTogether,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
+)
 
 
 NAVY = colors.HexColor("#0B5279")
@@ -25,6 +34,7 @@ PALE_GREEN = colors.HexColor("#EAF8EF")
 PALE_AMBER = colors.HexColor("#FFF6E5")
 PALE_RED = colors.HexColor("#FDECEF")
 ROW_ALT = colors.HexColor("#F8FAFC")
+COMPANY_LOGO_PATH = Path(__file__).resolve().parent.parent / "assets" / "blockexe-logo.png"
 
 STATUS_LABELS = {
     "not_recorded": "Not recorded",
@@ -39,6 +49,57 @@ STATUS_LABELS = {
 def _paragraph(value: Any, style: ParagraphStyle) -> Paragraph:
     text = "-" if value is None or str(value).strip() == "" else str(value)
     return Paragraph(escape(text).replace("\n", "<br/>"), style)
+
+
+def _brand_header(report_title: str) -> Table:
+    base = getSampleStyleSheet()
+    trackerx_style = ParagraphStyle(
+        "HeaderTrackerX",
+        parent=base["Heading1"],
+        fontName="Helvetica-Bold",
+        fontSize=17,
+        leading=20,
+        textColor=colors.white,
+        spaceAfter=0,
+    )
+    report_style = ParagraphStyle(
+        "HeaderReportTitle",
+        parent=base["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=9,
+        leading=11,
+        textColor=colors.white,
+        alignment=TA_RIGHT,
+    )
+    company_logo = PlatypusImage(
+        str(COMPANY_LOGO_PATH),
+        width=62 * mm,
+        height=62 * mm * 872 / 3152,
+    )
+    company_logo.hAlign = "CENTER"
+    header = Table(
+        [[Paragraph("TrackerX", trackerx_style), company_logo, Paragraph(report_title, report_style)]],
+        colWidths=[38 * mm, 70 * mm, 51 * mm],
+        hAlign="LEFT",
+    )
+    header.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), NAVY),
+                ("BACKGROUND", (1, 0), (1, 0), colors.white),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (0, 0), 6 * mm),
+                ("RIGHTPADDING", (0, 0), (0, 0), 2 * mm),
+                ("LEFTPADDING", (1, 0), (1, 0), 4 * mm),
+                ("RIGHTPADDING", (1, 0), (1, 0), 4 * mm),
+                ("LEFTPADDING", (2, 0), (2, 0), 3 * mm),
+                ("RIGHTPADDING", (2, 0), (2, 0), 6 * mm),
+                ("TOPPADDING", (0, 0), (-1, -1), 3 * mm),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 3 * mm),
+            ]
+        )
+    )
+    return header
 
 
 def _footer(canvas: Canvas, document: SimpleDocTemplate) -> None:
@@ -81,24 +142,6 @@ def build_attendance_pdf(
     )
 
     base = getSampleStyleSheet()
-    brand_style = ParagraphStyle(
-        "Brand",
-        parent=base["Heading1"],
-        fontName="Helvetica-Bold",
-        fontSize=19,
-        leading=22,
-        textColor=colors.white,
-        spaceAfter=0,
-    )
-    title_style = ParagraphStyle(
-        "DocumentTitle",
-        parent=base["Normal"],
-        fontName="Helvetica-Bold",
-        fontSize=10,
-        leading=12,
-        textColor=colors.white,
-        alignment=TA_RIGHT,
-    )
     meta_label = ParagraphStyle(
         "MetaLabel",
         parent=base["Normal"],
@@ -146,24 +189,7 @@ def build_attendance_pdf(
     )
 
     story: list[Any] = []
-    brand = Table(
-        [[Paragraph("TrackerX", brand_style), Paragraph("DAILY ATTENDANCE", title_style)]],
-        colWidths=[105 * mm, 54 * mm],
-        hAlign="LEFT",
-    )
-    brand.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, -1), NAVY),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("LEFTPADDING", (0, 0), (0, 0), 8 * mm),
-                ("RIGHTPADDING", (-1, 0), (-1, 0), 8 * mm),
-                ("TOPPADDING", (0, 0), (-1, -1), 5 * mm),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 5 * mm),
-            ]
-        )
-    )
-    story.extend([brand, Spacer(1, 5 * mm)])
+    story.extend([_brand_header("DAILY ATTENDANCE"), Spacer(1, 5 * mm)])
 
     meta = Table(
         [
@@ -332,23 +358,6 @@ def build_monthly_days_off_pdf(
     )
 
     base = getSampleStyleSheet()
-    brand_style = ParagraphStyle(
-        "MonthlyBrand",
-        parent=base["Heading1"],
-        fontName="Helvetica-Bold",
-        fontSize=19,
-        leading=22,
-        textColor=colors.white,
-    )
-    title_style = ParagraphStyle(
-        "MonthlyTitle",
-        parent=base["Normal"],
-        fontName="Helvetica-Bold",
-        fontSize=10,
-        leading=12,
-        textColor=colors.white,
-        alignment=TA_RIGHT,
-    )
     meta_label = ParagraphStyle(
         "MonthlyMetaLabel",
         parent=base["Normal"],
@@ -388,23 +397,7 @@ def build_monthly_days_off_pdf(
     )
 
     story: list[Any] = []
-    brand = Table(
-        [[Paragraph("TrackerX", brand_style), Paragraph("MONTHLY DAYS OFF", title_style)]],
-        colWidths=[105 * mm, 54 * mm],
-    )
-    brand.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, -1), NAVY),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("LEFTPADDING", (0, 0), (0, 0), 8 * mm),
-                ("RIGHTPADDING", (-1, 0), (-1, 0), 8 * mm),
-                ("TOPPADDING", (0, 0), (-1, -1), 5 * mm),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 5 * mm),
-            ]
-        )
-    )
-    story.extend([brand, Spacer(1, 5 * mm)])
+    story.extend([_brand_header("MONTHLY DAYS OFF"), Spacer(1, 5 * mm)])
 
     total_days_off = sum(int(row["days_off"]) for row in rows)
     meta = Table(
