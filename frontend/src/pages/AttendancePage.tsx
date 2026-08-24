@@ -70,11 +70,6 @@ function localDate(): string {
   return `${now.getFullYear()}-${month}-${day}`;
 }
 
-function localTime(): string {
-  const now = new Date();
-  return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-}
-
 function shiftDate(value: string, days: number): string {
   const date = new Date(`${value}T12:00:00`);
   date.setDate(date.getDate() + days);
@@ -116,6 +111,7 @@ export function AttendancePage({ embedded = false }: { embedded?: boolean } = {}
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [officeStart, setOfficeStart] = useState(DEFAULT_START);
   const [officeEnd, setOfficeEnd] = useState(DEFAULT_END);
+  const [autoFillHours, setAutoFillHours] = useState(true);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<AttendanceFilter>("all");
 
@@ -177,8 +173,8 @@ export function AttendancePage({ embedded = false }: { embedded?: boolean } = {}
     if (!row) return;
     const patch: Partial<AttendanceRecord> = { status };
     if (isOnDuty(status)) {
-      patch.check_in = row.check_in ?? officeStart;
-      patch.check_out = row.check_out ?? officeEnd;
+      patch.check_in = row.check_in ?? (autoFillHours ? officeStart : null);
+      patch.check_out = row.check_out ?? (autoFillHours ? officeEnd : null);
     } else {
       patch.check_in = null;
       patch.check_out = null;
@@ -186,7 +182,7 @@ export function AttendancePage({ embedded = false }: { embedded?: boolean } = {}
     updateRow(memberId, patch);
   }
 
-  function fillUnrecordedPresent() {
+  function markAllPresent() {
     let changed = false;
     const next = rows.map((row) => {
       if (row.status !== "not_recorded" || row.leave_request_id) return row;
@@ -194,8 +190,8 @@ export function AttendancePage({ embedded = false }: { embedded?: boolean } = {}
       return {
         ...row,
         status: "present" as const,
-        check_in: officeStart,
-        check_out: officeEnd,
+        check_in: autoFillHours ? officeStart : null,
+        check_out: autoFillHours ? officeEnd : null,
       };
     });
     if (!changed) return;
@@ -218,17 +214,6 @@ export function AttendancePage({ embedded = false }: { embedded?: boolean } = {}
     setDirty(true);
     setSavedAt(null);
     setSaveError(null);
-  }
-
-  function setCurrentTime(memberId: number, field: "check_in" | "check_out") {
-    const row = rows.find((item) => item.team_member_id === memberId);
-    if (!row) return;
-    const patch: Partial<AttendanceRecord> = {
-      status: isOnDuty(row.status) ? row.status : "present",
-      [field]: localTime(),
-    };
-    if (field === "check_out" && !row.check_in) patch.check_in = officeStart;
-    updateRow(memberId, patch);
   }
 
   function discardChanges() {
@@ -391,9 +376,18 @@ export function AttendancePage({ embedded = false }: { embedded?: boolean } = {}
                     <Clock3 className="h-4 w-4" />
                     Apply hours
                   </Button>
-                  <Button size="sm" onClick={fillUnrecordedPresent} disabled={!counts.fillable}>
+                  <label className="flex h-9 cursor-pointer items-center gap-2 rounded-md border border-border bg-surface px-3 text-sm font-medium text-fg">
+                    <input
+                      type="checkbox"
+                      checked={autoFillHours}
+                      onChange={(event) => setAutoFillHours(event.target.checked)}
+                      className="h-4 w-4 rounded border-border accent-accent"
+                    />
+                    Auto-fill hours
+                  </label>
+                  <Button size="sm" onClick={markAllPresent} disabled={!counts.fillable}>
                     <UserCheck className="h-4 w-4" />
-                    Fill {counts.fillable} unrecorded
+                    Mark all present
                   </Button>
                 </div>
               )}
@@ -459,15 +453,15 @@ export function AttendancePage({ embedded = false }: { embedded?: boolean } = {}
               </button>
             </div>
           ) : (
-            <>
-              <div className="hidden overflow-x-auto lg:block">
-                <table className="w-full text-left text-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[830px] table-fixed text-left text-sm">
                   <thead className="bg-raised/60 text-[11px] uppercase tracking-wide text-fg-subtle">
                     <tr>
                       <th className="w-[25%] px-4 py-3 font-semibold">Employee</th>
-                      <th className="w-[17%] px-3 py-3 font-semibold">Status</th>
-                      <th className="w-[17%] px-3 py-3 font-semibold">Check-in</th>
-                      <th className="w-[17%] px-3 py-3 font-semibold">Check-out</th>
+                      <th className="w-[11%] px-3 py-3 text-center font-semibold">Attended</th>
+                      <th className="w-[15%] px-3 py-3 font-semibold">Status</th>
+                      <th className="w-[14%] px-3 py-3 font-semibold">Check-in</th>
+                      <th className="w-[14%] px-3 py-3 font-semibold">Check-out</th>
                       <th className="px-3 py-3 font-semibold">Note</th>
                     </tr>
                   </thead>
@@ -477,30 +471,13 @@ export function AttendancePage({ embedded = false }: { embedded?: boolean } = {}
                         key={row.team_member_id}
                         row={row}
                         isAdmin={isAdmin}
-                        isToday={isToday}
                         onStatusChange={updateStatus}
                         onUpdate={updateRow}
-                        onSetCurrentTime={setCurrentTime}
                       />
                     ))}
                   </tbody>
-                </table>
-              </div>
-
-              <div className="divide-y divide-border lg:hidden">
-                {visibleRows.map((row) => (
-                  <AttendanceMobileRow
-                    key={row.team_member_id}
-                    row={row}
-                    isAdmin={isAdmin}
-                    isToday={isToday}
-                    onStatusChange={updateStatus}
-                    onUpdate={updateRow}
-                    onSetCurrentTime={setCurrentTime}
-                  />
-                ))}
-              </div>
-            </>
+              </table>
+            </div>
           )}
 
           <div className="flex items-center justify-between border-t border-border bg-raised/30 px-4 py-2.5 text-xs text-fg-muted">
@@ -546,10 +523,8 @@ function SummaryMetric({
 type RowEditorProps = {
   row: AttendanceRecord;
   isAdmin: boolean;
-  isToday: boolean;
   onStatusChange: (memberId: number, status: AttendanceStatus) => void;
   onUpdate: (memberId: number, patch: Partial<AttendanceRecord>) => void;
-  onSetCurrentTime: (memberId: number, field: "check_in" | "check_out") => void;
 };
 
 function AttendanceTableRow(props: RowEditorProps) {
@@ -558,6 +533,26 @@ function AttendanceTableRow(props: RowEditorProps) {
     <tr className="bg-surface align-middle transition-colors hover:bg-raised/30">
       <td className="px-4 py-3">
         <EmployeeIdentity row={row} />
+      </td>
+      <td className="px-3 py-3">
+        <label className="flex cursor-pointer items-center justify-center gap-2">
+          <input
+            type="checkbox"
+            checked={isOnDuty(row.status)}
+            disabled={!isAdmin}
+            onChange={(event) =>
+              props.onStatusChange(
+                row.team_member_id,
+                event.target.checked ? "present" : "absent",
+              )
+            }
+            aria-label={`Mark ${row.employee_name} attended`}
+            className="h-5 w-5 rounded border-border accent-accent disabled:cursor-not-allowed"
+          />
+          <span className={cn("text-xs font-medium", isOnDuty(row.status) ? "text-success" : "text-fg-subtle")}>
+            {isOnDuty(row.status) ? "Yes" : "No"}
+          </span>
+        </label>
       </td>
       <td className="px-3 py-3">
         <StatusControl {...props} />
@@ -571,7 +566,7 @@ function AttendanceTableRow(props: RowEditorProps) {
       <td className="px-3 py-3">
         {isAdmin ? (
           <Input
-            className="min-w-[160px]"
+            className="w-full min-w-0"
             value={row.notes ?? ""}
             placeholder="Add a note"
             onChange={(event) => props.onUpdate(row.team_member_id, { notes: event.target.value })}
@@ -581,32 +576,6 @@ function AttendanceTableRow(props: RowEditorProps) {
         )}
       </td>
     </tr>
-  );
-}
-
-function AttendanceMobileRow(props: RowEditorProps) {
-  const { row, isAdmin } = props;
-  return (
-    <div className="space-y-3 p-4">
-      <div className="flex items-start justify-between gap-3">
-        <EmployeeIdentity row={row} />
-        {!isAdmin && <Badge variant={STATUS_BADGE[row.status]}>{labelFor(row.status)}</Badge>}
-      </div>
-      {isAdmin && <StatusControl {...props} />}
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <TimeControl {...props} field="check_in" label="Check-in" showLabel />
-        <TimeControl {...props} field="check_out" label="Check-out" showLabel />
-      </div>
-      {isAdmin ? (
-        <Input
-          value={row.notes ?? ""}
-          placeholder="Optional note"
-          onChange={(event) => props.onUpdate(row.team_member_id, { notes: event.target.value })}
-        />
-      ) : row.notes ? (
-        <p className="text-sm text-fg-muted">{row.notes}</p>
-      ) : null}
-    </div>
   );
 }
 
@@ -642,7 +611,7 @@ function StatusControl({ row, isAdmin, onStatusChange }: RowEditorProps) {
   return (
     <Select
       aria-label={`${row.employee_name} status`}
-      className={cn("min-w-[140px] font-medium", STATUS_SELECT_STYLE[row.status])}
+      className={cn("w-full min-w-0 font-medium", STATUS_SELECT_STYLE[row.status])}
       value={row.status}
       onChange={(event) => onStatusChange(row.team_member_id, event.target.value as AttendanceStatus)}
     >
@@ -656,52 +625,29 @@ function StatusControl({ row, isAdmin, onStatusChange }: RowEditorProps) {
 function TimeControl({
   row,
   isAdmin,
-  isToday,
   onUpdate,
-  onSetCurrentTime,
   field,
   label,
-  showLabel = false,
 }: RowEditorProps & {
   field: "check_in" | "check_out";
   label: string;
-  showLabel?: boolean;
 }) {
   const enabled = isOnDuty(row.status);
   if (!isAdmin) {
     return (
-      <div>
-        {showLabel && <p className="mb-1 text-[11px] font-medium uppercase text-fg-subtle">{label}</p>}
-        <span className="text-fg-muted">{row[field] ?? "—"}</span>
-      </div>
+      <span className="text-fg-muted">{row[field] ?? "—"}</span>
     );
   }
   return (
     <label className="block">
-      {showLabel && <span className="mb-1 block text-[11px] font-medium uppercase text-fg-subtle">{label}</span>}
-      <div className="flex items-center gap-1.5">
-        <Input
-          aria-label={`${row.employee_name} ${label.toLowerCase()}`}
-          className="min-w-[112px]"
-          type="time"
-          disabled={!enabled}
-          value={row[field] ?? ""}
-          onChange={(event) => onUpdate(row.team_member_id, { [field]: event.target.value || null })}
-        />
-        {isToday && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="px-2"
-            title={`Set ${label.toLowerCase()} to the current local time`}
-            aria-label={`Set ${row.employee_name} ${label.toLowerCase()} to now`}
-            onClick={() => onSetCurrentTime(row.team_member_id, field)}
-          >
-            Now
-          </Button>
-        )}
-      </div>
+      <Input
+        aria-label={`${row.employee_name} ${label.toLowerCase()}`}
+        className="w-full min-w-0"
+        type="time"
+        disabled={!enabled}
+        value={row[field] ?? ""}
+        onChange={(event) => onUpdate(row.team_member_id, { [field]: event.target.value || null })}
+      />
     </label>
   );
 }
