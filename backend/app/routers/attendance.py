@@ -2,17 +2,24 @@ from __future__ import annotations
 
 """Attendance sheet: everyone can read their scope; only admin can edit."""
 
+from calendar import monthrange
 from datetime import date as date_type
 import re
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.deps import get_current_user, require_admin
 from app.models import AttendanceRecord, TeamMember, User
 from app.models.attendance import ATTENDANCE_STATUSES
-from app.schemas.attendance import AttendanceBulkInput, AttendanceInput, AttendanceOut
+from app.schemas.attendance import (
+    AttendanceBulkInput,
+    AttendanceExportInput,
+    AttendanceInput,
+    AttendanceOut,
+)
+from app.services.attendance_pdf import build_attendance_pdf, build_monthly_days_off_pdf
 
 router = APIRouter(prefix="/attendance", tags=["attendance"])
 
@@ -24,6 +31,13 @@ def _validate_date(value: str) -> str:
         return date_type.fromisoformat(value).isoformat()
     except ValueError:
         raise HTTPException(status_code=422, detail="Attendance date must use YYYY-MM-DD.")
+
+
+def _validate_month(value: str) -> str:
+    try:
+        return date_type.fromisoformat(f"{value}-01").strftime("%Y-%m")
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Attendance month must use YYYY-MM.")
 
 
 def _validate_input(inp: AttendanceInput) -> None:
@@ -89,6 +103,102 @@ def attendance_sheet(
     )
     by_member = {row.team_member_id: row for row in rows}
     return [_serialize(member, by_member.get(member.id), day) for member in members]
+
+
+@router.post("/export/pdf")
+def export_attendance_pdf(
+    inp: AttendanceExportInput,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    if not inp.records:
+        raise HTTPException(status_code=422, detail="The attendance sheet is empty.")
+    dates = {item.attendance_date for item in inp.records}
+    if len(dates) != 1:
+        raise HTTPException(status_code=422, detail="An attendance PDF must use one date.")
+
+    members = {member.id: member for member in _scoped_members(db, user)}
+    export_rows: list[dict] = []
+    for item in inp.records:
+        _validate_input(item)
+        member = members.get(item.team_member_id)
+        if member is None:
+            raise HTTPException(
+                status_code=403,
+                detail="The export contains an employee outside your attendance scope.",
+            )
+        export_rows.append(
+            {
+                "employee_name": member.name,
+                "employee_role": member.role,
+                "status": item.status,
+                "check_in": item.check_in,
+                "check_out": item.check_out,
+                "notes": item.notes,
+            }
+        )
+
+    day = next(iter(dates))
+    pdf = build_attendance_pdf(
+        attendance_date=day,
+        rows=export_rows,
+        prepared_by=user.full_name,
+    )
+    filename = f"trackerx-attendance-{day}.pdf"
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/export/monthly-pdf")
+def export_monthly_days_off_pdf(
+    month: str = Query(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    valid_month = _validate_month(month)
+    year, month_number = (int(part) for part in valid_month.split("-"))
+    first_day = f"{valid_month}-01"
+    last_day = f"{valid_month}-{monthrange(year, month_number)[1]:02d}"
+    members = _scoped_members(db, user)
+    member_ids = [member.id for member in members]
+    records = (
+        db.query(AttendanceRecord)
+        .filter(
+            AttendanceRecord.team_member_id.in_(member_ids),
+            AttendanceRecord.attendance_date >= first_day,
+            AttendanceRecord.attendance_date <= last_day,
+            AttendanceRecord.status.in_(("leave", "sick_leave", "absent")),
+        )
+        .all()
+        if member_ids
+        else []
+    )
+    days_off_by_member: dict[int, int] = {}
+    for record in records:
+        days_off_by_member[record.team_member_id] = (
+            days_off_by_member.get(record.team_member_id, 0) + 1
+        )
+    report_rows = [
+        {
+            "employee_name": member.name,
+            "days_off": days_off_by_member.get(member.id, 0),
+        }
+        for member in members
+    ]
+    pdf = build_monthly_days_off_pdf(
+        month=valid_month,
+        rows=report_rows,
+        prepared_by=user.full_name,
+    )
+    filename = f"trackerx-days-off-{valid_month}.pdf"
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.put("/bulk", response_model=list[AttendanceOut])

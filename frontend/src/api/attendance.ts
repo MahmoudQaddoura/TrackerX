@@ -20,3 +20,20 @@ export async function saveAttendance(records: AttendanceInput[]): Promise<Attend
   const { data } = await api.put<AttendanceRecord[]>("/attendance/bulk", { records });
   return data;
 }
+
+export async function exportAttendancePdf(records: AttendanceInput[]): Promise<Blob> {
+  const { data } = await api.post<Blob>(
+    "/attendance/export/pdf",
+    { records },
+    { responseType: "blob" },
+  );
+  return data;
+}
+
+export async function exportMonthlyDaysOffPdf(month: string): Promise<Blob> {
+  const { data } = await api.get<Blob>("/attendance/export/monthly-pdf", {
+    params: { month },
+    responseType: "blob",
+  });
+  return data;
+}

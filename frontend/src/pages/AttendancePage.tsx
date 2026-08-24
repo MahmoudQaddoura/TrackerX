@@ -4,6 +4,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock3,
+  Download,
   Save,
   Search,
   Undo2,
@@ -13,7 +14,11 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
-import type { AttendanceInput } from "@/api/attendance";
+import {
+  exportAttendancePdf,
+  exportMonthlyDaysOffPdf,
+  type AttendanceInput,
+} from "@/api/attendance";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -87,6 +92,13 @@ function formatDate(value: string): string {
   }).format(new Date(`${value}T12:00:00`));
 }
 
+function formatMonth(value: string): string {
+  return new Intl.DateTimeFormat(undefined, {
+    month: "long",
+    year: "numeric",
+  }).format(new Date(`${value.slice(0, 7)}-01T12:00:00`));
+}
+
 function labelFor(status: AttendanceStatus): string {
   return STATUS_OPTIONS.find((option) => option.value === status)?.label ?? status;
 }
@@ -108,6 +120,7 @@ export function AttendancePage({ embedded = false }: { embedded?: boolean } = {}
   const [rows, setRows] = useState<AttendanceRecord[]>([]);
   const [dirty, setDirty] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState<"daily" | "monthly" | null>(null);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [officeStart, setOfficeStart] = useState(DEFAULT_START);
   const [officeEnd, setOfficeEnd] = useState(DEFAULT_END);
@@ -222,8 +235,8 @@ export function AttendancePage({ embedded = false }: { embedded?: boolean } = {}
     setSaveError(null);
   }
 
-  async function handleSave() {
-    const payload: AttendanceInput[] = rows.map((row) => ({
+  function buildPayload(): AttendanceInput[] {
+    return rows.map((row) => ({
       team_member_id: row.team_member_id,
       attendance_date: date,
       status: row.status,
@@ -231,13 +244,54 @@ export function AttendancePage({ embedded = false }: { embedded?: boolean } = {}
       check_out: row.check_out || null,
       notes: row.notes?.trim() || null,
     }));
+  }
+
+  async function handleSave() {
     setSaveError(null);
     try {
-      await save.mutateAsync(payload);
+      await save.mutateAsync(buildPayload());
       setDirty(false);
       setSavedAt(new Date());
     } catch (error) {
       setSaveError(getApiErrorMessage(error, "Could not save the attendance sheet."));
+    }
+  }
+
+  function downloadPdf(blob: Blob, filename: string) {
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+  }
+
+  async function handleDailyExport() {
+    setExporting("daily");
+    setSaveError(null);
+    try {
+      const blob = await exportAttendancePdf(buildPayload());
+      downloadPdf(blob, `trackerx-attendance-${date}.pdf`);
+    } catch (error) {
+      setSaveError(getApiErrorMessage(error, "Could not export the attendance PDF."));
+    } finally {
+      setExporting(null);
+    }
+  }
+
+  async function handleMonthlyExport() {
+    const month = date.slice(0, 7);
+    setExporting("monthly");
+    setSaveError(null);
+    try {
+      const blob = await exportMonthlyDaysOffPdf(month);
+      downloadPdf(blob, `trackerx-days-off-${month}.pdf`);
+    } catch (error) {
+      setSaveError(getApiErrorMessage(error, "Could not export the monthly days-off PDF."));
+    } finally {
+      setExporting(null);
     }
   }
 
@@ -418,20 +472,40 @@ export function AttendancePage({ embedded = false }: { embedded?: boolean } = {}
                 </Select>
               </div>
 
-              {isAdmin && (
-                <div className="flex items-center justify-end gap-2">
-                  {dirty && (
-                    <Button variant="ghost" size="sm" onClick={discardChanges}>
-                      <Undo2 className="h-4 w-4" />
-                      Discard
-                    </Button>
-                  )}
+              <div className="flex items-center justify-end gap-2">
+                {isAdmin && dirty && (
+                  <Button variant="ghost" size="sm" onClick={discardChanges}>
+                    <Undo2 className="h-4 w-4" />
+                    Discard
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDailyExport}
+                  disabled={exporting !== null || rows.length === 0}
+                  title="Export the selected day's current table values"
+                >
+                  {exporting === "daily" ? <Spinner /> : <Download className="h-4 w-4" />}
+                  Daily PDF
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleMonthlyExport}
+                  disabled={exporting !== null || rows.length === 0}
+                  title={`Export saved days-off totals for ${formatMonth(date)}`}
+                >
+                  {exporting === "monthly" ? <Spinner /> : <CalendarCheck2 className="h-4 w-4" />}
+                  Monthly PDF
+                </Button>
+                {isAdmin && (
                   <Button size="sm" onClick={handleSave} disabled={!dirty || save.isPending}>
                     {save.isPending ? <Spinner /> : <Save className="h-4 w-4" />}
                     Save attendance
                   </Button>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
 

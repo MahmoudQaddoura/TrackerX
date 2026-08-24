@@ -16,6 +16,10 @@ class AttendanceBulkInput(BaseModel):
     records: list[AttendanceInput]
 
 
+class AttendanceExportInput(BaseModel):
+    records: list[AttendanceInput]
+
+
 class AttendanceOut(BaseModel):
     id: int | None
     team_member_id: int
