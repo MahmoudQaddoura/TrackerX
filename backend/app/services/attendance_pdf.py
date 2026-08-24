@@ -5,14 +5,17 @@ from __future__ import annotations
 from datetime import date, datetime
 from html import escape
 from io import BytesIO
+import os
 from pathlib import Path
 from typing import Any
 
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_LEFT, TA_RIGHT
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen.canvas import Canvas
 from reportlab.platypus import (
     Image as PlatypusImage,
@@ -34,7 +37,32 @@ PALE_GREEN = colors.HexColor("#EAF8EF")
 PALE_AMBER = colors.HexColor("#FFF6E5")
 PALE_RED = colors.HexColor("#FDECEF")
 ROW_ALT = colors.HexColor("#F8FAFC")
+GREEN = colors.HexColor("#14804A")
+AMBER = colors.HexColor("#B54708")
 COMPANY_LOGO_PATH = Path(__file__).resolve().parent.parent / "assets" / "blockexe-logo.png"
+
+
+def _register_report_fonts() -> tuple[str, str]:
+    """Use Yu Gothic when available, with a safe deployment fallback."""
+
+    font_root = Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts"
+    regular_path = font_root / "YuGothR.ttc"
+    bold_path = font_root / "YuGothB.ttc"
+    try:
+        if "YuGothicTrackerX" not in pdfmetrics.getRegisteredFontNames():
+            pdfmetrics.registerFont(
+                TTFont("YuGothicTrackerX", str(regular_path), subfontIndex=0)
+            )
+        if "YuGothicTrackerXBold" not in pdfmetrics.getRegisteredFontNames():
+            pdfmetrics.registerFont(
+                TTFont("YuGothicTrackerXBold", str(bold_path), subfontIndex=0)
+            )
+        return "YuGothicTrackerX", "YuGothicTrackerXBold"
+    except (OSError, IOError):
+        return "Helvetica", "Helvetica-Bold"
+
+
+FONT_REGULAR, FONT_BOLD = _register_report_fonts()
 
 STATUS_LABELS = {
     "not_recorded": "Not recorded",
@@ -53,53 +81,141 @@ def _paragraph(value: Any, style: ParagraphStyle) -> Paragraph:
 
 def _brand_header(report_title: str) -> Table:
     base = getSampleStyleSheet()
-    trackerx_style = ParagraphStyle(
-        "HeaderTrackerX",
-        parent=base["Heading1"],
-        fontName="Helvetica-Bold",
-        fontSize=17,
-        leading=20,
-        textColor=colors.white,
-        spaceAfter=0,
-    )
     report_style = ParagraphStyle(
         "HeaderReportTitle",
         parent=base["Normal"],
-        fontName="Helvetica-Bold",
-        fontSize=9,
-        leading=11,
-        textColor=colors.white,
-        alignment=TA_RIGHT,
+        fontName=FONT_BOLD,
+        fontSize=10,
+        leading=12,
+        textColor=INK,
+        alignment=TA_CENTER,
     )
     company_logo = PlatypusImage(
         str(COMPANY_LOGO_PATH),
-        width=62 * mm,
-        height=62 * mm * 872 / 3152,
+        width=39 * mm,
+        height=39 * mm * 872 / 3152,
     )
-    company_logo.hAlign = "CENTER"
+    company_logo.hAlign = "LEFT"
     header = Table(
-        [[Paragraph("TrackerX", trackerx_style), company_logo, Paragraph(report_title, report_style)]],
-        colWidths=[38 * mm, 70 * mm, 51 * mm],
+        [[company_logo, Paragraph(report_title, report_style), ""]],
+        colWidths=[55 * mm, 49 * mm, 55 * mm],
         hAlign="LEFT",
     )
     header.setStyle(
         TableStyle(
             [
-                ("BACKGROUND", (0, 0), (-1, -1), NAVY),
-                ("BACKGROUND", (1, 0), (1, 0), colors.white),
+                ("BACKGROUND", (0, 0), (-1, -1), colors.white),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("LEFTPADDING", (0, 0), (0, 0), 6 * mm),
-                ("RIGHTPADDING", (0, 0), (0, 0), 2 * mm),
-                ("LEFTPADDING", (1, 0), (1, 0), 4 * mm),
-                ("RIGHTPADDING", (1, 0), (1, 0), 4 * mm),
-                ("LEFTPADDING", (2, 0), (2, 0), 3 * mm),
-                ("RIGHTPADDING", (2, 0), (2, 0), 6 * mm),
-                ("TOPPADDING", (0, 0), (-1, -1), 3 * mm),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 3 * mm),
+                ("LINEBELOW", (0, 0), (-1, 0), 1.2, NAVY),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 3.5 * mm),
             ]
         )
     )
     return header
+
+
+def _report_heading(
+    title: str,
+    subtitle: str,
+    prepared_by: str,
+    generated_label: str,
+) -> Table:
+    base = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        "ReportHeading",
+        parent=base["Heading1"],
+        fontName=FONT_BOLD,
+        fontSize=18,
+        leading=21,
+        textColor=INK,
+        spaceAfter=2,
+    )
+    meta_style = ParagraphStyle(
+        "ReportMeta",
+        parent=base["Normal"],
+        fontName=FONT_REGULAR,
+        fontSize=7.2,
+        leading=10,
+        textColor=MUTED,
+        alignment=TA_RIGHT,
+    )
+    heading = Table(
+        [
+            [
+                Paragraph(f"{escape(title)}<br/><font size='8.5' color='#667085'>{escape(subtitle)}</font>", title_style),
+                Paragraph(
+                    f"<b>Prepared by</b><br/>{escape(prepared_by)}<br/><br/><b>Generated</b><br/>{escape(generated_label)}",
+                    meta_style,
+                ),
+            ]
+        ],
+        colWidths=[108 * mm, 51 * mm],
+        hAlign="LEFT",
+    )
+    heading.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (0, 0), 0),
+                ("RIGHTPADDING", (0, 0), (0, 0), 8 * mm),
+                ("LEFTPADDING", (1, 0), (1, 0), 5 * mm),
+                ("RIGHTPADDING", (1, 0), (1, 0), 0),
+                ("LINEBEFORE", (1, 0), (1, 0), 0.7, LINE),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+            ]
+        )
+    )
+    return heading
+
+
+def _metric_card(
+    label: str,
+    value: int,
+    background: colors.Color,
+    accent: colors.Color,
+    width: float = 37.5,
+) -> Table:
+    base = getSampleStyleSheet()
+    label_style = ParagraphStyle(
+        f"MetricLabel{label}",
+        parent=base["Normal"],
+        fontName=FONT_BOLD,
+        fontSize=6.5,
+        leading=8,
+        textColor=MUTED,
+        alignment=TA_CENTER,
+    )
+    value_style = ParagraphStyle(
+        f"MetricValue{label}",
+        parent=base["Normal"],
+        fontName=FONT_BOLD,
+        fontSize=14,
+        leading=16,
+        textColor=accent,
+        alignment=TA_CENTER,
+    )
+    card = Table(
+        [[Paragraph(label.upper(), label_style)], [Paragraph(str(value), value_style)]],
+        colWidths=[width * mm],
+    )
+    card.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), background),
+                ("BOX", (0, 0), (-1, -1), 0.55, LINE),
+                ("LINEABOVE", (0, 0), (-1, 0), 1.6, accent),
+                ("TOPPADDING", (0, 0), (-1, 0), 2.2 * mm),
+                ("BOTTOMPADDING", (0, 0), (-1, 0), 0.4 * mm),
+                ("TOPPADDING", (0, 1), (-1, 1), 0),
+                ("BOTTOMPADDING", (0, 1), (-1, 1), 2.2 * mm),
+            ]
+        )
+    )
+    return card
 
 
 def _footer(canvas: Canvas, document: SimpleDocTemplate) -> None:
@@ -109,11 +225,11 @@ def _footer(canvas: Canvas, document: SimpleDocTemplate) -> None:
     canvas.setLineWidth(0.5)
     canvas.line(18 * mm, 14 * mm, width - 18 * mm, 14 * mm)
     canvas.setFillColor(MUTED)
-    canvas.setFont("Helvetica", 7.5)
+    canvas.setFont(FONT_REGULAR, 7.5)
     report_name = (
         "Monthly Days Off" if "Monthly Days Off" in document.title else "Daily Attendance"
     )
-    canvas.drawString(18 * mm, 9 * mm, f"TrackerX | {report_name}")
+    canvas.drawString(18 * mm, 9 * mm, f"blockeXe | {report_name}")
     canvas.drawRightString(width - 18 * mm, 9 * mm, f"Page {canvas.getPageNumber()}")
     canvas.restoreState()
 
@@ -142,43 +258,34 @@ def build_attendance_pdf(
     )
 
     base = getSampleStyleSheet()
-    meta_label = ParagraphStyle(
-        "MetaLabel",
-        parent=base["Normal"],
-        fontName="Helvetica-Bold",
-        fontSize=7,
-        leading=9,
-        textColor=MUTED,
-        textTransform="uppercase",
-    )
-    meta_value = ParagraphStyle(
-        "MetaValue",
-        parent=base["Normal"],
-        fontName="Helvetica-Bold",
-        fontSize=9,
-        leading=11,
-        textColor=INK,
-    )
     cell_style = ParagraphStyle(
         "Cell",
         parent=base["Normal"],
-        fontName="Helvetica",
-        fontSize=7.5,
-        leading=9.5,
+        fontName=FONT_REGULAR,
+        fontSize=7.2,
+        leading=9.2,
         textColor=INK,
     )
     cell_bold = ParagraphStyle(
         "CellBold",
         parent=cell_style,
-        fontName="Helvetica-Bold",
+        fontName=FONT_BOLD,
+    )
+    status_style = ParagraphStyle(
+        "StatusCell",
+        parent=cell_style,
+        fontName=FONT_BOLD,
+        fontSize=6.8,
+        leading=8.5,
+        alignment=TA_CENTER,
     )
     header_style = ParagraphStyle(
         "TableHeader",
         parent=base["Normal"],
-        fontName="Helvetica-Bold",
-        fontSize=7,
+        fontName=FONT_BOLD,
+        fontSize=6.5,
         leading=8,
-        textColor=colors.white,
+        textColor=NAVY,
     )
     note_style = ParagraphStyle(
         "Note",
@@ -189,38 +296,18 @@ def build_attendance_pdf(
     )
 
     story: list[Any] = []
-    story.extend([_brand_header("DAILY ATTENDANCE"), Spacer(1, 5 * mm)])
-
-    meta = Table(
+    story.extend(
         [
-            [
-                Paragraph("Attendance date", meta_label),
-                Paragraph("Prepared by", meta_label),
-                Paragraph("Generated", meta_label),
-            ],
-            [
-                Paragraph(day.strftime("%A, %d %B %Y"), meta_value),
-                Paragraph(escape(prepared_by), meta_value),
-                Paragraph(created.strftime("%d %b %Y, %I:%M %p"), meta_value),
-            ],
-        ],
-        colWidths=[62 * mm, 53 * mm, 44 * mm],
-    )
-    meta.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, -1), PALE_BLUE),
-                ("BOX", (0, 0), (-1, -1), 0.6, LINE),
-                ("INNERGRID", (0, 0), (-1, -1), 0.4, LINE),
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("LEFTPADDING", (0, 0), (-1, -1), 3.5 * mm),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 3.5 * mm),
-                ("TOPPADDING", (0, 0), (-1, 0), 2.5 * mm),
-                ("BOTTOMPADDING", (0, 0), (-1, 0), 1 * mm),
-                ("TOPPADDING", (0, 1), (-1, 1), 1 * mm),
-                ("BOTTOMPADDING", (0, 1), (-1, 1), 3 * mm),
-            ]
-        )
+            _brand_header("DAILY ATTENDANCE"),
+            Spacer(1, 7 * mm),
+            _report_heading(
+                day.strftime("%A, %d %B %Y"),
+                "Attendance register and recorded working hours",
+                prepared_by,
+                created.strftime("%d %b %Y, %I:%M %p"),
+            ),
+            Spacer(1, 6 * mm),
+        ]
     )
 
     total = len(rows)
@@ -230,44 +317,70 @@ def build_attendance_pdf(
     summary = Table(
         [
             [
-                Paragraph("EMPLOYEES", meta_label),
-                Paragraph("ON DUTY", meta_label),
-                Paragraph("AWAY", meta_label),
-                Paragraph("UNRECORDED", meta_label),
-            ],
-            [
-                Paragraph(str(total), meta_value),
-                Paragraph(str(on_duty), meta_value),
-                Paragraph(str(away), meta_value),
-                Paragraph(str(unrecorded), meta_value),
-            ],
+                _metric_card("Employees", total, ROW_ALT, NAVY),
+                "",
+                _metric_card("On duty", on_duty, PALE_GREEN, GREEN),
+                "",
+                _metric_card("Away", away, PALE_AMBER, AMBER),
+                "",
+                _metric_card("Unrecorded", unrecorded, ROW_ALT, MUTED),
+            ]
         ],
-        colWidths=[39.75 * mm] * 4,
+        colWidths=[37.5 * mm, 3 * mm, 37.5 * mm, 3 * mm, 37.5 * mm, 3 * mm, 37.5 * mm],
     )
     summary.setStyle(
         TableStyle(
             [
-                ("BOX", (0, 0), (-1, -1), 0.6, LINE),
-                ("INNERGRID", (0, 0), (-1, -1), 0.4, LINE),
-                ("BACKGROUND", (0, 0), (-1, -1), colors.white),
-                ("LEFTPADDING", (0, 0), (-1, -1), 3.5 * mm),
-                ("TOPPADDING", (0, 0), (-1, 0), 2.5 * mm),
-                ("BOTTOMPADDING", (0, 0), (-1, 0), 0.5 * mm),
-                ("TOPPADDING", (0, 1), (-1, 1), 0.5 * mm),
-                ("BOTTOMPADDING", (0, 1), (-1, 1), 2.5 * mm),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
             ]
         )
     )
-    story.extend([KeepTogether([meta, Spacer(1, 3 * mm), summary]), Spacer(1, 5 * mm)])
+    section_title = ParagraphStyle(
+        "DailySectionTitle",
+        parent=base["Normal"],
+        fontName=FONT_BOLD,
+        fontSize=10,
+        leading=12,
+        textColor=INK,
+    )
+    section_meta = ParagraphStyle(
+        "DailySectionMeta",
+        parent=base["Normal"],
+        fontName=FONT_REGULAR,
+        fontSize=7,
+        leading=9,
+        textColor=MUTED,
+        alignment=TA_RIGHT,
+    )
+    section_heading = Table(
+        [[Paragraph("Employee attendance", section_title), Paragraph(f"{total} employees", section_meta)]],
+        colWidths=[120 * mm, 39 * mm],
+    )
+    section_heading.setStyle(
+        TableStyle(
+            [
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5 * mm),
+                ("VALIGN", (0, 0), (-1, -1), "BOTTOM"),
+            ]
+        )
+    )
+    story.extend([KeepTogether([summary]), Spacer(1, 7 * mm), section_heading])
 
     table_data: list[list[Any]] = [
         [
             Paragraph("EMPLOYEE", header_style),
             Paragraph("ROLE", header_style),
-            Paragraph("STATUS", header_style),
-            Paragraph("IN", header_style),
-            Paragraph("OUT", header_style),
-            Paragraph("NOTES", header_style),
+            Paragraph("ATTENDANCE", header_style),
+            Paragraph("CHECK IN", header_style),
+            Paragraph("CHECK OUT", header_style),
+            Paragraph("NOTE", header_style),
         ]
     ]
     for row in rows:
@@ -275,7 +388,7 @@ def build_attendance_pdf(
             [
                 _paragraph(row.get("employee_name"), cell_bold),
                 _paragraph(row.get("employee_role"), cell_style),
-                _paragraph(STATUS_LABELS.get(row["status"], row["status"]), cell_bold),
+                _paragraph(STATUS_LABELS.get(row["status"], row["status"]), status_style),
                 _paragraph(row.get("check_in"), cell_style),
                 _paragraph(row.get("check_out"), cell_style),
                 _paragraph(row.get("notes"), note_style),
@@ -284,21 +397,22 @@ def build_attendance_pdf(
 
     attendance_table = Table(
         table_data,
-        colWidths=[35 * mm, 31 * mm, 25 * mm, 15 * mm, 15 * mm, 38 * mm],
+        colWidths=[36 * mm, 32 * mm, 25 * mm, 18 * mm, 18 * mm, 30 * mm],
         repeatRows=1,
         hAlign="LEFT",
     )
     table_commands: list[tuple[Any, ...]] = [
-        ("BACKGROUND", (0, 0), (-1, 0), NAVY),
-        ("BOX", (0, 0), (-1, -1), 0.7, LINE),
-        ("INNERGRID", (0, 0), (-1, -1), 0.35, LINE),
+        ("BACKGROUND", (0, 0), (-1, 0), PALE_BLUE),
+        ("BOX", (0, 0), (-1, -1), 0.6, LINE),
+        ("LINEBELOW", (0, 0), (-1, 0), 1.0, NAVY),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 2.2 * mm),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 2.2 * mm),
-        ("TOPPADDING", (0, 0), (-1, 0), 2.5 * mm),
-        ("BOTTOMPADDING", (0, 0), (-1, 0), 2.5 * mm),
-        ("TOPPADDING", (0, 1), (-1, -1), 2.5 * mm),
-        ("BOTTOMPADDING", (0, 1), (-1, -1), 2.5 * mm),
+        ("LEFTPADDING", (0, 0), (-1, -1), 2.5 * mm),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 2.5 * mm),
+        ("TOPPADDING", (0, 0), (-1, 0), 3 * mm),
+        ("BOTTOMPADDING", (0, 0), (-1, 0), 3 * mm),
+        ("TOPPADDING", (0, 1), (-1, -1), 3.2 * mm),
+        ("BOTTOMPADDING", (0, 1), (-1, -1), 3.2 * mm),
+        ("ALIGN", (2, 0), (4, -1), "CENTER"),
     ]
     status_background = {
         "present": PALE_GREEN,
@@ -311,6 +425,7 @@ def build_attendance_pdf(
     for index, row in enumerate(rows, start=1):
         if index % 2 == 0:
             table_commands.append(("BACKGROUND", (0, index), (-1, index), ROW_ALT))
+        table_commands.append(("LINEBELOW", (0, index), (-1, index), 0.35, LINE))
         table_commands.append(
             ("BACKGROUND", (2, index), (2, index), status_background.get(row["status"], colors.white))
         )
@@ -319,11 +434,11 @@ def build_attendance_pdf(
     story.append(Spacer(1, 4 * mm))
     story.append(
         Paragraph(
-            "This report reflects the values displayed in TrackerX at export time. Blank times are shown as hyphens.",
+            "Generated from the saved attendance record. Times use the local office time zone.",
             ParagraphStyle(
                 "Disclaimer",
                 parent=base["Normal"],
-                fontName="Helvetica",
+                fontName=FONT_REGULAR,
                 fontSize=7,
                 leading=9,
                 textColor=MUTED,
@@ -344,6 +459,7 @@ def build_monthly_days_off_pdf(
     """Return a concise monthly employee days-off summary."""
 
     month_date = datetime.strptime(month, "%Y-%m")
+    created = datetime.now().astimezone()
     buffer = BytesIO()
     document = SimpleDocTemplate(
         buffer,
@@ -358,36 +474,20 @@ def build_monthly_days_off_pdf(
     )
 
     base = getSampleStyleSheet()
-    meta_label = ParagraphStyle(
-        "MonthlyMetaLabel",
-        parent=base["Normal"],
-        fontName="Helvetica-Bold",
-        fontSize=7,
-        leading=9,
-        textColor=MUTED,
-    )
-    meta_value = ParagraphStyle(
-        "MonthlyMetaValue",
-        parent=base["Normal"],
-        fontName="Helvetica-Bold",
-        fontSize=9,
-        leading=11,
-        textColor=INK,
-    )
     header_style = ParagraphStyle(
         "MonthlyTableHeader",
         parent=base["Normal"],
-        fontName="Helvetica-Bold",
-        fontSize=8,
-        leading=10,
-        textColor=colors.white,
+        fontName=FONT_BOLD,
+        fontSize=7,
+        leading=9,
+        textColor=NAVY,
     )
     name_style = ParagraphStyle(
         "MonthlyName",
         parent=base["Normal"],
-        fontName="Helvetica-Bold",
-        fontSize=9,
-        leading=11,
+        fontName=FONT_BOLD,
+        fontSize=8.2,
+        leading=10,
         textColor=INK,
     )
     days_style = ParagraphStyle(
@@ -397,40 +497,77 @@ def build_monthly_days_off_pdf(
     )
 
     story: list[Any] = []
-    story.extend([_brand_header("MONTHLY DAYS OFF"), Spacer(1, 5 * mm)])
-
     total_days_off = sum(int(row["days_off"]) for row in rows)
-    meta = Table(
+    employees_with_days_off = sum(int(row["days_off"]) > 0 for row in rows)
+    story.extend(
+        [
+            _brand_header("MONTHLY DAYS OFF"),
+            Spacer(1, 7 * mm),
+            _report_heading(
+                month_date.strftime("%B %Y"),
+                "Employee leave and absence summary",
+                prepared_by,
+                created.strftime("%d %b %Y, %I:%M %p"),
+            ),
+            Spacer(1, 6 * mm),
+        ]
+    )
+    summary = Table(
         [
             [
-                Paragraph("REPORTING MONTH", meta_label),
-                Paragraph("PREPARED BY", meta_label),
-                Paragraph("TOTAL DAYS OFF", meta_label),
-            ],
-            [
-                Paragraph(month_date.strftime("%B %Y"), meta_value),
-                Paragraph(escape(prepared_by), meta_value),
-                Paragraph(str(total_days_off), meta_value),
-            ],
+                _metric_card("Employees", len(rows), ROW_ALT, NAVY, width=51),
+                "",
+                _metric_card("With days off", employees_with_days_off, PALE_AMBER, AMBER, width=51),
+                "",
+                _metric_card("Total days off", total_days_off, PALE_BLUE, NAVY, width=51),
+            ]
         ],
-        colWidths=[55 * mm, 65 * mm, 39 * mm],
+        colWidths=[51 * mm, 3 * mm, 51 * mm, 3 * mm, 51 * mm],
     )
-    meta.setStyle(
+    summary.setStyle(
         TableStyle(
             [
-                ("BACKGROUND", (0, 0), (-1, -1), PALE_BLUE),
-                ("BOX", (0, 0), (-1, -1), 0.6, LINE),
-                ("INNERGRID", (0, 0), (-1, -1), 0.4, LINE),
-                ("LEFTPADDING", (0, 0), (-1, -1), 3.5 * mm),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 3.5 * mm),
-                ("TOPPADDING", (0, 0), (-1, 0), 2.5 * mm),
-                ("BOTTOMPADDING", (0, 0), (-1, 0), 1 * mm),
-                ("TOPPADDING", (0, 1), (-1, 1), 1 * mm),
-                ("BOTTOMPADDING", (0, 1), (-1, 1), 3 * mm),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
             ]
         )
     )
-    story.extend([meta, Spacer(1, 5 * mm)])
+    section_title = ParagraphStyle(
+        "MonthlySectionTitle",
+        parent=base["Normal"],
+        fontName=FONT_BOLD,
+        fontSize=10,
+        leading=12,
+        textColor=INK,
+    )
+    section_meta = ParagraphStyle(
+        "MonthlySectionMeta",
+        parent=base["Normal"],
+        fontName=FONT_REGULAR,
+        fontSize=7,
+        leading=9,
+        textColor=MUTED,
+        alignment=TA_RIGHT,
+    )
+    section_heading = Table(
+        [[Paragraph("Days off by employee", section_title), Paragraph(f"{len(rows)} employees", section_meta)]],
+        colWidths=[120 * mm, 39 * mm],
+    )
+    section_heading.setStyle(
+        TableStyle(
+            [
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5 * mm),
+                ("VALIGN", (0, 0), (-1, -1), "BOTTOM"),
+            ]
+        )
+    )
+    story.extend([summary, Spacer(1, 7 * mm), section_heading])
 
     report_data: list[list[Any]] = [
         [Paragraph("EMPLOYEE", header_style), Paragraph("DAYS OFF", header_style)]
@@ -442,31 +579,36 @@ def build_monthly_days_off_pdf(
                 _paragraph(row.get("days_off", 0), days_style),
             ]
         )
-    report_table = Table(report_data, colWidths=[120 * mm, 39 * mm], repeatRows=1)
+    report_table = Table(report_data, colWidths=[126 * mm, 33 * mm], repeatRows=1)
     commands: list[tuple[Any, ...]] = [
-        ("BACKGROUND", (0, 0), (-1, 0), NAVY),
-        ("BOX", (0, 0), (-1, -1), 0.7, LINE),
-        ("INNERGRID", (0, 0), (-1, -1), 0.35, LINE),
+        ("BACKGROUND", (0, 0), (-1, 0), PALE_BLUE),
+        ("BOX", (0, 0), (-1, -1), 0.6, LINE),
+        ("LINEBELOW", (0, 0), (-1, 0), 1.0, NAVY),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("LEFTPADDING", (0, 0), (-1, -1), 3 * mm),
         ("RIGHTPADDING", (0, 0), (-1, -1), 3 * mm),
-        ("TOPPADDING", (0, 0), (-1, -1), 3 * mm),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3 * mm),
-        ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+        ("TOPPADDING", (0, 0), (-1, 0), 3 * mm),
+        ("BOTTOMPADDING", (0, 0), (-1, 0), 3 * mm),
+        ("TOPPADDING", (0, 1), (-1, -1), 3.4 * mm),
+        ("BOTTOMPADDING", (0, 1), (-1, -1), 3.4 * mm),
+        ("ALIGN", (1, 0), (1, -1), "CENTER"),
     ]
-    for index in range(1, len(report_data)):
+    for index, row in enumerate(rows, start=1):
         commands.append(
             ("BACKGROUND", (0, index), (-1, index), ROW_ALT if index % 2 == 0 else colors.white)
         )
+        commands.append(("LINEBELOW", (0, index), (-1, index), 0.35, LINE))
+        if int(row["days_off"]) > 0:
+            commands.append(("BACKGROUND", (1, index), (1, index), PALE_AMBER))
     report_table.setStyle(TableStyle(commands))
     story.extend([report_table, Spacer(1, 4 * mm)])
     story.append(
         Paragraph(
-            "Days off includes Leave, Sick leave, and Absent attendance records saved in TrackerX for this month.",
+            "Days off includes Leave, Sick leave, and Absent attendance records saved for this month.",
             ParagraphStyle(
                 "MonthlyDefinition",
                 parent=base["Normal"],
-                fontName="Helvetica",
+                fontName=FONT_REGULAR,
                 fontSize=7,
                 leading=9,
                 textColor=MUTED,
