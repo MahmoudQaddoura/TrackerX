@@ -9,6 +9,9 @@ services:
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in the production .env file}
       DATABASE_URL: sqlite:////app/data/app.db
       DOCUMENTS_DIR: /app/data/documents
+      BACKUP_DIR: /app/backups
+      BACKUP_ON_STARTUP: "false"
+      BACKUP_RETENTION_COUNT: ${BACKUP_RETENTION_COUNT:-14}
       CORS_ORIGINS: '${CORS_ORIGINS:-["http://localhost:8080"]}'
       ENVIRONMENT: ${ENVIRONMENT:-production}
       INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL:-}
@@ -16,8 +19,30 @@ services:
       INITIAL_ADMIN_FULL_NAME: ${INITIAL_ADMIN_FULL_NAME:-TrackerX Administrator}
     volumes:
       - app-data:/app/data
+      - app-backups:/app/backups
     expose:
       - "8000"
+    init: true
+    restart: unless-stopped
+
+  backup:
+    build: ./backend
+    environment:
+      DATABASE_URL: sqlite:////app/data/app.db
+      DOCUMENTS_DIR: /app/data/documents
+      BACKUP_DIR: /app/backups
+      BACKUP_RETENTION_COUNT: ${BACKUP_RETENTION_COUNT:-14}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+    volumes:
+      - app-data:/app/data:ro
+      - app-backups:/app/backups
+    depends_on:
+      backend:
+        condition: service_healthy
+    command:
+      - sh
+      - -c
+      - while true; do python -m app.backup --reason scheduled; sleep "$${BACKUP_INTERVAL_SECONDS}"; done
     init: true
     restart: unless-stopped
 
@@ -39,3 +64,4 @@ services:
 
 volumes:
   app-data:
+  app-backups:

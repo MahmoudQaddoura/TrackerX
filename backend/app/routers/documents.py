@@ -24,6 +24,11 @@ from app.models.document import DOCUMENT_CATEGORIES
 from app.schemas.document import DocumentOut, DocumentUpdate
 from app.services.serialize import document_out
 from app.services.document_preview import PreviewUnavailable, prepare_preview
+from app.services.document_storage import (
+    InvalidDocumentPath,
+    resolve_document_path,
+    storage_key_for_path,
+)
 
 router = APIRouter(tags=["documents"])
 
@@ -38,13 +43,10 @@ def _document_or_404(db: Session, document_id: int) -> Document:
 
 
 def _stored_document_path(doc: Document) -> Path:
-    base = Path(settings.documents_dir).resolve()
-    path = Path(doc.file_path).resolve()
     try:
-        path.relative_to(base)
-    except ValueError:
+        return resolve_document_path(doc.file_path)
+    except InvalidDocumentPath:
         raise HTTPException(status_code=410, detail="The stored file path is invalid.")
-    return path
 
 
 @router.get("/projects/{project_id}/documents", response_model=list[DocumentOut])
@@ -119,7 +121,7 @@ async def upload_document(
         title=title,
         description=description,
         file_name=file.filename or safe_name,
-        file_path=str(stored_path),
+        file_path=storage_key_for_path(stored_path),
         content_type=file.content_type,
         file_size=total_bytes,
         uploaded_by_id=user.id,

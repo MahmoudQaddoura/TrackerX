@@ -15,3 +15,5 @@ dist/
 
 backend/data/app.db
 backend/data/documents/
+backend/backups/
+backups/

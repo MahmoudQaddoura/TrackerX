@@ -6,12 +6,14 @@ FastAPI application assembly: CORS, table creation, router mounting, health.
 Every router is mounted under /api. One purpose: wire the app together.
 """
 
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect
 
 from app.config import settings
-from app.db import Base, engine
+from app.db import Base, SessionLocal, engine
 from app import models  # noqa: F401 — importing registers all tables on Base
 
 from app.routers import (
@@ -33,6 +35,11 @@ from app.routers import (
     team_members,
     users,
 )
+from app.services.data_backup import create_data_backup
+from app.services.document_storage import normalize_document_storage_paths
+
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title=settings.app_name,
@@ -180,8 +187,20 @@ app.add_middleware(
 def on_startup() -> None:
     """Create any missing tables. (Simple projects skip migration tooling.)"""
     settings.documents_dir.mkdir(parents=True, exist_ok=True)
+    if settings.backup_on_startup:
+        try:
+            result = create_data_backup(reason="startup")
+            logger.info("Verified startup data backup: %s", result["archive"])
+        except FileNotFoundError:
+            pass  # The first start has no database to preserve yet.
+        except Exception:
+            logger.exception("TrackerX could not create its startup data backup.")
     Base.metadata.create_all(bind=engine)
     _migrate_local_schema()
+    with SessionLocal() as db:
+        result = normalize_document_storage_paths(db)
+        if result["updated"] or result["invalid"]:
+            logger.info("Document path migration result: %s", result)
 
 
 # Auth carries its own /auth prefix; everything else is mounted under /api.

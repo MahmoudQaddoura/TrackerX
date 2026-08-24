@@ -63,19 +63,29 @@ backend's 50 MB per-file limit with multipart overhead.
 
 ## 5. Back up persistent data
 
-The `trackerx_app-data` volume contains the SQLite database and uploaded files.
-Create a consistent backup while writes are paused:
+TrackerX stores the SQLite database and uploaded files in `trackerx_app-data`.
+The `backup` service snapshots both into one checksum-verified ZIP in the separate
+`trackerx_app-backups` volume immediately after startup and every 24 hours.
+
+Create an additional backup before an upgrade:
 
 ```bash
-docker compose stop backend
-docker run --rm -v trackerx_app-data:/data -v "$PWD/backups":/backup alpine \
-  tar czf /backup/trackerx-app-data.tar.gz -C /data .
-docker compose start backend
+docker compose exec backup python -m app.backup --reason pre-upgrade
+docker compose exec backup ls -lh /app/backups
+mkdir -p ./backups
+docker compose cp backup:/app/backups/. ./backups/
 ```
 
-Copy the archive off the server and periodically test a restore on a separate
-host. For larger teams or multiple application replicas, migrate to PostgreSQL
-before scaling horizontally.
+Verify any exported archive before relying on it:
+
+```bash
+docker compose exec backup python -m app.backup --verify /app/backups/ARCHIVE.zip
+```
+
+The manifest links every database document record to a stored file and records a
+SHA-256 checksum for every entry. Keep at least one exported copy outside the
+server. For larger teams or multiple application replicas, migrate to PostgreSQL
+and object storage before scaling horizontally.
 
 ## 6. Update without losing data
 
@@ -89,8 +99,8 @@ docker compose ps
 curl --fail http://127.0.0.1:8080/api/health
 ```
 
-Back up `trackerx_app-data` first. Do not run `docker compose down -v`; `-v`
-deletes the database and documents volume.
+Create and export a verified backup first. Do not run `docker compose down -v`;
+`-v` deletes both the live-data and on-server backup volumes.
 
 ## 7. Rollback
 

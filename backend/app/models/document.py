@@ -29,7 +29,9 @@ class Document(Base):
     title = Column(Text, nullable=False)
     description = Column(Text, nullable=True)
     file_name = Column(Text, nullable=False)  # original filename
-    file_path = Column(Text, nullable=False)  # path on disk (never exposed via API)
+    # Portable path relative to DOCUMENTS_DIR. Legacy absolute values are
+    # normalized on startup and remain readable during migration.
+    file_path = Column(Text, nullable=False)
     content_type = Column(Text, nullable=True)
     file_size = Column(Integer, nullable=True)  # bytes
     uploaded_by_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)

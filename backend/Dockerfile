@@ -15,7 +15,7 @@ COPY app ./app
 # Data (SQLite db + uploaded documents) lives here; mount a volume in production.
 RUN addgroup --system trackerx \
     && adduser --system --ingroup trackerx trackerx \
-    && mkdir -p /app/data/documents \
+    && mkdir -p /app/data/documents /app/backups \
     && chown -R trackerx:trackerx /app
 
 USER trackerx

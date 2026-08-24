@@ -36,7 +36,10 @@ reverse proxy (Caddy, Traefik, or nginx with Let's Encrypt) in front of that por
 Do not expose the backend service or plain HTTP directly to the internet.
 
 The named volume `trackerx_app-data` contains both the SQLite database and all
-uploaded documents. Back it up before every upgrade and on a regular schedule.
+uploaded documents. A separate `trackerx_app-backups` volume receives a verified
+portable backup immediately after deployment and every 24 hours. Each ZIP contains
+the database, uploads, SHA-256 checksums, and a manifest. Export backups off the
+server regularly; neither runtime data nor confidential uploads are committed to Git.
 
 See [docs/GUIDE.md](docs/GUIDE.md) for the full deployment, update, backup, and
 verification procedure.

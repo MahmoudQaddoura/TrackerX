@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     documents_dir: Path = BASE_DIR / "data" / "documents"
     max_upload_bytes: int = 50 * 1024 * 1024  # 50 MB
 
+    # Verified data backups (SQLite + uploaded files in one portable archive)
+    backup_dir: Path = BASE_DIR / "backups"
+    backup_on_startup: bool = True
+    backup_retention_count: int = 14
+
     # CORS — the frontend dev server + any configured public URL
     cors_origins: list[str] = [
         "http://localhost:5173",
