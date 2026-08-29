@@ -88,7 +88,6 @@ export const DOCUMENT_FOLDERS_BY_COLLECTION: Record<
   DocumentFolderDefinition[]
 > = {
   project: [
-    SHARED_FOLDERS.asset_inventory,
     SHARED_FOLDERS.technical_manual,
     SHARED_FOLDERS.software_manual,
     {
@@ -101,7 +100,6 @@ export const DOCUMENT_FOLDERS_BY_COLLECTION: Record<
     SHARED_FOLDERS.nodes,
   ],
   operations: [
-    SHARED_FOLDERS.asset_inventory,
     SHARED_FOLDERS.technical_manual,
     SHARED_FOLDERS.software_manual,
     {
