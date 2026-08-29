@@ -48,6 +48,12 @@ class Project(Base):
     )
     meetings = relationship("Meeting", back_populates="project", cascade="all, delete-orphan")
     documents = relationship("Document", back_populates="project", cascade="all, delete-orphan")
+    assets = relationship(
+        "Asset",
+        back_populates="project",
+        cascade="all, delete-orphan",
+        order_by="Asset.hostname",
+    )
     clients = relationship("User", secondary="project_clients")
     assigned_members = relationship(
         "TeamMember",

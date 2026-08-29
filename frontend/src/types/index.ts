@@ -33,6 +33,16 @@ export type ProactiveReportStatus =
   | "attention_required";
 export type SupportIncidentStatus = "reported" | "investigating" | "resolved" | "unresolved";
 export type SupportIncidentSeverity = "low" | "medium" | "high" | "critical";
+export type AssetEnvironment =
+  | "production"
+  | "staging"
+  | "development"
+  | "test"
+  | "disaster_recovery"
+  | "other";
+export type AssetStatus = "active" | "maintenance" | "inactive" | "retired";
+export type AssetProtocol = "tcp" | "udp";
+export type AssetConnectionStatus = "connected" | "closed" | "not_needed";
 
 export interface AuthUser {
   id: number;
@@ -452,6 +462,54 @@ export interface SupportIncident {
   created_by_name: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface AssetPort {
+  id: number;
+  asset_id: number;
+  port: number;
+  protocol: AssetProtocol;
+  service: string;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectAsset {
+  id: number;
+  project_id: number;
+  hostname: string;
+  ip_address: string;
+  environment: AssetEnvironment;
+  purpose: string | null;
+  tier: string | null;
+  os: string | null;
+  cpu: string | null;
+  ram: string | null;
+  storage: string | null;
+  applications: string | null;
+  database: string | null;
+  services: string | null;
+  status: AssetStatus;
+  notes: string | null;
+  ports: AssetPort[];
+  created_by_name: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AssetConnection {
+  id: number;
+  source_asset_id: number;
+  port_id: number;
+  status: AssetConnectionStatus;
+  updated_at: string;
+}
+
+export interface AssetMatrix {
+  environment: AssetEnvironment;
+  assets: ProjectAsset[];
+  connections: AssetConnection[];
 }
 
 export interface ClientProject {

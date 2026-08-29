@@ -21,6 +21,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { RiskBadge } from "@/components/common/RiskBadge";
+import { AssetInventoryWorkspace } from "@/components/assets/AssetInventoryWorkspace";
 import { ProjectStatusBadge } from "@/components/common/StatusBadge";
 import { DelaysTable } from "@/components/dashboard/DelaysTable";
 import { KpiCard } from "@/components/dashboard/KpiCard";
@@ -201,6 +202,7 @@ export function ProjectDetailPage() {
             <TabsTrigger value="gantt">Gantt</TabsTrigger>
             <TabsTrigger value="documents">Documents</TabsTrigger>
             <TabsTrigger value="meetings">Meetings</TabsTrigger>
+            <TabsTrigger value="assets">Asset Inventory</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview">
@@ -229,6 +231,9 @@ export function ProjectDetailPage() {
           <TabsContent value="meetings">
             <MeetingsPanel projectId={id} />
           </TabsContent>
+          <TabsContent value="assets">
+            <AssetInventoryWorkspace projectId={id} canEdit={canEditProjectContent} />
+          </TabsContent>
       </Tabs>
 
       <ProjectFormDialog
@@ -254,8 +259,8 @@ export function ProjectDetailPage() {
 function resolveProjectTab(requested: string | null, canEditProjectContent: boolean): string {
   const normalized = requested === "kanban" && !canEditProjectContent ? "board" : requested;
   const allowed = canEditProjectContent
-    ? ["overview", "kanban", "gantt", "documents", "meetings"]
-    : ["overview", "board", "gantt", "documents", "meetings"];
+    ? ["overview", "kanban", "gantt", "documents", "meetings", "assets"]
+    : ["overview", "board", "gantt", "documents", "meetings", "assets"];
   return normalized && allowed.includes(normalized) ? normalized : "overview";
 }
 

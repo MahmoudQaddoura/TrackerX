@@ -25,6 +25,7 @@ from app.models.support import (
 )
 from app.models.client import ClientProfile, ClientReportShare
 from app.models.coverage import LeaveCoverageOffer
+from app.models.asset import Asset, AssetConnection, AssetPort
 
 __all__ = [
     "User",
@@ -47,4 +48,7 @@ __all__ = [
     "ClientProfile",
     "ClientReportShare",
     "LeaveCoverageOffer",
+    "Asset",
+    "AssetPort",
+    "AssetConnection",
 ]

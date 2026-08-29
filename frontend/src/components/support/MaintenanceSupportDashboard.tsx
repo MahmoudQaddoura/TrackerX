@@ -16,12 +16,14 @@ import {
   ShieldCheck,
   Trash2,
   UserRoundCheck,
+  Boxes,
   type LucideIcon,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { ProjectStatusBadge } from "@/components/common/StatusBadge";
+import { AssetInventoryWorkspace } from "@/components/assets/AssetInventoryWorkspace";
 import { DocumentRepository } from "@/components/documents/DocumentRepository";
 import { DeleteConfirmDialog } from "@/components/forms/DeleteConfirmDialog";
 import { IncidentDialog } from "@/components/support/IncidentDialog";
@@ -203,7 +205,7 @@ export function MaintenanceSupportDashboard({
 
       {!isLoading && !isError && (
         <Tabs defaultValue="proactive">
-          <TabsList className="grid w-full grid-cols-2 sm:max-w-xl">
+          <TabsList className="grid w-full grid-cols-3 sm:max-w-3xl">
             <TabsTrigger value="proactive" className="justify-center gap-2 py-2.5">
               <Activity className="h-4 w-4" /> Proactive Tasks
               <Badge variant="neutral">{reportMetrics.total}</Badge>
@@ -211,6 +213,9 @@ export function MaintenanceSupportDashboard({
             <TabsTrigger value="reactive" className="justify-center gap-2 py-2.5">
               <AlertTriangle className="h-4 w-4" /> Reactive Tasks
               <Badge variant="neutral">{incidents.data?.length ?? 0}</Badge>
+            </TabsTrigger>
+            <TabsTrigger value="assets" className="justify-center gap-2 py-2.5">
+              <Boxes className="h-4 w-4" /> Asset Inventory
             </TabsTrigger>
           </TabsList>
 
@@ -249,6 +254,13 @@ export function MaintenanceSupportDashboard({
               }}
               onPreview={setPreviewIncident}
               onDelete={(incident) => setDeleteTarget({ type: "incident", item: incident })}
+            />
+          </TabsContent>
+
+          <TabsContent value="assets">
+            <AssetInventoryWorkspace
+              projectId={project.id}
+              canEdit={canEditProjectContent}
             />
           </TabsContent>
         </Tabs>

@@ -18,6 +18,7 @@ from app import models  # noqa: F401 — importing registers all tables on Base
 
 from app.routers import (
     analytics,
+    assets,
     attendance,
     auth,
     comments,
@@ -207,6 +208,7 @@ def on_startup() -> None:
 app.include_router(auth.router, prefix="/api")
 for r in (
     projects.router,
+    assets.router,
     milestones.router,
     tasks.router,
     team_members.router,
