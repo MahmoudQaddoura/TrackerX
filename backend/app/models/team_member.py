@@ -64,3 +64,8 @@ class TeamMember(Base):
         cascade="all, delete-orphan",
     )
     user = relationship("User")
+
+    @property
+    def employee_number(self) -> str:
+        """Stable, human-readable employee ID derived from the directory record."""
+        return f"{self.id:04d}" if self.id is not None else ""

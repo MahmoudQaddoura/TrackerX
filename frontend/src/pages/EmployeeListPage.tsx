@@ -109,6 +109,7 @@ export function EmployeeListPage() {
   const normalizedSearch = searchQuery.trim().toLowerCase();
   const matchesSearch = (member: TeamMember) =>
     !normalizedSearch ||
+    member.employee_number.includes(normalizedSearch) ||
     member.name.toLowerCase().includes(normalizedSearch) ||
     member.role?.toLowerCase().includes(normalizedSearch) ||
     member.projects.some((project) => project.name.toLowerCase().includes(normalizedSearch));
@@ -435,7 +436,7 @@ export function EmployeeListPage() {
                     .filter((m) => m.id !== delegateTarget.id)
                     .map((m) => (
                       <option key={m.id} value={String(m.id)}>
-                        {m.name}
+                        {m.employee_number} · {m.name}
                         {m.role ? ` — ${m.role}` : ""} · {m.task_count} tasks
                       </option>
                     ))}
@@ -667,6 +668,9 @@ function EmployeeCard({
           <UserCircle className="h-8 w-8 text-fg-muted shrink-0" />
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
+              <Badge variant="outline" className="font-mono text-[10px]">
+                ID {member.employee_number}
+              </Badge>
               <p className="truncate font-medium text-fg">{member.name}</p>
               {isOwner && (
                 <Badge

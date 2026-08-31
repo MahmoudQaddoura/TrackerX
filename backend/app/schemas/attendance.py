@@ -23,6 +23,7 @@ class AttendanceExportInput(BaseModel):
 class AttendanceOut(BaseModel):
     id: int | None
     team_member_id: int
+    employee_number: str
     employee_name: str
     employee_role: str | None
     attendance_date: str

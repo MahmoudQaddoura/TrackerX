@@ -24,6 +24,7 @@ class LeaveRequestReview(BaseModel):
 class LeaveRequestOut(BaseModel):
     id: int
     team_member_id: int
+    employee_number: str
     employee_name: str
     employee_role: str | None
     request_type: str

@@ -127,6 +127,7 @@ export interface Task {
 
 export interface TeamMember {
   id: number;
+  employee_number: string;
   name: string;
   name_arabic: string | null;
   role: string | null;
@@ -181,6 +182,7 @@ export type AttendanceStatus =
 export interface AttendanceRecord {
   id: number | null;
   team_member_id: number;
+  employee_number: string;
   employee_name: string;
   employee_role: string | null;
   attendance_date: string;
@@ -196,6 +198,7 @@ export interface AttendanceRecord {
 export interface LeaveRequest {
   id: number;
   team_member_id: number;
+  employee_number: string;
   employee_name: string;
   employee_role: string | null;
   request_type: LeaveRequestType;

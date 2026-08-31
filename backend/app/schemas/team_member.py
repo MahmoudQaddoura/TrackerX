@@ -46,6 +46,7 @@ class EmployeeProjectsInput(BaseModel):
 
 class TeamMemberOut(BaseModel):
     id: int
+    employee_number: str
     name: str
     name_arabic: str | None
     role: str | None

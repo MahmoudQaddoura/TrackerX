@@ -364,6 +364,7 @@ export function LeaveRequestsPage({ embedded = false }: { embedded?: boolean } =
               <div className="rounded-lg border border-border bg-raised/50 p-3 text-sm">
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="font-medium text-fg">{rejectingRequest.employee_name}</p>
+                  <Badge variant="outline" className="font-mono">ID {rejectingRequest.employee_number}</Badge>
                   <Badge variant="default">
                     {rejectingRequest.duration_unit === "hours" ? <Clock3 className="h-3 w-3" /> : <CalendarDays className="h-3 w-3" />}
                     {durationLabel(rejectingRequest)}
@@ -464,6 +465,7 @@ function RequestList({
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <p className="font-semibold text-fg">{request.employee_name}</p>
+                <Badge variant="outline" className="font-mono">ID {request.employee_number}</Badge>
                 <Badge variant="outline">{TYPE_LABELS[request.request_type]}</Badge>
                 <Badge variant="default">
                   {request.duration_unit === "hours" ? <Clock3 className="h-3 w-3" /> : <CalendarDays className="h-3 w-3" />}

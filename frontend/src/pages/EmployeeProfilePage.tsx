@@ -181,6 +181,9 @@ export function EmployeeProfilePage({ self = false }: { self?: boolean }) {
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge className="border border-white/20 bg-white/10 text-white">Employee profile</Badge>
+                <Badge className="border border-white/20 bg-white/10 font-mono text-white">
+                  ID {member.employee_number}
+                </Badge>
                 <Badge className={member.is_active ? "border border-emerald-200/30 bg-emerald-300/20 text-white" : "border border-white/20 bg-white/10 text-white"}>
                   {member.is_active ? "Active" : "Inactive"}
                 </Badge>
@@ -221,7 +224,11 @@ export function EmployeeProfilePage({ self = false }: { self?: boolean }) {
                   {member.role_description || "No role summary has been added yet. An administrator can document responsibilities, expertise, and scope here."}
                 </p>
               </div>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-lg border border-border p-3">
+                  <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-fg-subtle"><IdCard className="h-3.5 w-3.5" /> Employee ID</p>
+                  <p className="mt-1 font-mono text-sm font-semibold text-fg">{member.employee_number}</p>
+                </div>
                 <div className="rounded-lg border border-border p-3">
                   <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-fg-subtle"><Mail className="h-3.5 w-3.5" /> TrackerX login</p>
                   <p className="mt-1 truncate text-sm font-medium text-fg">{member.login_email ?? "No login created"}</p>

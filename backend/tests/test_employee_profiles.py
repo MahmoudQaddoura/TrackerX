@@ -38,6 +38,7 @@ class EmployeeProfileTests(unittest.TestCase):
 
         output = team_member_out(member)
 
+        self.assertEqual(output["employee_number"], "0008")
         self.assertEqual(output["name_arabic"], "اسم الموظف")
         self.assertEqual(output["role_description"], "Owns platform delivery and documentation.")
         self.assertEqual(output["profile_file_count"], 1)

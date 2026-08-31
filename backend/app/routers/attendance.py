@@ -55,6 +55,7 @@ def _serialize(member: TeamMember, record: AttendanceRecord | None, day: str) ->
     return {
         "id": record.id if record else None,
         "team_member_id": member.id,
+        "employee_number": member.employee_number,
         "employee_name": member.name,
         "employee_role": member.role,
         "attendance_date": day,

@@ -159,6 +159,7 @@ export function AttendancePage({ embedded = false }: { embedded?: boolean } = {}
     return rows.filter((row) => {
       const matchesSearch =
         !query ||
+        row.employee_number.includes(query) ||
         row.employee_name.toLowerCase().includes(query) ||
         Boolean(row.employee_role?.toLowerCase().includes(query));
       const matchesFilter =
@@ -455,7 +456,7 @@ export function AttendancePage({ embedded = false }: { embedded?: boolean } = {}
                     className="pl-9"
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
-                    placeholder="Search employee or role"
+                    placeholder="Search ID, employee, or role"
                     aria-label="Search attendance"
                   />
                 </div>
@@ -528,14 +529,15 @@ export function AttendancePage({ embedded = false }: { embedded?: boolean } = {}
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[830px] table-fixed text-left text-sm">
+              <table className="w-full min-w-[920px] table-fixed text-left text-sm">
                   <thead className="bg-raised/60 text-[11px] uppercase tracking-wide text-fg-subtle">
                     <tr>
-                      <th className="w-[25%] px-4 py-3 font-semibold">Employee</th>
-                      <th className="w-[11%] px-3 py-3 text-center font-semibold">Attended</th>
-                      <th className="w-[15%] px-3 py-3 font-semibold">Status</th>
-                      <th className="w-[14%] px-3 py-3 font-semibold">Check-in</th>
-                      <th className="w-[14%] px-3 py-3 font-semibold">Check-out</th>
+                      <th className="w-[9%] px-4 py-3 font-semibold">Employee ID</th>
+                      <th className="w-[21%] px-3 py-3 font-semibold">Employee</th>
+                      <th className="w-[10%] px-3 py-3 text-center font-semibold">Attended</th>
+                      <th className="w-[14%] px-3 py-3 font-semibold">Status</th>
+                      <th className="w-[13%] px-3 py-3 font-semibold">Check-in</th>
+                      <th className="w-[13%] px-3 py-3 font-semibold">Check-out</th>
                       <th className="px-3 py-3 font-semibold">Note</th>
                     </tr>
                   </thead>
@@ -605,7 +607,10 @@ function AttendanceTableRow(props: RowEditorProps) {
   const { row, isAdmin } = props;
   return (
     <tr className="bg-surface align-middle transition-colors hover:bg-raised/30">
-      <td className="px-4 py-3">
+      <td className="px-4 py-3 font-mono text-xs font-semibold text-accent">
+        {row.employee_number}
+      </td>
+      <td className="px-3 py-3">
         <EmployeeIdentity row={row} />
       </td>
       <td className="px-3 py-3">
