@@ -19,6 +19,7 @@ from pathlib import Path
 from app.db import Base, SessionLocal, engine
 from app.models import Meeting, Milestone, Project, Task, TeamMember
 from app.services.csv_parser import parse_project_csv
+from app.services.employee_numbers import assign_employee_number
 
 DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 
@@ -108,7 +109,7 @@ def _find_or_create_member(db, cache: dict, name: str) -> TeamMember:
             return m
     member = TeamMember(name=name.strip(), role=None, is_active=1)
     db.add(member)
-    db.flush()
+    assign_employee_number(db, member)
     cache[key] = member
     return member
 

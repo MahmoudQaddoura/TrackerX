@@ -165,7 +165,7 @@ def team_member_out(member) -> dict:
     projects = sorted(project_map.values(), key=lambda project: project["name"].lower())
     return {
         "id": member.id,
-        "employee_number": member.employee_number,
+        "employee_number": member.employee_number or f"{member.id:04d}",
         "name": member.name,
         "name_arabic": member.name_arabic,
         "role": member.role,

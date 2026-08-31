@@ -85,6 +85,35 @@ def _migrate_local_schema() -> None:
             connection.exec_driver_sql("ALTER TABLE team_members ADD COLUMN name_arabic TEXT")
         if "role_description" not in team_member_columns:
             connection.exec_driver_sql("ALTER TABLE team_members ADD COLUMN role_description TEXT")
+        if "employee_number" not in team_member_columns:
+            connection.exec_driver_sql("ALTER TABLE team_members ADD COLUMN employee_number TEXT")
+            member_rows = list(
+                connection.exec_driver_sql(
+                    """
+                    SELECT tm.id, tm.name, tm.is_active,
+                           COALESCE(u.is_primary_admin, 0) AS is_primary_admin
+                    FROM team_members AS tm
+                    LEFT JOIN users AS u ON u.id = tm.user_id
+                    """
+                ).mappings()
+            )
+            member_rows.sort(
+                key=lambda row: (
+                    0 if row["is_primary_admin"] else
+                    1 if row["name"].strip().lower().startswith("yazan") else
+                    2 if row["is_active"] else 3,
+                    row["id"],
+                )
+            )
+            for number, row in enumerate(member_rows, start=1):
+                connection.exec_driver_sql(
+                    "UPDATE team_members SET employee_number = ? WHERE id = ?",
+                    (f"{number:04d}", row["id"]),
+                )
+        connection.exec_driver_sql(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ux_team_members_employee_number "
+            "ON team_members (employee_number)"
+        )
         if "parent_project_id" not in project_columns:
             connection.exec_driver_sql(
                 "ALTER TABLE projects ADD COLUMN parent_project_id INTEGER REFERENCES projects(id)"

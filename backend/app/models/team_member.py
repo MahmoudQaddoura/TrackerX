@@ -21,6 +21,7 @@ class TeamMember(Base):
     __tablename__ = "team_members"
 
     id = Column(Integer, primary_key=True)
+    employee_number = Column(Text, unique=True, nullable=True)
     name = Column(Text, nullable=False)
     name_arabic = Column(Text, nullable=True)
     role = Column(Text, nullable=True)  # free text, e.g. "Backend Engineer"
@@ -64,8 +65,3 @@ class TeamMember(Base):
         cascade="all, delete-orphan",
     )
     user = relationship("User")
-
-    @property
-    def employee_number(self) -> str:
-        """Stable, human-readable employee ID derived from the directory record."""
-        return f"{self.id:04d}" if self.id is not None else ""

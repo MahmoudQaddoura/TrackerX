@@ -27,6 +27,7 @@ from app.schemas.team_member import (
     TeamMemberUpdate,
 )
 from app.security import hash_password
+from app.services.employee_numbers import assign_employee_number
 from app.services.serialize import team_member_out
 
 router = APIRouter(prefix="/team-members", tags=["employees"])
@@ -67,7 +68,10 @@ def list_members(
     q = db.query(TeamMember)
     if active_only:
         q = q.filter(TeamMember.is_active == 1)
-    return [team_member_out(m) for m in q.order_by(TeamMember.name).all()]
+    return [
+        team_member_out(m)
+        for m in q.order_by(TeamMember.employee_number, TeamMember.id).all()
+    ]
 
 
 @router.get("/me", response_model=TeamMemberOut)
@@ -105,6 +109,7 @@ def create_member(inp: TeamMemberInput, db: Session = Depends(get_db), _=Depends
         is_active=1 if inp.is_active else 0,
     )
     db.add(m)
+    assign_employee_number(db, m)
     db.commit()
     db.refresh(m)
     return team_member_out(m)

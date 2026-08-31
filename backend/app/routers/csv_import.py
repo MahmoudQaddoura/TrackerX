@@ -18,6 +18,7 @@ from app.deps import require_admin
 from app.models import Milestone, Project, Task, TeamMember
 from app.schemas.project import ProjectOut
 from app.services.csv_parser import parse_project_csv
+from app.services.employee_numbers import assign_employee_number
 from app.services.serialize import project_out
 
 router = APIRouter(tags=["projects"])
@@ -32,7 +33,7 @@ def _find_or_create_member(db: Session, cache: dict[str, TeamMember], name: str)
     if member is None:
         member = TeamMember(name=name.strip(), role="Team Member", is_active=1)
         db.add(member)
-        db.flush()  # assign an id without committing yet
+        assign_employee_number(db, member)
     cache[key] = member
     return member
 

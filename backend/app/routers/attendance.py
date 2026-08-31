@@ -55,7 +55,7 @@ def _serialize(member: TeamMember, record: AttendanceRecord | None, day: str) ->
     return {
         "id": record.id if record else None,
         "team_member_id": member.id,
-        "employee_number": member.employee_number,
+        "employee_number": member.employee_number or f"{member.id:04d}",
         "employee_name": member.name,
         "employee_role": member.role,
         "attendance_date": day,
@@ -76,7 +76,7 @@ def _scoped_members(db: Session, user: User) -> list[TeamMember]:
         return (
             db.query(TeamMember)
             .filter(TeamMember.is_active == 1)
-            .order_by(TeamMember.name)
+            .order_by(TeamMember.employee_number, TeamMember.id)
             .all()
         )
     member = db.query(TeamMember).filter(TeamMember.user_id == user.id).first()
@@ -250,7 +250,7 @@ def save_attendance_sheet(
     members = (
         db.query(TeamMember)
         .filter(TeamMember.is_active == 1)
-        .order_by(TeamMember.name)
+        .order_by(TeamMember.employee_number, TeamMember.id)
         .all()
     )
     records = (

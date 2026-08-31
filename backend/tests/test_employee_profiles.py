@@ -20,6 +20,7 @@ class EmployeeProfileTests(unittest.TestCase):
     def test_profile_contains_bilingual_role_information_and_file_count(self):
         member = TeamMember(
             id=8,
+            employee_number="0042",
             name="Employee Name",
             name_arabic="اسم الموظف",
             role="Engineer",
@@ -38,7 +39,7 @@ class EmployeeProfileTests(unittest.TestCase):
 
         output = team_member_out(member)
 
-        self.assertEqual(output["employee_number"], "0008")
+        self.assertEqual(output["employee_number"], "0042")
         self.assertEqual(output["name_arabic"], "اسم الموظف")
         self.assertEqual(output["role_description"], "Owns platform delivery and documentation.")
         self.assertEqual(output["profile_file_count"], 1)

@@ -64,7 +64,7 @@ def _serialize(request: LeaveRequest) -> dict:
     return {
         "id": request.id,
         "team_member_id": request.team_member_id,
-        "employee_number": request.team_member.employee_number,
+        "employee_number": request.team_member.employee_number or f"{request.team_member_id:04d}",
         "employee_name": request.team_member.name,
         "employee_role": request.team_member.role,
         "request_type": request.request_type,
