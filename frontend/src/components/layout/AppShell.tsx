@@ -34,7 +34,7 @@ export function AppShell() {
             {user && (
               <div className="hidden items-center gap-2 sm:flex">
                 <Badge variant={user.role === "admin" ? "default" : "neutral"}>
-                  {ROLE_LABEL[user.role] ?? user.role}
+                  {user.is_primary_admin ? "Owner" : ROLE_LABEL[user.role] ?? user.role}
                 </Badge>
                 <Badge variant={user.role === "admin" || user.access_level === "write" ? "success" : "outline"}>
                   {user.role === "admin" || user.access_level === "write" ? "Read & write" : "Read only"}
