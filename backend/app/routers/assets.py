@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from app.db import get_db
-from app.deps import check_project_access, get_current_user, require_project_access, require_project_content_editor
+from app.deps import check_project_access, require_project_access, require_project_content_editor
 from app.models import Asset, AssetConnection, AssetPort, Project, User
 from app.models.asset import (
     ASSET_ENVIRONMENTS,
@@ -169,12 +169,10 @@ def _commit_or_conflict(db: Session, message: str) -> None:
 @router.get("/projects/{project_id}/assets", response_model=list[AssetOut])
 def list_assets(
     project: Project = Depends(require_project_access),
-    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     environment: str | None = Query(default=None),
     search: str | None = Query(default=None, max_length=150),
 ):
-    _assert_staff(user)
     if environment is not None and environment not in ASSET_ENVIRONMENTS:
         raise HTTPException(status_code=422, detail="Invalid asset environment.")
     query = (
@@ -292,11 +290,9 @@ def delete_asset_port(
 @router.get("/projects/{project_id}/asset-matrix", response_model=AssetMatrixOut)
 def get_asset_matrix(
     project: Project = Depends(require_project_access),
-    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     environment: str = Query(default="production"),
 ):
-    _assert_staff(user)
     if environment not in ASSET_ENVIRONMENTS:
         raise HTTPException(status_code=422, detail="Invalid asset environment.")
     assets = (

@@ -14,6 +14,7 @@
 import {
   ArrowRight,
   BriefcaseBusiness,
+  Boxes,
   CalendarRange,
   CheckCircle2,
   ChevronDown,
@@ -859,6 +860,7 @@ function ProfileDialog({ member, onClose }: { member: TeamMember; onClose: () =>
                         { tab: "gantt", label: "Gantt", icon: CalendarRange },
                         { tab: "documents", label: "Documents", icon: FileArchive },
                         { tab: "meetings", label: "Meetings", icon: MessagesSquare },
+                        { tab: "assets", label: "Assets", icon: Boxes },
                       ].map(({ tab, label, icon: Icon }) => (
                         <Button key={tab} variant="outline" size="sm" asChild>
                           <Link to={`/projects/${project.id}?tab=${tab}`} onClick={onClose}>

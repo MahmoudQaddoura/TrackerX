@@ -28,9 +28,11 @@ const MODES: ViewMode[] = ["Day", "Week", "Month"];
 export function GanttChart({
   tasks,
   onOpenMilestone,
+  hideTeamDetails = false,
 }: {
   tasks: GanttTaskDTO[];
   onOpenMilestone: (milestoneId: number) => void;
+  hideTeamDetails?: boolean;
 }) {
   const chartRef = useRef<HTMLDivElement>(null);
   const [mode, setMode] = useState<ViewMode>("Week");
@@ -49,7 +51,8 @@ export function GanttChart({
     const matchingMilestones = new Set<number>();
     if (query) {
       for (const row of tasks) {
-        const text = `${row.name} ${row.milestone_name} ${row.assignee_names.join(" ")}`
+        const teamSearch = hideTeamDetails ? "" : row.assignee_names.join(" ");
+        const text = `${row.name} ${row.milestone_name} ${teamSearch}`
           .toLocaleLowerCase();
         if (text.includes(query)) matchingMilestones.add(row.milestone_id);
       }
@@ -60,7 +63,7 @@ export function GanttChart({
       if (query && !matchingMilestones.has(row.milestone_id)) return false;
       return true;
     });
-  }, [milestoneFilter, search, tasks, workstream]);
+  }, [hideTeamDetails, milestoneFilter, search, tasks, workstream]);
 
   const selectedMilestone = milestones.find((row) => row.milestone_id === selectedMilestoneId) ?? null;
   const selectedTasks = selectedMilestone
@@ -156,7 +159,7 @@ export function GanttChart({
                 className="pl-9"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search milestone, task, or assignee…"
+                placeholder={hideTeamDetails ? "Search milestone or task…" : "Search milestone, task, or assignee…"}
               />
             </div>
             <div className="relative">

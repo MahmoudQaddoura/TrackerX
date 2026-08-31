@@ -2,13 +2,16 @@ from __future__ import annotations
 
 import unittest
 
+from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
 from app.db import Base
 from app.load_asset_inventory import load_inventory
-from app.models import Asset, AssetConnection, Project
+from app.deps import get_accessible_project_ids, require_project_content_editor
+from app.models import Asset, AssetConnection, Project, User
+from app.routers.assets import get_asset_matrix, list_assets
 
 
 class AssetInventoryTests(unittest.TestCase):
@@ -49,3 +52,27 @@ class AssetInventoryTests(unittest.TestCase):
                 if connection.port_record.asset_id == web.id
             }
             self.assertEqual(states, {443: "closed", 3443: "connected"})
+
+    def test_linked_client_can_read_assets_but_cannot_write(self):
+        with Session(self.engine) as db:
+            load_inventory(db, 1)
+            client = User(
+                email="client@example.com",
+                hashed_password="not-used",
+                full_name="Client User",
+                role="client",
+                access_level="read",
+            )
+            project = db.get(Project, 1)
+            project.clients.append(client)
+            db.commit()
+
+            self.assertEqual(get_accessible_project_ids(client, db), {1})
+            rows = list_assets(project=project, db=db, environment=None, search=None)
+            matrix = get_asset_matrix(project=project, db=db, environment="production")
+
+            self.assertEqual(len(rows), 6)
+            self.assertEqual(len(matrix["assets"]), 3)
+            self.assertGreater(len(matrix["connections"]), 0)
+            with self.assertRaises(HTTPException):
+                require_project_content_editor(client)

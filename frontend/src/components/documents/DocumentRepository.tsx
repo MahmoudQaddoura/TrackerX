@@ -56,7 +56,7 @@ export function DocumentRepository({
   const { data, isLoading, isError, refetch } = useDocuments(projectId);
   const milestones = useMilestones(projectId);
   const collection: DocumentCollectionKey = workspace === "support" ? "operations" : "project";
-  const [folderKey, setFolderKey] = useState<DocumentFolderKey>("asset_inventory");
+  const [folderKey, setFolderKey] = useState<DocumentFolderKey>("technical_manual");
   const folders = getDocumentFolders(collection);
 
   const placedDocuments = useMemo(
