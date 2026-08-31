@@ -128,7 +128,9 @@ export interface Task {
 export interface TeamMember {
   id: number;
   name: string;
+  name_arabic: string | null;
   role: string | null;
+  role_description: string | null;
   is_active: boolean;
   task_count: number;
   total_tasks: number;
@@ -137,6 +139,11 @@ export interface TeamMember {
   projects: {
     id: number;
     name: string;
+    status: ProjectStatus;
+    project_type: ProjectType;
+    progress_pct: number;
+    total_tasks: number;
+    done_tasks: number;
     assignment_source: "admin" | "task" | "admin_and_task" | "leadership";
     leadership_role: "project_manager" | null;
   }[];
@@ -148,8 +155,19 @@ export interface TeamMember {
   is_primary_admin: boolean;
   access_level: AccessLevel | null;
   login_enabled: boolean;
+  profile_file_count: number;
   created_at: string;
   updated_at: string;
+}
+
+export interface EmployeeProfileFile {
+  id: number;
+  team_member_id: number;
+  file_name: string;
+  content_type: string | null;
+  file_size: number;
+  uploaded_by_name: string | null;
+  created_at: string;
 }
 
 export type AttendanceStatus =

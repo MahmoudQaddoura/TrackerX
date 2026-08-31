@@ -22,7 +22,9 @@ class TeamMember(Base):
 
     id = Column(Integer, primary_key=True)
     name = Column(Text, nullable=False)
+    name_arabic = Column(Text, nullable=True)
     role = Column(Text, nullable=True)  # free text, e.g. "Backend Engineer"
+    role_description = Column(Text, nullable=True)
     is_active = Column(Integer, nullable=False, default=1)  # 0/1 boolean
     user_id = Column(
         Integer, ForeignKey("users.id", ondelete="SET NULL"), unique=True, nullable=True
@@ -53,6 +55,11 @@ class TeamMember(Base):
     )
     leave_requests = relationship(
         "LeaveRequest",
+        back_populates="team_member",
+        cascade="all, delete-orphan",
+    )
+    profile_files = relationship(
+        "EmployeeProfileFile",
         back_populates="team_member",
         cascade="all, delete-orphan",
     )

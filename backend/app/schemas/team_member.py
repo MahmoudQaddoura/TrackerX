@@ -10,13 +10,17 @@ from pydantic import BaseModel, EmailStr, Field
 
 class TeamMemberInput(BaseModel):
     name: str = Field(min_length=1, max_length=200)
+    name_arabic: str | None = Field(default=None, max_length=200)
     role: str | None = Field(default=None, max_length=200)
+    role_description: str | None = Field(default=None, max_length=2000)
     is_active: bool = True
 
 
 class TeamMemberUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
+    name_arabic: str | None = Field(default=None, max_length=200)
     role: str | None = Field(default=None, max_length=200)
+    role_description: str | None = Field(default=None, max_length=2000)
     is_active: bool | None = None
 
 
@@ -43,7 +47,9 @@ class EmployeeProjectsInput(BaseModel):
 class TeamMemberOut(BaseModel):
     id: int
     name: str
+    name_arabic: str | None
     role: str | None
+    role_description: str | None
     is_active: bool
     task_count: int
     total_tasks: int
@@ -58,5 +64,6 @@ class TeamMemberOut(BaseModel):
     is_primary_admin: bool
     access_level: str | None
     login_enabled: bool
+    profile_file_count: int
     created_at: str
     updated_at: str

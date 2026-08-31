@@ -110,18 +110,30 @@ def team_member_out(member) -> dict:
     project_map: dict[int, dict] = {}
     assigned_project_ids = {project.id for project in member.assigned_projects}
     for project in member.assigned_projects:
+        rollup = prog.rollup(prog.project_tasks(project))
         project_map[project.id] = {
             "id": project.id,
             "name": project.name,
+            "status": project.status,
+            "project_type": project.project_type,
+            "progress_pct": rollup["progress_pct"],
+            "total_tasks": rollup["total_tasks"],
+            "done_tasks": rollup["done_tasks"],
             "assignment_source": "admin",
             "leadership_role": None,
         }
     for project in member.managed_projects:
+        rollup = prog.rollup(prog.project_tasks(project))
         item = project_map.setdefault(
             project.id,
             {
                 "id": project.id,
                 "name": project.name,
+                "status": project.status,
+                "project_type": project.project_type,
+                "progress_pct": rollup["progress_pct"],
+                "total_tasks": rollup["total_tasks"],
+                "done_tasks": rollup["done_tasks"],
                 "assignment_source": "leadership",
                 "leadership_role": None,
             },
@@ -135,9 +147,16 @@ def team_member_out(member) -> dict:
             if pid in project_map:
                 project_map[pid]["assignment_source"] = "admin_and_task"
             else:
+                project = t.milestone.project
+                rollup = prog.rollup(prog.project_tasks(project))
                 project_map[pid] = {
                     "id": pid,
-                    "name": t.milestone.project.name,
+                    "name": project.name,
+                    "status": project.status,
+                    "project_type": project.project_type,
+                    "progress_pct": rollup["progress_pct"],
+                    "total_tasks": rollup["total_tasks"],
+                    "done_tasks": rollup["done_tasks"],
                     "assignment_source": "task",
                     "leadership_role": None,
                 }
@@ -147,7 +166,9 @@ def team_member_out(member) -> dict:
     return {
         "id": member.id,
         "name": member.name,
+        "name_arabic": member.name_arabic,
         "role": member.role,
+        "role_description": member.role_description,
         "is_active": bool(member.is_active),
         "task_count": len(tasks),
         "total_tasks": len(tasks),
@@ -166,6 +187,7 @@ def team_member_out(member) -> dict:
             else None
         ),
         "login_enabled": bool(member.user.is_enabled) if member.user else False,
+        "profile_file_count": len(member.profile_files),
         "created_at": member.created_at,
         "updated_at": member.updated_at,
     }

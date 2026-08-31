@@ -84,6 +84,43 @@ def _document_records(database: Path, documents_root: Path) -> list[dict[str, ob
     return normalized
 
 
+def _employee_profile_file_records(
+    database: Path, documents_root: Path
+) -> list[dict[str, object]]:
+    """Collect private employee-file links for the same verified file manifest."""
+
+    with closing(sqlite3.connect(str(database))) as connection:
+        table_exists = connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' "
+            "AND name = 'employee_profile_files'"
+        ).fetchone()
+        if table_exists is None:
+            return []
+        records = connection.execute(
+            "SELECT id, team_member_id, file_name, file_path, file_size "
+            "FROM employee_profile_files ORDER BY id"
+        ).fetchall()
+
+    normalized: list[dict[str, object]] = []
+    for file_id, member_id, file_name, stored_path, file_size in records:
+        try:
+            storage_key = storage_key_from_value(stored_path, documents_root)
+        except InvalidDocumentPath as exc:
+            raise DataBackupError(
+                f"Employee profile file {file_id} has an unsafe storage path."
+            ) from exc
+        normalized.append(
+            {
+                "id": file_id,
+                "team_member_id": member_id,
+                "file_name": file_name,
+                "storage_key": storage_key,
+                "file_size": file_size,
+            }
+        )
+    return normalized
+
+
 def _remove_expired_backups(output_dir: Path, keep: int) -> None:
     if keep <= 0:
         return
@@ -125,22 +162,24 @@ def create_data_backup(
         snapshot = Path(temp_name) / "app.db"
         _snapshot_database(database, snapshot)
         records = _document_records(snapshot, documents_root)
+        profile_records = _employee_profile_file_records(snapshot, documents_root)
         disk_files = sorted(path for path in documents_root.rglob("*") if path.is_file())
         disk_by_key = {path.relative_to(documents_root).as_posix(): path for path in disk_files}
-        missing = [record for record in records if record["storage_key"] not in disk_by_key]
+        linked_records = [*records, *profile_records]
+        missing = [record for record in linked_records if record["storage_key"] not in disk_by_key]
         if missing:
-            missing_ids = ", ".join(str(record["id"]) for record in missing)
-            raise DataBackupError(f"Uploaded files are missing for document IDs: {missing_ids}")
+            missing_files = ", ".join(str(record["file_name"]) for record in missing)
+            raise DataBackupError(f"Database-linked uploaded files are missing: {missing_files}")
         size_mismatches = [
             record
-            for record in records
+            for record in linked_records
             if record["file_size"] is not None
             and int(record["file_size"])
             != disk_by_key[str(record["storage_key"])].stat().st_size
         ]
         if size_mismatches:
-            mismatch_ids = ", ".join(str(record["id"]) for record in size_mismatches)
-            raise DataBackupError(f"File-size verification failed for document IDs: {mismatch_ids}")
+            mismatch_files = ", ".join(str(record["file_name"]) for record in size_mismatches)
+            raise DataBackupError(f"File-size verification failed for: {mismatch_files}")
 
         files_manifest = [
             {
@@ -161,6 +200,7 @@ def create_data_backup(
                 "integrity_check": "ok",
             },
             "document_records": records,
+            "employee_profile_file_records": profile_records,
             "files": files_manifest,
         }
 
@@ -181,6 +221,9 @@ def create_data_backup(
         "database_bytes": verification["database_bytes"],
         "document_files": verification["document_files"],
         "document_records": len(verification["manifest"]["document_records"]),
+        "employee_profile_file_records": len(
+            verification["manifest"].get("employee_profile_file_records", [])
+        ),
         "verified": True,
     }
 
@@ -207,16 +250,20 @@ def verify_data_backup(archive_path: Path) -> dict[str, object]:
         archived_documents = {
             entry["path"].removeprefix("documents/"): entry for entry in manifest["files"]
         }
+        linked_records = [
+            *manifest["document_records"],
+            *manifest.get("employee_profile_file_records", []),
+        ]
         missing_records = [
             record
-            for record in manifest["document_records"]
+            for record in linked_records
             if record["storage_key"] not in archived_documents
         ]
         if missing_records:
             raise DataBackupError("The archive does not contain every database-linked document.")
         size_mismatches = [
             record
-            for record in manifest["document_records"]
+            for record in linked_records
             if record["file_size"] is not None
             and int(record["file_size"])
             != archived_documents[record["storage_key"]]["size"]

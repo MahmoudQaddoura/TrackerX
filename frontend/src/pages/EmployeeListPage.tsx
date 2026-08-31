@@ -14,17 +14,11 @@
 import {
   ArrowRight,
   BriefcaseBusiness,
-  Boxes,
-  CalendarRange,
-  CheckCircle2,
   ChevronDown,
   ChevronRight,
-  FileArchive,
-  FolderKanban,
   FolderPlus,
   KeyRound,
   ListChecks,
-  MessagesSquare,
   Pencil,
   Plus,
   Search,
@@ -35,7 +29,7 @@ import {
   Users,
 } from "lucide-react";
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import {
   assignMemberProjects,
@@ -72,14 +66,12 @@ import { timeGreeting } from "@/lib/greeting";
 import { useQueryClient } from "@tanstack/react-query";
 import type { EmployeeAccountRole, TeamMember } from "@/types";
 
-type ProfileView = { member: TeamMember } | null;
-
 export function EmployeeListPage() {
   const { isAdmin, isPrimaryAdmin, user } = useAuth();
   const qc = useQueryClient();
   const { data: members, isLoading, isError, refetch } = useTeam();
   const projectsQuery = useProjects();
-  const [profile, setProfile] = useState<ProfileView>(null);
+  const navigate = useNavigate();
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<TeamMember | null>(null);
   const [saving, setSaving] = useState(false);
@@ -332,7 +324,7 @@ export function EmployeeListPage() {
               member={m}
               isDeactivated={false}
               isAdmin={isAdmin}
-              onViewProfile={() => setProfile({ member: m })}
+              onViewProfile={() => navigate(`/employees/${m.id}`)}
               onEdit={() => openEdit(m)}
               onDelete={() => handleDelete(m)}
               onDelegate={() => openDelegate(m)}
@@ -367,7 +359,7 @@ export function EmployeeListPage() {
                   member={m}
                   isDeactivated
                   isAdmin={isAdmin}
-                  onViewProfile={() => setProfile({ member: m })}
+                  onViewProfile={() => navigate(`/employees/${m.id}`)}
                   onEdit={() => openEdit(m)}
                   onDelete={() => handleDelete(m)}
                   onDelegate={() => openDelegate(m)}
@@ -379,9 +371,6 @@ export function EmployeeListPage() {
           )}
         </div>
       )}
-
-      {/* Profile drill-down dialog */}
-      {profile && <ProfileDialog member={profile.member} onClose={() => setProfile(null)} />}
 
       {/* Create / Edit form dialog */}
       {formOpen && (
@@ -672,7 +661,7 @@ function EmployeeCard({
       <CardContent className="flex items-center gap-3 pt-5">
         <button
           type="button"
-          className="flex flex-1 items-center gap-3 text-left"
+          className="flex flex-1 items-center gap-3 rounded-lg text-left outline-none transition-colors hover:text-accent focus-visible:ring-2 focus-visible:ring-ring"
           onClick={onViewProfile}
         >
           <UserCircle className="h-8 w-8 text-fg-muted shrink-0" />
@@ -702,6 +691,7 @@ function EmployeeCard({
               )}
             </div>
             <p className="text-xs text-fg-muted">{member.role ?? "—"}</p>
+            {member.name_arabic && <p className="truncate text-xs text-fg-subtle" dir="rtl" lang="ar">{member.name_arabic}</p>}
             <p className="text-xs text-fg-subtle">
               {member.task_count} task{member.task_count !== 1 ? "s" : ""}
               {member.has_login && (
@@ -763,128 +753,5 @@ function EmployeeCard({
         )}
       </CardContent>
     </Card>
-  );
-}
-
-// ---------- Profile Dialog ----------
-
-function ProfileDialog({ member, onClose }: { member: TeamMember; onClose: () => void }) {
-  const isOwner = member.role === "Owner";
-
-  return (
-    <Dialog open onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-3xl">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <UserCircle className="h-5 w-5" />
-            {member.name}
-            {isOwner && (
-              <Badge
-                variant="neutral"
-                className="ml-1 border-amber-500/50 bg-amber-500/10 text-amber-700 text-[11px]"
-              >
-                Owner
-              </Badge>
-            )}
-            {member.account_role === "admin" && (
-              <Badge variant="success" className="ml-1 text-[11px]">
-                Admin privileges
-              </Badge>
-            )}
-            {member.is_primary_admin && (
-              <Badge variant="default" className="ml-1 text-[11px]">
-                Primary admin
-              </Badge>
-            )}
-          </DialogTitle>
-        </DialogHeader>
-        <div className="space-y-5 text-sm">
-          <div className="grid gap-3 sm:grid-cols-4">
-            <div className="rounded-lg bg-raised/60 p-3">
-              <span className="text-fg-muted">Role</span>
-              <p className="font-medium">{member.role ?? "—"}</p>
-            </div>
-            <div className="rounded-lg bg-raised/60 p-3">
-              <span className="text-fg-muted">Status</span>
-              <p className="font-medium">{member.is_active ? "Active" : "Inactive"}</p>
-            </div>
-            <div className="rounded-lg bg-raised/60 p-3">
-              <span className="text-fg-muted">Task progress</span>
-              <p className="font-medium">{member.done_tasks}/{member.total_tasks}</p>
-            </div>
-            <div className="rounded-lg bg-raised/60 p-3">
-              <span className="text-fg-muted">Active effort</span>
-              <p className="font-medium">{member.active_est_days} days</p>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border px-4 py-3">
-            <div>
-              <p className="font-medium text-fg">TrackerX access</p>
-              <p className="text-xs text-fg-muted">{member.login_email ?? "No login has been created"}</p>
-            </div>
-            <Badge variant={member.login_enabled ? "success" : "outline"}>
-              {member.login_enabled
-                ? member.account_role === "admin"
-                  ? "Administrator · Read & write"
-                  : member.access_level
-                : "No active login"}
-            </Badge>
-          </div>
-          <div>
-            <div className="mb-2 flex items-center justify-between">
-              <div>
-                <p className="font-semibold text-fg">Assigned project workspaces</p>
-                <p className="text-xs text-fg-muted">Access assigned by an admin or linked through active task work.</p>
-              </div>
-              <Badge variant="neutral">{member.projects.length} projects</Badge>
-            </div>
-            {member.projects.length > 0 ? (
-              <div className="space-y-2">
-                {member.projects.map((project) => (
-                  <div key={project.id} className="rounded-lg border border-border p-3">
-                    <div className="flex items-center gap-2 font-medium text-fg">
-                      <FolderKanban className="h-4 w-4 text-accent" /> {project.name}
-                      <Badge variant={project.assignment_source === "task" ? "outline" : "success"} className="text-[10px]">
-                        {project.assignment_source === "task" ? "Task-linked" : project.assignment_source === "admin_and_task" ? "Admin + task" : project.assignment_source === "leadership" ? "Leadership access" : "Admin assigned"}
-                      </Badge>
-                      {project.leadership_role && (
-                        <Badge variant="default" className="text-[10px]">
-                          Project Manager
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {[
-                        { tab: "overview", label: "Overview", icon: CheckCircle2 },
-                        { tab: "kanban", label: "Tasks", icon: ListChecks },
-                        { tab: "gantt", label: "Gantt", icon: CalendarRange },
-                        { tab: "documents", label: "Documents", icon: FileArchive },
-                        { tab: "meetings", label: "Meetings", icon: MessagesSquare },
-                        { tab: "assets", label: "Assets", icon: Boxes },
-                      ].map(({ tab, label, icon: Icon }) => (
-                        <Button key={tab} variant="outline" size="sm" asChild>
-                          <Link to={`/projects/${project.id}?tab=${tab}`} onClick={onClose}>
-                            <Icon className="h-3.5 w-3.5" /> {label}
-                          </Link>
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-lg border border-dashed border-border p-5 text-center text-fg-muted">
-                No project access yet. An admin can assign a workspace from this employee’s card.
-              </div>
-            )}
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            Close
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }

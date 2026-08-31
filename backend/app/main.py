@@ -26,6 +26,7 @@ from app.routers import (
     coverage,
     csv_import,
     documents,
+    employee_profile_files,
     gantt,
     leave_requests,
     meetings,
@@ -59,6 +60,9 @@ def _migrate_local_schema() -> None:
     milestone_columns = {column["name"] for column in inspect(engine).get_columns("milestones")}
     user_columns = {column["name"] for column in inspect(engine).get_columns("users")}
     project_columns = {column["name"] for column in inspect(engine).get_columns("projects")}
+    team_member_columns = {
+        column["name"] for column in inspect(engine).get_columns("team_members")
+    }
     attendance_columns = {
         column["name"] for column in inspect(engine).get_columns("attendance_records")
     }
@@ -77,6 +81,10 @@ def _migrate_local_schema() -> None:
             connection.exec_driver_sql(
                 "ALTER TABLE projects ADD COLUMN project_type TEXT NOT NULL DEFAULT 'actual_project'"
             )
+        if "name_arabic" not in team_member_columns:
+            connection.exec_driver_sql("ALTER TABLE team_members ADD COLUMN name_arabic TEXT")
+        if "role_description" not in team_member_columns:
+            connection.exec_driver_sql("ALTER TABLE team_members ADD COLUMN role_description TEXT")
         if "parent_project_id" not in project_columns:
             connection.exec_driver_sql(
                 "ALTER TABLE projects ADD COLUMN parent_project_id INTEGER REFERENCES projects(id)"
@@ -214,6 +222,7 @@ for r in (
     team_members.router,
     users.router,
     documents.router,
+    employee_profile_files.router,
     meetings.router,
     comments.router,
     csv_import.router,

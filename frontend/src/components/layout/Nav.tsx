@@ -3,7 +3,7 @@
  * Dashboard and assigned projects are available to every signed-in user.
  * Company-wide employee management remains admin/pm-only.
  */
-import { Building2, CalendarCheck2, LayoutDashboard, FolderKanban, Users } from "lucide-react";
+import { Building2, CalendarCheck2, LayoutDashboard, FolderKanban, UserRound, Users } from "lucide-react";
 import { NavLink } from "react-router-dom";
 
 import { useAuth } from "@/context/AuthContext";
@@ -17,6 +17,7 @@ export function Nav() {
     ...(!isClient ? [{ to: "/attendance", label: "Attendance & leave", icon: CalendarCheck2 }] : []),
     ...(canViewManagement ? [{ to: "/employees", label: "Employees", icon: Users }] : []),
     ...(isAdmin ? [{ to: "/clients", label: "Clients", icon: Building2 }] : []),
+    ...(!isClient ? [{ to: "/my-profile", label: "My profile", icon: UserRound }] : []),
   ];
 
   return (

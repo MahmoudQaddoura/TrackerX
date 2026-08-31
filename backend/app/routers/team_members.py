@@ -70,22 +70,39 @@ def list_members(
     return [team_member_out(m) for m in q.order_by(TeamMember.name).all()]
 
 
+@router.get("/me", response_model=TeamMemberOut)
+def get_my_profile(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Return the directory profile linked to the signed-in employee."""
+    member = db.query(TeamMember).filter(TeamMember.user_id == user.id).first()
+    if member is None:
+        raise HTTPException(status_code=404, detail="No employee profile is linked to this login.")
+    return team_member_out(member)
+
+
 @router.get("/{member_id}", response_model=TeamMemberOut)
 def get_member(
     member_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Admin and PM can view an employee's profile (projects, workload)."""
-    if user.role not in ("admin", "pm"):
-        raise HTTPException(status_code=403, detail="Only admins and PMs can view employee profiles.")
-    return team_member_out(_member_or_404(db, member_id))
+    """Management can view profiles; an employee can view their own profile."""
+    member = _member_or_404(db, member_id)
+    if user.role not in ("admin", "pm") and member.user_id != user.id:
+        raise HTTPException(status_code=403, detail="You can only view your own employee profile.")
+    return team_member_out(member)
 
 
 @router.post("", response_model=TeamMemberOut, status_code=201)
 def create_member(inp: TeamMemberInput, db: Session = Depends(get_db), _=Depends(require_admin)):
     m = TeamMember(
-        name=inp.name, role=inp.role, is_active=1 if inp.is_active else 0
+        name=inp.name,
+        name_arabic=inp.name_arabic,
+        role=inp.role,
+        role_description=inp.role_description,
+        is_active=1 if inp.is_active else 0,
     )
     db.add(m)
     db.commit()

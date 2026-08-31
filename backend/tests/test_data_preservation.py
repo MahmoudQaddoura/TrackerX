@@ -3,6 +3,7 @@ from __future__ import annotations
 import sqlite3
 import tempfile
 import unittest
+import zipfile
 from contextlib import closing
 from pathlib import Path
 
@@ -44,6 +45,9 @@ class DataBackupTests(unittest.TestCase):
             uploaded = documents / "5" / "technical" / "proposal.pdf"
             uploaded.parent.mkdir(parents=True)
             uploaded.write_bytes(b"verifyx")
+            cv_file = documents / "_employee_profiles" / "2" / "resume.pdf"
+            cv_file.parent.mkdir(parents=True)
+            cv_file.write_bytes(b"employee-profile")
 
             with closing(sqlite3.connect(database)) as connection:
                 connection.execute(
@@ -53,6 +57,14 @@ class DataBackupTests(unittest.TestCase):
                 connection.execute(
                     "INSERT INTO documents VALUES (1, ?, ?, ?)",
                     ("proposal.pdf", "5/technical/proposal.pdf", uploaded.stat().st_size),
+                )
+                connection.execute(
+                    "CREATE TABLE employee_profile_files (id INTEGER PRIMARY KEY, "
+                    "team_member_id INTEGER, file_name TEXT, file_path TEXT, file_size INTEGER)"
+                )
+                connection.execute(
+                    "INSERT INTO employee_profile_files VALUES (1, 2, ?, ?, ?)",
+                    ("resume.pdf", "_employee_profiles/2/resume.pdf", cv_file.stat().st_size),
                 )
                 connection.commit()
 
@@ -66,6 +78,12 @@ class DataBackupTests(unittest.TestCase):
             verified = verify_data_backup(Path(result["archive"]))
 
             self.assertTrue(result["verified"])
-            self.assertEqual(result["document_files"], 1)
+            self.assertEqual(result["document_files"], 2)
             self.assertEqual(result["document_records"], 1)
+            self.assertEqual(result["employee_profile_file_records"], 1)
             self.assertTrue(verified["verified"])
+            with zipfile.ZipFile(result["archive"], "r") as archive:
+                self.assertIn(
+                    "documents/_employee_profiles/2/resume.pdf",
+                    archive.namelist(),
+                )

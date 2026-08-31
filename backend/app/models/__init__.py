@@ -12,6 +12,7 @@ from app.models.project import Project
 from app.models.milestone import Milestone
 from app.models.task import Task, task_assignees
 from app.models.team_member import TeamMember
+from app.models.employee_profile_file import EmployeeProfileFile
 from app.models.document import Document
 from app.models.meeting import Meeting
 from app.models.comment import Comment
@@ -36,6 +37,7 @@ __all__ = [
     "Task",
     "task_assignees",
     "TeamMember",
+    "EmployeeProfileFile",
     "Document",
     "Meeting",
     "Comment",

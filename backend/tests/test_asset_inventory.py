@@ -1,6 +1,15 @@
 from __future__ import annotations
 
+import os
+from pathlib import Path
+import tempfile
 import unittest
+
+# unittest imports all discovered modules before running them. Establish a
+# disposable database before any app module can construct the shared engine,
+# so later tests can never migrate or drop the real TrackerX database.
+_shared_test_database = Path(tempfile.gettempdir()) / "trackerx_unit_tests.db"
+os.environ.setdefault("DATABASE_URL", f"sqlite:///{_shared_test_database.as_posix()}")
 
 from fastapi import HTTPException
 from sqlalchemy import create_engine

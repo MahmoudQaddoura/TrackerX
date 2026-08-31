@@ -5,13 +5,75 @@ import type {
   DelegateTasksOut,
   DelegateTasksPayload,
   EmployeeAccountRole,
+  EmployeeProfileFile,
   TeamMember,
 } from "@/types";
 
 export interface TeamMemberPayload {
   name: string;
+  name_arabic?: string | null;
   role?: string | null;
+  role_description?: string | null;
   is_active?: boolean;
+}
+
+export async function fetchMember(id: number): Promise<TeamMember> {
+  const { data } = await api.get<TeamMember>(`/team-members/${id}`);
+  return data;
+}
+
+export async function fetchMyMemberProfile(): Promise<TeamMember> {
+  const { data } = await api.get<TeamMember>("/team-members/me");
+  return data;
+}
+
+export async function fetchEmployeeProfileFiles(memberId: number): Promise<EmployeeProfileFile[]> {
+  const { data } = await api.get<EmployeeProfileFile[]>(`/team-members/${memberId}/profile-files`);
+  return data;
+}
+
+export async function uploadEmployeeProfileFiles(
+  memberId: number,
+  files: File[],
+): Promise<EmployeeProfileFile[]> {
+  const form = new FormData();
+  files.forEach((file) => form.append("files", file));
+  const { data } = await api.post<EmployeeProfileFile[]>(
+    `/team-members/${memberId}/profile-files`,
+    form,
+  );
+  return data;
+}
+
+export async function deleteEmployeeProfileFile(fileId: number): Promise<void> {
+  await api.delete(`/employee-profile-files/${fileId}`);
+}
+
+export async function previewEmployeeProfileFile(fileId: number) {
+  const response = await api.get<Blob>(`/employee-profile-files/${fileId}/preview`, {
+    responseType: "blob",
+  });
+  return {
+    blob: response.data,
+    contentType: String(
+      response.headers["content-type"] ?? response.data.type ?? "application/octet-stream",
+    ),
+    truncated: response.headers["x-preview-truncated"] === "true",
+  };
+}
+
+export async function downloadEmployeeProfileFile(file: EmployeeProfileFile): Promise<void> {
+  const response = await api.get(`/employee-profile-files/${file.id}/download`, {
+    responseType: "blob",
+  });
+  const url = URL.createObjectURL(response.data as Blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = file.file_name;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 export interface EmployeeCredentialsPayload {

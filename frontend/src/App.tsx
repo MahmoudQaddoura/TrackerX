@@ -17,6 +17,7 @@ import { NotFoundPage } from "@/pages/NotFoundPage";
 import { ProjectDetailPage } from "@/pages/ProjectDetailPage";
 import { ProjectsPage } from "@/pages/ProjectsPage";
 import { EmployeeListPage } from "@/pages/EmployeeListPage";
+import { EmployeeProfilePage } from "@/pages/EmployeeProfilePage";
 import { ClientsPage } from "@/pages/ClientsPage";
 
 function RequireManage({ children }: { children: React.ReactNode }) {
@@ -51,6 +52,15 @@ export default function App() {
             </RequireManage>
           }
         />
+        <Route
+          path="/employees/:memberId"
+          element={
+            <RequireManage>
+              <EmployeeProfilePage />
+            </RequireManage>
+          }
+        />
+        <Route path="/my-profile" element={<EmployeeProfilePage self />} />
         <Route
           path="/clients"
           element={
