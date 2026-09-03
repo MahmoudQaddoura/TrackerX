@@ -1,7 +1,17 @@
-import { Boxes, Database, Network, Plus, Server, Wrench } from "lucide-react";
-import { useMemo, useState } from "react";
+import {
+  Boxes,
+  Database,
+  Download,
+  Maximize2,
+  Minimize2,
+  Network,
+  Plus,
+  Server,
+  Wrench,
+} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
-import type { AssetPayload } from "@/api/assets";
+import { exportAssetInventoryPdf, type AssetPayload } from "@/api/assets";
 import { AssetFormDialog } from "@/components/assets/AssetFormDialog";
 import { AssetNetworkMatrix } from "@/components/assets/AssetNetworkMatrix";
 import { AssetPortDialog } from "@/components/assets/AssetPortDialog";
@@ -10,9 +20,11 @@ import { DeleteConfirmDialog } from "@/components/forms/DeleteConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/ui/error-state";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAssetMutations, useAssets } from "@/hooks/useAssets";
 import { getApiErrorMessage } from "@/lib/apiClient";
+import { cn } from "@/lib/utils";
 import type {
   AssetConnectionStatus,
   AssetPort,
@@ -38,6 +50,8 @@ export function AssetInventoryWorkspace({
   const [portAsset, setPortAsset] = useState<ProjectAsset>();
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>();
   const [actionError, setActionError] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
   const assets = assetsQuery.data ?? [];
   const metrics = useMemo(
@@ -48,6 +62,20 @@ export function AssetInventoryWorkspace({
     }),
     [assets],
   );
+
+  useEffect(() => {
+    if (!expanded) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setExpanded(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [expanded]);
 
   if (assetsQuery.isLoading) return <Skeleton className="h-[32rem] w-full" />;
   if (assetsQuery.isError) {
@@ -87,54 +115,117 @@ export function AssetInventoryWorkspace({
     }
   }
 
-  function saveAsset(payload: AssetPayload) {
-    return editingAsset
-      ? mutations.updateAsset.mutateAsync({ id: editingAsset.id, payload })
-      : mutations.createAsset.mutateAsync(payload);
+  async function saveAsset(payload: AssetPayload) {
+    if (editingAsset) {
+      return mutations.updateAsset.mutateAsync({ id: editingAsset.id, payload });
+    }
+    const created = await mutations.createAsset.mutateAsync(payload);
+    setPortAsset(created);
+    window.setTimeout(() => setPortOpen(true), 0);
+    return created;
+  }
+
+  async function exportPdf() {
+    setActionError("");
+    setExporting(true);
+    try {
+      const blob = await exportAssetInventoryPdf(projectId);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `trackerx-project-${projectId}-asset-inventory.pdf`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+    } catch (error) {
+      setActionError(getApiErrorMessage(error, "Could not export the asset inventory PDF."));
+    } finally {
+      setExporting(false);
+    }
   }
 
   return (
-    <section className="overflow-hidden rounded-xl border border-border bg-surface shadow-card">
-      <div className="border-b border-border bg-gradient-to-r from-accent-soft/80 via-surface to-surface px-5 py-5 sm:px-6">
+    <section
+      className={cn(
+        "rounded-xl border border-border bg-surface shadow-card",
+        expanded
+          ? "fixed inset-3 z-[70] overflow-y-auto shadow-pop sm:inset-5"
+          : "overflow-hidden",
+      )}
+      aria-label="Project asset inventory"
+    >
+      <div className="bg-accent px-5 py-5 text-accent-fg sm:px-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex min-w-0 items-start gap-3">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-fg">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 text-white ring-1 ring-white/20">
               <Boxes className="h-5 w-5" />
             </span>
             <div>
-              <h2 className="font-display text-xl font-semibold text-fg">Asset inventory</h2>
-              <p className="mt-1 max-w-2xl text-sm text-fg-muted">
-                Project-owned infrastructure, destination ports, and source-to-port connectivity.
+              <h2 className="font-display text-xl font-semibold text-white">Asset inventory</h2>
+              <p className="mt-1 max-w-2xl text-sm text-white/75">
+                One project register for infrastructure, ports, and network decisions.
               </p>
             </div>
           </div>
-          {canEdit && (
+          <div className="flex flex-wrap items-center gap-2">
             <Button
-              onClick={() => {
-                setEditingAsset(undefined);
-                setAssetOpen(true);
-              }}
+              variant="outline"
+              className="border-white/30 bg-white/10 text-white hover:bg-white/20"
+              onClick={() => setExpanded((current) => !current)}
+              title={expanded ? "Return to the project page" : "Open a full-screen inventory workspace"}
             >
-              <Plus className="h-4 w-4" /> Add asset
+              {expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+              {expanded ? "Minimize" : "Maximize"}
             </Button>
-          )}
+            <Button
+              variant="outline"
+              className="border-white/30 bg-white/10 text-white hover:bg-white/20"
+              disabled={exporting || assets.length === 0}
+              onClick={exportPdf}
+              title={assets.length ? "Export the complete asset register, ports, and network rules" : "Add an asset before exporting"}
+            >
+              {exporting ? <Spinner /> : <Download className="h-4 w-4" />}
+              Export PDF
+            </Button>
+            {canEdit && (
+              <Button
+                className="bg-white text-accent hover:bg-accent-soft"
+                onClick={() => {
+                  setEditingAsset(undefined);
+                  setAssetOpen(true);
+                }}
+              >
+                <Plus className="h-4 w-4" /> Add asset
+              </Button>
+            )}
+          </div>
         </div>
-        <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      </div>
+
+      <div className="grid grid-cols-2 gap-px border-b border-border bg-border sm:grid-cols-4">
+        <div className="bg-surface p-3 sm:px-5">
           <Metric label="Assets" value={assets.length} icon={Server} />
+        </div>
+        <div className="bg-surface p-3 sm:px-5">
           <Metric label="Environments" value={metrics.environments} icon={Database} />
+        </div>
+        <div className="bg-surface p-3 sm:px-5">
           <Metric label="Tracked ports" value={metrics.ports} icon={Network} />
+        </div>
+        <div className="bg-surface p-3 sm:px-5">
           <Metric label="Maintenance" value={metrics.maintenance} icon={Wrench} />
         </div>
       </div>
 
       <div className="p-4 sm:p-6">
         <Tabs defaultValue="inventory">
-          <TabsList className="grid w-full grid-cols-2 sm:max-w-md">
+          <TabsList className="grid w-full grid-cols-2 sm:max-w-lg">
             <TabsTrigger value="inventory" className="justify-center gap-2">
-              <Server className="h-4 w-4" /> Inventory
+              <Server className="h-4 w-4" /> Asset register
             </TabsTrigger>
             <TabsTrigger value="matrix" className="justify-center gap-2">
-              <Network className="h-4 w-4" /> Network matrix
+              <Network className="h-4 w-4" /> Connectivity matrix
             </TabsTrigger>
           </TabsList>
 
@@ -214,12 +305,14 @@ function Metric({
   icon: typeof Server;
 }) {
   return (
-    <div className="rounded-lg border border-border/80 bg-surface/85 px-3 py-3">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-medium text-fg-muted">{label}</p>
-        <Icon className="h-4 w-4 text-accent" />
+    <div className="flex items-center gap-3">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+        <Icon className="h-4 w-4" />
+      </span>
+      <div>
+        <p className="text-[11px] font-medium uppercase tracking-wide text-fg-subtle">{label}</p>
+        <p className="font-display text-xl font-bold leading-tight text-fg">{value}</p>
       </div>
-      <p className="mt-1 font-display text-xl font-bold text-fg">{value}</p>
     </div>
   );
 }

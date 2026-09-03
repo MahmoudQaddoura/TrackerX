@@ -20,7 +20,7 @@ from app.db import Base
 from app.load_asset_inventory import load_inventory
 from app.deps import get_accessible_project_ids, require_project_content_editor
 from app.models import Asset, AssetConnection, Project, User
-from app.routers.assets import get_asset_matrix, list_assets
+from app.routers.assets import export_asset_inventory_pdf, get_asset_matrix, list_assets
 
 
 class AssetInventoryTests(unittest.TestCase):
@@ -85,3 +85,22 @@ class AssetInventoryTests(unittest.TestCase):
             self.assertGreater(len(matrix["connections"]), 0)
             with self.assertRaises(HTTPException):
                 require_project_content_editor(client)
+
+    def test_pdf_export_contains_complete_project_inventory(self):
+        with Session(self.engine) as db:
+            load_inventory(db, 1)
+            project = db.get(Project, 1)
+            user = User(
+                email="admin@example.com",
+                hashed_password="not-used",
+                full_name="TrackerX Admin",
+                role="admin",
+                access_level="write",
+            )
+
+            response = export_asset_inventory_pdf(project=project, db=db, user=user)
+
+            self.assertEqual(response.media_type, "application/pdf")
+            self.assertTrue(response.body.startswith(b"%PDF-"))
+            self.assertGreater(len(response.body), 8_000)
+            self.assertIn("asset-inventory.pdf", response.headers["content-disposition"])

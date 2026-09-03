@@ -46,6 +46,13 @@ export async function fetchAssets(
   return data;
 }
 
+export async function exportAssetInventoryPdf(projectId: number): Promise<Blob> {
+  const { data } = await api.get<Blob>(`/projects/${projectId}/assets/export/pdf`, {
+    responseType: "blob",
+  });
+  return data;
+}
+
 export async function createAsset(
   projectId: number,
   payload: AssetPayload,

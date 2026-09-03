@@ -16,6 +16,15 @@ import { Select } from "@/components/ui/select";
 import { getApiErrorMessage } from "@/lib/apiClient";
 import type { AssetProtocol, ProjectAsset } from "@/types";
 
+const COMMON_PORTS = [
+  { port: 443, protocol: "tcp" as const, service: "HTTPS" },
+  { port: 80, protocol: "tcp" as const, service: "HTTP" },
+  { port: 22, protocol: "tcp" as const, service: "SSH" },
+  { port: 5432, protocol: "tcp" as const, service: "PostgreSQL" },
+  { port: 3306, protocol: "tcp" as const, service: "MySQL" },
+  { port: 53, protocol: "udp" as const, service: "DNS" },
+];
+
 export function AssetPortDialog({
   open,
   onOpenChange,
@@ -72,6 +81,25 @@ export function AssetPortDialog({
           </DialogDescription>
         </DialogHeader>
         <form className="grid gap-4" onSubmit={submit}>
+          <div className="rounded-lg border border-border bg-accent-soft/40 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-accent">Common ports</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {COMMON_PORTS.map((option) => (
+                <button
+                  key={`${option.port}-${option.protocol}`}
+                  type="button"
+                  className="rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs font-medium text-fg hover:border-accent/40 hover:bg-accent-soft"
+                  onClick={() => {
+                    setPort(String(option.port));
+                    setProtocol(option.protocol);
+                    setService(option.service);
+                  }}
+                >
+                  {option.port}/{option.protocol.toUpperCase()} · {option.service}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-1.5">
               <Label>Port *</Label>
@@ -103,7 +131,7 @@ export function AssetPortDialog({
           </div>
           {error && <p className="text-sm text-danger">{error}</p>}
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Done for now</Button>
             <Button type="submit" disabled={isPending}>{isPending ? "Adding…" : "Add port"}</Button>
           </DialogFooter>
         </form>

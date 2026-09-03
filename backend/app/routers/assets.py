@@ -4,13 +4,20 @@ from __future__ import annotations
 
 from ipaddress import ip_address
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+import re
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from app.db import get_db
-from app.deps import check_project_access, require_project_access, require_project_content_editor
+from app.deps import (
+    check_project_access,
+    get_current_user,
+    require_project_access,
+    require_project_content_editor,
+)
 from app.models import Asset, AssetConnection, AssetPort, Project, User
 from app.models.asset import (
     ASSET_ENVIRONMENTS,
@@ -28,6 +35,7 @@ from app.schemas.asset import (
     AssetPortOut,
     AssetUpdate,
 )
+from app.services.asset_inventory_pdf import build_asset_inventory_pdf
 
 router = APIRouter(tags=["asset-inventory"])
 
@@ -196,6 +204,78 @@ def list_assets(
         )
     rows = query.order_by(Asset.environment, Asset.hostname).all()
     return [_asset_out(asset) for asset in rows]
+
+
+@router.get("/projects/{project_id}/assets/export/pdf")
+def export_asset_inventory_pdf(
+    project: Project = Depends(require_project_access),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    assets = (
+        db.query(Asset)
+        .options(selectinload(Asset.ports), selectinload(Asset.created_by))
+        .filter(Asset.project_id == project.id)
+        .order_by(Asset.environment, Asset.hostname)
+        .all()
+    )
+    if not assets:
+        raise HTTPException(
+            status_code=422,
+            detail="Add at least one asset before exporting the inventory.",
+        )
+
+    asset_ids = [asset.id for asset in assets]
+    port_ids = [port.id for asset in assets for port in asset.ports]
+    connections = (
+        db.query(AssetConnection)
+        .options(
+            selectinload(AssetConnection.source_asset),
+            selectinload(AssetConnection.port_record).selectinload(AssetPort.asset),
+        )
+        .filter(
+            AssetConnection.source_asset_id.in_(asset_ids),
+            AssetConnection.port_id.in_(port_ids),
+        )
+        .all()
+        if port_ids
+        else []
+    )
+    connections.sort(
+        key=lambda connection: (
+            connection.source_asset.hostname,
+            connection.port_record.asset.hostname,
+            connection.port_record.port,
+            connection.port_record.protocol,
+        )
+    )
+    connection_rows = [
+        {
+            "source_hostname": connection.source_asset.hostname,
+            "source_ip_address": connection.source_asset.ip_address,
+            "destination_hostname": connection.port_record.asset.hostname,
+            "destination_ip_address": connection.port_record.asset.ip_address,
+            "port": connection.port_record.port,
+            "protocol": connection.port_record.protocol,
+            "service": connection.port_record.service,
+            "status": connection.status,
+        }
+        for connection in connections
+    ]
+    pdf = build_asset_inventory_pdf(
+        project_name=project.name,
+        project_type=project.project_type,
+        assets=[_asset_out(asset) for asset in assets],
+        connections=connection_rows,
+        prepared_by=user.full_name,
+    )
+    slug = re.sub(r"[^a-z0-9]+", "-", project.name.lower()).strip("-") or f"project-{project.id}"
+    filename = f"trackerx-{slug}-asset-inventory.pdf"
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post("/projects/{project_id}/assets", response_model=AssetOut, status_code=201)
