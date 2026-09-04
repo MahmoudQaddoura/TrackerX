@@ -69,7 +69,20 @@ def _migrate_local_schema() -> None:
     leave_request_columns = {
         column["name"] for column in inspect(engine).get_columns("leave_requests")
     }
+    proactive_report_columns = {
+        column["name"] for column in inspect(engine).get_columns("proactive_service_reports")
+    }
     with engine.begin() as connection:
+        if "service_area_name" not in proactive_report_columns:
+            connection.exec_driver_sql(
+                "ALTER TABLE proactive_service_reports ADD COLUMN service_area_name TEXT"
+            )
+        # Correct the original demo seed where the patch report inherited the
+        # health-check category, which otherwise under-counts service coverage.
+        connection.exec_driver_sql(
+            "UPDATE proactive_service_reports SET category = 'patch_update' "
+            "WHERE title = 'Patch Update Report' AND category = 'health_check'"
+        )
         if "workstream" not in milestone_columns:
             connection.exec_driver_sql(
                 "ALTER TABLE milestones ADD COLUMN workstream TEXT NOT NULL DEFAULT 'project'"

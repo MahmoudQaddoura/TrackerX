@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """Structured proactive reporting and reactive incident workflows."""
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
 from app.db import get_db
@@ -28,6 +28,7 @@ from app.schemas.support import (
     SupportIncidentOut,
     SupportIncidentUpdate,
 )
+from app.services.support_report_pdf import build_proactive_report_pdf
 
 router = APIRouter(tags=["maintenance-support"])
 
@@ -64,6 +65,11 @@ def _validate_report(data: dict, existing: ProactiveServiceReport | None = None)
     period_end = data.get("period_end", existing.period_end if existing else None)
     if category not in PROACTIVE_CATEGORIES:
         raise HTTPException(status_code=422, detail="Invalid proactive report category.")
+    service_area_name = data.get(
+        "service_area_name", existing.service_area_name if existing else None
+    )
+    if service_area_name is not None and not service_area_name.strip():
+        raise HTTPException(status_code=422, detail="Custom service name cannot be blank.")
     if status not in PROACTIVE_STATUSES:
         raise HTTPException(status_code=422, detail="Invalid proactive report status.")
     if period_start and period_end and period_start > period_end:
@@ -119,6 +125,7 @@ def _report_out(report: ProactiveServiceReport) -> dict:
         "id": report.id,
         "project_id": report.project_id,
         "category": report.category,
+        "service_area_name": report.service_area_name,
         "title": report.title,
         "status": report.status,
         "period_start": report.period_start,
@@ -247,6 +254,27 @@ def delete_proactive_report(
     check_project_access(db, user, report.project_id)
     db.delete(report)
     db.commit()
+
+
+@router.get("/support/proactive/{report_id}/export/pdf")
+def export_proactive_report_pdf(
+    report_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    report = db.get(ProactiveServiceReport, report_id)
+    if report is None:
+        raise HTTPException(status_code=404, detail="Proactive report not found.")
+    if user.role == "client":
+        raise HTTPException(status_code=403, detail="Clients can download only forwarded reports.")
+    check_project_access(db, user, report.project_id)
+    pdf = build_proactive_report_pdf(report, prepared_by=user.full_name)
+    filename = f"service-report-{report.id:04d}.pdf"
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get(

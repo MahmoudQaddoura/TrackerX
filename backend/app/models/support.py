@@ -70,6 +70,7 @@ class ProactiveServiceReport(Base):
         index=True,
     )
     category = Column(Text, nullable=False, index=True)
+    service_area_name = Column(Text, nullable=True)
     title = Column(Text, nullable=False)
     status = Column(Text, nullable=False, default="pending", index=True)
     period_start = Column(Text, nullable=True)

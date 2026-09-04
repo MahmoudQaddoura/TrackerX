@@ -16,8 +16,8 @@ import {
   type ClientUpdatePayload,
 } from "@/api/clients";
 
-export function useClients() {
-  return useQuery({ queryKey: ["clients"], queryFn: fetchClients });
+export function useClients(enabled = true) {
+  return useQuery({ queryKey: ["clients"], queryFn: fetchClients, enabled });
 }
 
 export function useClientReportAdmin(clientId: number | null) {

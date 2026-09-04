@@ -11,6 +11,7 @@ import type {
 
 export interface ProactiveReportPayload {
   category?: ProactiveReportCategory;
+  service_area_name?: string | null;
   title?: string;
   status?: ProactiveReportStatus;
   period_start?: string | null;
@@ -71,6 +72,13 @@ export async function updateProactiveReport(
 
 export async function deleteProactiveReport(reportId: number): Promise<void> {
   await api.delete(`/support/proactive/${reportId}`);
+}
+
+export async function exportProactiveReportPdf(reportId: number): Promise<Blob> {
+  const { data } = await api.get<Blob>(`/support/proactive/${reportId}/export/pdf`, {
+    responseType: "blob",
+  });
+  return data;
 }
 
 export async function fetchSupportIncidents(projectId: number): Promise<SupportIncident[]> {

@@ -13,6 +13,7 @@ class SupportAssigneeOut(BaseModel):
 
 class ProactiveReportInput(BaseModel):
     category: str
+    service_area_name: str | None = Field(default=None, max_length=120)
     title: str = Field(min_length=1, max_length=250)
     status: str = "pending"
     period_start: str | None = None
@@ -28,6 +29,7 @@ class ProactiveReportInput(BaseModel):
 
 class ProactiveReportUpdate(BaseModel):
     category: str | None = None
+    service_area_name: str | None = Field(default=None, max_length=120)
     title: str | None = Field(default=None, min_length=1, max_length=250)
     status: str | None = None
     period_start: str | None = None
@@ -45,6 +47,7 @@ class ProactiveReportOut(BaseModel):
     id: int
     project_id: int
     category: str
+    service_area_name: str | None
     title: str
     status: str
     period_start: str | None

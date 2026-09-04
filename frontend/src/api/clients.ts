@@ -82,3 +82,10 @@ export async function markClientReportRead(shareId: number): Promise<ClientRepor
   const { data } = await api.patch<ClientReportShare>(`/client/reports/${shareId}/read`);
   return data;
 }
+
+export async function exportForwardedReportPdf(shareId: number): Promise<Blob> {
+  const { data } = await api.get<Blob>(`/client/reports/${shareId}/export/pdf`, {
+    responseType: "blob",
+  });
+  return data;
+}

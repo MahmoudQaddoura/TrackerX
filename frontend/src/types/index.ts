@@ -448,6 +448,7 @@ export interface ProactiveServiceReport {
   id: number;
   project_id: number;
   category: ProactiveReportCategory;
+  service_area_name: string | null;
   title: string;
   status: ProactiveReportStatus;
   period_start: string | null;

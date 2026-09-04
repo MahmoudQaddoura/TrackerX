@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """Client accounts, project visibility, and explicitly forwarded reports."""
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import delete, func, insert
 from sqlalchemy.orm import Session
 
@@ -29,6 +29,7 @@ from app.schemas.client import (
 )
 from app.security import hash_password
 from app.services.serialize import project_out
+from app.services.support_report_pdf import build_proactive_report_pdf
 
 router = APIRouter(tags=["clients"])
 
@@ -101,6 +102,7 @@ def _profile_out(db: Session, client: User, include_notes: bool = True) -> dict:
 def _proactive_payload(report: ProactiveServiceReport) -> dict:
     return {
         "category": report.category,
+        "service_area_name": report.service_area_name,
         "title": report.title,
         "status": report.status,
         "period_start": report.period_start,
@@ -491,3 +493,22 @@ def mark_report_read(
         db.commit()
         db.refresh(share)
     return _share_out(share)
+
+
+@router.get("/client/reports/{share_id}/export/pdf")
+def export_forwarded_report_pdf(
+    share_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    if user.role != "client":
+        raise HTTPException(status_code=403, detail="This area is for client accounts.")
+    share = db.get(ClientReportShare, share_id)
+    if share is None or share.client_user_id != user.id or share.proactive_report is None:
+        raise HTTPException(status_code=404, detail="Forwarded proactive report not found.")
+    pdf = build_proactive_report_pdf(share.proactive_report, prepared_by=share.shared_by.full_name if share.shared_by else "TrackerX Administration")
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="service-report-{share.proactive_report.id:04d}.pdf"'},
+    )

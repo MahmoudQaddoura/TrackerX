@@ -5,7 +5,9 @@ import {
   BarChart3,
   CheckCircle2,
   Clock3,
+  Download,
   FileOutput,
+  FileText,
   Gauge,
   LifeBuoy,
   Link2,
@@ -13,6 +15,7 @@ import {
   Pencil,
   Plus,
   RefreshCw,
+  Send,
   ShieldCheck,
   Trash2,
   UserRoundCheck,
@@ -27,6 +30,7 @@ import { AssetInventoryWorkspace } from "@/components/assets/AssetInventoryWorks
 import { DocumentRepository } from "@/components/documents/DocumentRepository";
 import { DeleteConfirmDialog } from "@/components/forms/DeleteConfirmDialog";
 import { IncidentDialog } from "@/components/support/IncidentDialog";
+import { ForwardReportDialog } from "@/components/support/ForwardReportDialog";
 import {
   PROACTIVE_CATEGORY_OPTIONS,
   ProactiveReportDialog,
@@ -41,6 +45,8 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/context/AuthContext";
+import { exportProactiveReportPdf } from "@/api/support";
+import { useClients, useClientMutations } from "@/hooks/useClients";
 import {
   useProactiveReports,
   useSupportIncidents,
@@ -80,12 +86,16 @@ export function MaintenanceSupportDashboard({
   const reports = useProactiveReports(project.id);
   const incidents = useSupportIncidents(project.id);
   const mutations = useSupportMutations(project.id);
+  const clients = useClients(isAdmin);
+  const clientMutations = useClientMutations();
   const [reportOpen, setReportOpen] = useState(false);
   const [incidentOpen, setIncidentOpen] = useState(false);
   const [editingReport, setEditingReport] = useState<ProactiveServiceReport | undefined>();
   const [editingIncident, setEditingIncident] = useState<SupportIncident | undefined>();
   const [previewReport, setPreviewReport] = useState<ProactiveServiceReport | undefined>();
   const [previewIncident, setPreviewIncident] = useState<SupportIncident | undefined>();
+  const [forwardReport, setForwardReport] = useState<ProactiveServiceReport | undefined>();
+  const [downloadingReportId, setDownloadingReportId] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<
     { type: "report"; item: ProactiveServiceReport } | { type: "incident"; item: SupportIncident } | null
   >(null);
@@ -121,6 +131,21 @@ export function MaintenanceSupportDashboard({
 
   const isLoading = reports.isLoading || incidents.isLoading;
   const isError = reports.isError || incidents.isError;
+
+  async function downloadReport(report: ProactiveServiceReport) {
+    setDownloadingReportId(report.id);
+    try {
+      const blob = await exportProactiveReportPdf(report.id);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `service-report-${String(report.id).padStart(4, "0")}.pdf`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setDownloadingReportId(null);
+    }
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -205,7 +230,7 @@ export function MaintenanceSupportDashboard({
 
       {!isLoading && !isError && (
         <Tabs defaultValue="proactive">
-          <TabsList className="grid w-full grid-cols-3 sm:max-w-3xl">
+          <TabsList className="grid w-full grid-cols-2 sm:max-w-4xl sm:grid-cols-4">
             <TabsTrigger value="proactive" className="justify-center gap-2 py-2.5">
               <Activity className="h-4 w-4" /> Proactive Tasks
               <Badge variant="neutral">{reportMetrics.total}</Badge>
@@ -217,6 +242,9 @@ export function MaintenanceSupportDashboard({
             <TabsTrigger value="assets" className="justify-center gap-2 py-2.5">
               <Boxes className="h-4 w-4" /> Asset Inventory
             </TabsTrigger>
+            <TabsTrigger value="documents" className="justify-center gap-2 py-2.5">
+              <FileText className="h-4 w-4" /> Documents
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="proactive">
@@ -225,6 +253,7 @@ export function MaintenanceSupportDashboard({
               metrics={reportMetrics}
               canEdit={canEditProjectContent}
               canManage={canManage}
+              canForward={isAdmin}
               onAdd={() => {
                 setEditingReport(undefined);
                 setReportOpen(true);
@@ -234,6 +263,9 @@ export function MaintenanceSupportDashboard({
                 setReportOpen(true);
               }}
               onPreview={setPreviewReport}
+              onDownload={downloadReport}
+              onForward={setForwardReport}
+              downloadingReportId={downloadingReportId}
               onDelete={(report) => setDeleteTarget({ type: "report", item: report })}
             />
           </TabsContent>
@@ -263,10 +295,12 @@ export function MaintenanceSupportDashboard({
               canEdit={canEditProjectContent}
             />
           </TabsContent>
+
+          <TabsContent value="documents">
+            <DocumentRepository projectId={project.id} workspace="support" embedded />
+          </TabsContent>
         </Tabs>
       )}
-
-      <DocumentRepository projectId={project.id} workspace="support" />
 
       <ProactiveReportDialog
         open={reportOpen}
@@ -303,7 +337,10 @@ export function MaintenanceSupportDashboard({
         project={project}
         report={previewReport}
         incident={previewIncident}
+        isDownloading={!!previewReport && downloadingReportId === previewReport.id}
+        onDownload={previewReport ? () => downloadReport(previewReport) : undefined}
       />
+      <ForwardReportDialog open={!!forwardReport} onOpenChange={(open) => !open && setForwardReport(undefined)} project={project} report={forwardReport} clients={clients.data ?? []} isPending={clientMutations.forwardReport.isPending} onForward={(clientId, message) => clientMutations.forwardReport.mutateAsync({ clientId, reportType: "proactive", reportId: forwardReport!.id, message })} />
       <DeleteConfirmDialog
         open={!!deleteTarget}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
@@ -328,18 +365,26 @@ function ProactiveWorkspace({
   metrics,
   canEdit,
   canManage,
+  canForward,
   onAdd,
   onOpen,
   onPreview,
+  onDownload,
+  onForward,
+  downloadingReportId,
   onDelete,
 }: {
   reports: ProactiveServiceReport[];
   metrics: { total: number; completed: number; attention: number; inProgress: number };
   canEdit: boolean;
   canManage: boolean;
+  canForward: boolean;
   onAdd: () => void;
   onOpen: (report: ProactiveServiceReport) => void;
   onPreview: (report: ProactiveServiceReport) => void;
+  onDownload: (report: ProactiveServiceReport) => void;
+  onForward: (report: ProactiveServiceReport) => void;
+  downloadingReportId: number | null;
   onDelete: (report: ProactiveServiceReport) => void;
 }) {
   return (
@@ -348,14 +393,14 @@ function ProactiveWorkspace({
         <MetricCard label="Completed reports" value={metrics.completed} icon={CheckCircle2} tone="success" />
         <MetricCard label="In progress" value={metrics.inProgress} icon={Clock3} />
         <MetricCard label="Attention required" value={metrics.attention} icon={AlertTriangle} tone="warning" />
-        <MetricCard label="Service areas" value={`${new Set(reports.map((report) => report.category)).size}/6`} icon={Activity} />
+        <MetricCard label="Service areas" value={new Set(reports.map((report) => report.service_area_name || report.category)).size} icon={Activity} />
       </div>
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="font-display text-lg font-semibold text-fg">Service assurance reports</h2>
           <p className="mt-1 max-w-3xl text-sm text-fg-muted">
-            Employees complete structured evidence for health, security, updates, performance, and service KPIs. Completed records can be printed or saved as PDF reports.
+            Complete structured service evidence, download a client-ready PDF, and forward finalized reports to the linked client portal.
           </p>
         </div>
         {canEdit && <Button onClick={onAdd}><Plus className="h-4 w-4" /> New report</Button>}
@@ -371,8 +416,12 @@ function ProactiveWorkspace({
               report={report}
               canEdit={canEdit}
               canManage={canManage}
+              canForward={canForward}
               onOpen={() => onOpen(report)}
               onPreview={() => onPreview(report)}
+              onDownload={() => onDownload(report)}
+              onForward={() => onForward(report)}
+              isDownloading={downloadingReportId === report.id}
               onDelete={() => onDelete(report)}
             />
           ))}
@@ -382,9 +431,10 @@ function ProactiveWorkspace({
   );
 }
 
-function ProactiveReportCard({ report, canEdit, canManage, onOpen, onPreview, onDelete }: { report: ProactiveServiceReport; canEdit: boolean; canManage: boolean; onOpen: () => void; onPreview: () => void; onDelete: () => void }) {
+function ProactiveReportCard({ report, canEdit, canManage, canForward, onOpen, onPreview, onDownload, onForward, onDelete, isDownloading }: { report: ProactiveServiceReport; canEdit: boolean; canManage: boolean; canForward: boolean; onOpen: () => void; onPreview: () => void; onDownload: () => void; onForward: () => void; onDelete: () => void; isDownloading: boolean }) {
   const Icon = CATEGORY_ICONS[report.category];
   const category = PROACTIVE_CATEGORY_OPTIONS.find((option) => option.value === report.category);
+  const serviceLabel = report.service_area_name || category?.label;
   const completeness = reportCompleteness(report);
   return (
     <Card className="group cursor-pointer transition-all hover:-translate-y-0.5 hover:border-accent/60 hover:shadow-md" onClick={onOpen}>
@@ -393,8 +443,9 @@ function ProactiveReportCard({ report, canEdit, canManage, onOpen, onPreview, on
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent"><Icon className="h-5 w-5" /></span>
           <ReportStatusBadge status={report.status} />
         </div>
-        <h3 className="mt-4 font-semibold text-fg">{report.title}</h3>
-        <p className="mt-1 line-clamp-2 text-xs leading-5 text-fg-muted">{category?.description}</p>
+        <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-accent">{serviceLabel}</p>
+        <h3 className="mt-1 font-semibold text-fg">{report.title}</h3>
+        <p className="mt-1 line-clamp-2 text-xs leading-5 text-fg-muted">{report.service_area_name ? "Custom service assurance report." : category?.description}</p>
         <div className="mt-4 flex items-center justify-between text-xs text-fg-muted"><span>Report completeness</span><span>{completeness}%</span></div>
         <Progress value={completeness} className="mt-1.5" />
         <div className="mt-4 flex flex-wrap gap-1.5">
@@ -405,6 +456,8 @@ function ProactiveReportCard({ report, canEdit, canManage, onOpen, onPreview, on
           <span className="text-xs text-fg-subtle">Updated {formatDate(report.updated_at)}</span>
           <div className="flex items-center gap-1">
             <Button variant="ghost" size="icon" title="Preview report" aria-label="Preview report" onClick={onPreview}><FileOutput className="h-4 w-4" /></Button>
+            <Button variant="ghost" size="icon" title="Download PDF" aria-label="Download report PDF" disabled={isDownloading} onClick={onDownload}><Download className="h-4 w-4" /></Button>
+            {canForward && report.status === "completed" && <Button variant="ghost" size="icon" title="Forward to client" aria-label="Forward report to client" onClick={onForward}><Send className="h-4 w-4" /></Button>}
             {canEdit && <Button variant="ghost" size="icon" title="Edit report" aria-label="Edit report" onClick={onOpen}><Pencil className="h-4 w-4" /></Button>}
             {canManage && <Button variant="ghost" size="icon" title="Delete report" aria-label="Delete report" onClick={onDelete}><Trash2 className="h-4 w-4" /></Button>}
           </div>

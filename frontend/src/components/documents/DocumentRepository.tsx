@@ -49,9 +49,11 @@ const FOLDER_ICONS: Record<DocumentFolderKey, LucideIcon> = {
 export function DocumentRepository({
   projectId,
   workspace = "project",
+  embedded = false,
 }: {
   projectId: number;
   workspace?: "project" | "support";
+  embedded?: boolean;
 }) {
   const { data, isLoading, isError, refetch } = useDocuments(projectId);
   const milestones = useMilestones(projectId);
@@ -86,28 +88,34 @@ export function DocumentRepository({
     ).length;
 
   return (
-    <section aria-labelledby="document-workspace-title" className="overflow-hidden rounded-xl border border-border bg-surface shadow-card">
-      <div className="border-b border-border bg-gradient-to-br from-accent-soft via-surface to-surface px-5 py-5 sm:px-6">
-        <div className="flex items-start gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-fg shadow-sm">
-            {workspace === "support" ? <Archive className="h-5 w-5" /> : <FileStack className="h-5 w-5" />}
-          </span>
-          <div>
-            <h2 id="document-workspace-title" className="font-display text-lg font-semibold text-fg">
-              {workspace === "support" ? "Service evidence & documents" : "Actual project documents"}
-            </h2>
-            <p className="mt-0.5 text-sm text-fg-muted">
-              {workspace === "support"
-                ? "Store operational evidence, manuals, updates, client reports, and supporting records."
-                : "Delivery records, technical references, testing evidence, and project handover files."}
-            </p>
+    <section
+      aria-label={embedded ? "Project documents" : undefined}
+      aria-labelledby={embedded ? undefined : "document-workspace-title"}
+      className={embedded ? "pt-2" : "overflow-hidden rounded-xl border border-border bg-surface shadow-card"}
+    >
+      {!embedded && (
+        <div className="border-b border-border bg-gradient-to-br from-accent-soft via-surface to-surface px-5 py-5 sm:px-6">
+          <div className="flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-fg shadow-sm">
+              {workspace === "support" ? <Archive className="h-5 w-5" /> : <FileStack className="h-5 w-5" />}
+            </span>
+            <div>
+              <h2 id="document-workspace-title" className="font-display text-lg font-semibold text-fg">
+                {workspace === "support" ? "Service evidence & documents" : "Actual project documents"}
+              </h2>
+              <p className="mt-0.5 text-sm text-fg-muted">
+                {workspace === "support"
+                  ? "Store operational evidence, manuals, updates, client reports, and supporting records."
+                  : "Delivery records, technical references, testing evidence, and project handover files."}
+              </p>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
-      <div className="px-5 py-5 sm:px-6">
+      <div className={embedded ? "py-3" : "px-5 py-5 sm:px-6"}>
         <Tabs value={folderKey} onValueChange={(value) => setFolderKey(value as DocumentFolderKey)}>
-          <div className="-mx-5 overflow-x-auto px-5 pb-2 sm:-mx-6 sm:px-6">
+          <div className={embedded ? "overflow-x-auto pb-2" : "-mx-5 overflow-x-auto px-5 pb-2 sm:-mx-6 sm:px-6"}>
             <TabsList className="w-max min-w-full flex-nowrap justify-start">
               {folders.map((folder) => {
                 const Icon = FOLDER_ICONS[folder.key];

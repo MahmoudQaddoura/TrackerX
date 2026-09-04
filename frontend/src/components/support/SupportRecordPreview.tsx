@@ -2,6 +2,7 @@ import { FileDown } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import {
   Dialog,
   DialogContent,
@@ -18,12 +19,16 @@ export function SupportRecordPreview({
   project,
   report,
   incident,
+  onDownload,
+  isDownloading = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   project: Project;
   report?: ProactiveServiceReport;
   incident?: SupportIncident;
+  onDownload?: () => void;
+  isDownloading?: boolean;
 }) {
   if (!report && !incident) return null;
   const title = report?.title ?? incident?.title ?? "Service report";
@@ -62,9 +67,9 @@ export function SupportRecordPreview({
 
         <DialogFooter data-no-print>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
-          <Button onClick={() => window.print()}>
-            <FileDown className="h-4 w-4" /> Print / Save PDF
-          </Button>
+          {report && onDownload && <Button onClick={onDownload} disabled={isDownloading}>
+            {isDownloading ? <Spinner /> : <FileDown className="h-4 w-4" />} Download PDF
+          </Button>}
         </DialogFooter>
       </DialogContent>
     </Dialog>
