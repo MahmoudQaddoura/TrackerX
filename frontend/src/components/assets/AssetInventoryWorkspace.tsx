@@ -1,7 +1,9 @@
 import {
   Boxes,
+  ChevronDown,
   Database,
   Download,
+  FileText,
   FileSpreadsheet,
   Maximize2,
   Minimize2,
@@ -10,7 +12,7 @@ import {
   Server,
   Wrench,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import {
@@ -57,7 +59,9 @@ export function AssetInventoryWorkspace({
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>();
   const [actionError, setActionError] = useState("");
   const [exporting, setExporting] = useState<"pdf" | "xlsx" | null>(null);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
 
   const assets = assetsQuery.data ?? [];
   const metrics = useMemo(
@@ -87,6 +91,22 @@ export function AssetInventoryWorkspace({
       window.removeEventListener("keydown", closeOnEscape);
     };
   }, [assetOpen, deleteTarget, expanded, portOpen]);
+
+  useEffect(() => {
+    if (!exportMenuOpen) return;
+    const closeMenu = (event: MouseEvent) => {
+      if (!exportMenuRef.current?.contains(event.target as Node)) setExportMenuOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setExportMenuOpen(false);
+    };
+    document.addEventListener("mousedown", closeMenu);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeMenu);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [exportMenuOpen]);
 
   if (assetsQuery.isLoading) return <Skeleton className="h-[32rem] w-full" />;
   if (assetsQuery.isError) {
@@ -195,26 +215,52 @@ export function AssetInventoryWorkspace({
               {expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
               {expanded ? "Minimize" : "Maximize"}
             </Button>
-            <Button
-              variant="outline"
-              className="border-white/30 bg-white/10 text-white hover:bg-white/20"
-              disabled={exporting !== null || assets.length === 0}
-              onClick={() => exportInventory("pdf")}
-              title={assets.length ? "Export the complete asset register, ports, and network rules" : "Add an asset before exporting"}
-            >
-              {exporting === "pdf" ? <Spinner /> : <Download className="h-4 w-4" />}
-              Export PDF
-            </Button>
-            <Button
-              variant="outline"
-              className="border-white/30 bg-white/10 text-white hover:bg-white/20"
-              disabled={exporting !== null || assets.length === 0}
-              onClick={() => exportInventory("xlsx")}
-              title={assets.length ? "Export a complete, filterable Excel workbook" : "Add an asset before exporting"}
-            >
-              {exporting === "xlsx" ? <Spinner /> : <FileSpreadsheet className="h-4 w-4" />}
-              Export Excel
-            </Button>
+            <div className="relative" ref={exportMenuRef}>
+              <Button
+                variant="outline"
+                className="border-white/30 bg-white/10 text-white hover:bg-white/20"
+                disabled={exporting !== null || assets.length === 0}
+                onClick={() => setExportMenuOpen((current) => !current)}
+                aria-expanded={exportMenuOpen}
+                aria-haspopup="menu"
+                title={assets.length ? "Choose an export format" : "Add an asset before exporting"}
+              >
+                {exporting ? <Spinner /> : <Download className="h-4 w-4" />}
+                Export
+                <ChevronDown className={cn("h-4 w-4 transition-transform", exportMenuOpen && "rotate-180")} />
+              </Button>
+              {exportMenuOpen && (
+                <div
+                  role="menu"
+                  className="absolute right-0 z-40 mt-2 w-64 overflow-hidden rounded-xl border border-border bg-surface p-1.5 text-fg shadow-lg"
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-accent-soft"
+                    onClick={() => {
+                      setExportMenuOpen(false);
+                      void exportInventory("pdf");
+                    }}
+                  >
+                    <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent-soft text-accent"><FileText className="h-4 w-4" /></span>
+                    <span><span className="block text-sm font-semibold">PDF report</span><span className="block text-xs text-fg-muted">Print-ready inventory and matrix</span></span>
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-accent-soft"
+                    onClick={() => {
+                      setExportMenuOpen(false);
+                      void exportInventory("xlsx");
+                    }}
+                  >
+                    <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent-soft text-accent"><FileSpreadsheet className="h-4 w-4" /></span>
+                    <span><span className="block text-sm font-semibold">Excel workbook</span><span className="block text-xs text-fg-muted">Filterable tables and visual matrix</span></span>
+                  </button>
+                </div>
+              )}
+            </div>
             {canEdit && (
               <Button
                 className="bg-white text-accent hover:bg-accent-soft"

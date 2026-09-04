@@ -61,36 +61,58 @@ export function AssetNetworkMatrix({
       ),
     [matrix.data?.connections],
   );
-  const assets = matrix.data?.assets ?? [];
+  const assets = useMemo(
+    () =>
+      inventoryAssets
+        .filter((asset) => asset.environment === environment)
+        .sort((left, right) => left.hostname.localeCompare(right.hostname))
+        .map((asset) => ({
+          ...asset,
+          ports: [...asset.ports].sort(
+            (left, right) => left.port - right.port || left.protocol.localeCompare(right.protocol),
+          ),
+        })),
+    [environment, inventoryAssets],
+  );
   const destinations = assets.filter((asset) => asset.ports.length > 0);
   const portCount = destinations.reduce((total, asset) => total + asset.ports.length, 0);
 
   return (
     <div className="mt-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h3 className="font-display text-base font-semibold text-fg">Port-level connectivity</h3>
-          <p className="mt-1 max-w-2xl text-sm text-fg-muted">
-            Rows are outbound source IPs. Every destination port has its own connection state.
-          </p>
+      <div className="rounded-xl border border-accent/15 bg-accent-soft/35 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h3 className="font-display text-base font-semibold text-accent">Connectivity from the asset register</h3>
+            <p className="mt-1 max-w-2xl text-sm text-fg-muted">
+              Source rows and destination ports are created automatically from the registered assets in this environment.
+            </p>
+          </div>
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
+            <span className="rounded-full border border-accent/15 bg-surface px-3 py-2 text-xs font-semibold text-accent">
+              {assets.length} {assets.length === 1 ? "asset" : "assets"}
+            </span>
+            <span className="rounded-full border border-accent/15 bg-surface px-3 py-2 text-xs font-semibold text-accent">
+              {portCount} destination {portCount === 1 ? "port" : "ports"}
+            </span>
+            <Select
+              className="w-full bg-surface sm:w-52"
+              value={environment}
+              onChange={(event) => setEnvironment(event.target.value as AssetEnvironment)}
+              aria-label="Matrix environment"
+            >
+              {(availableEnvironments.length ? availableEnvironments : ASSET_ENVIRONMENTS).map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </Select>
+          </div>
         </div>
-        <Select
-          className="w-full sm:w-52"
-          value={environment}
-          onChange={(event) => setEnvironment(event.target.value as AssetEnvironment)}
-          aria-label="Matrix environment"
-        >
-          {(availableEnvironments.length ? availableEnvironments : ASSET_ENVIRONMENTS).map((option) => (
-            <option key={option.value} value={option.value}>{option.label}</option>
-          ))}
-        </Select>
-      </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-fg-muted">
-        <Legend tone="connected" label="Connected" />
-        <Legend tone="closed" label="Closed" />
-        <Legend tone="not_needed" label="Not needed" />
-        {canEdit && <span>Click a cell to change its state.</span>}
+        <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-accent/10 pt-3 text-xs text-fg-muted">
+          <Legend tone="connected" label="Connected" />
+          <Legend tone="closed" label="Closed" />
+          <Legend tone="not_needed" label="Not needed" />
+          {canEdit && <span className="font-medium text-accent">Select a state to cycle: Not needed → Connected → Closed.</span>}
+        </div>
       </div>
 
       {matrix.isLoading ? (
@@ -110,24 +132,25 @@ export function AssetNetworkMatrix({
           description={canEdit ? "Add a port from the Inventory tab to start the matrix." : undefined}
         />
       ) : (
-        <div className="mt-4 max-h-[34rem] overflow-auto rounded-lg border border-border">
+        <div className="mt-4 max-h-[36rem] overflow-auto rounded-xl border border-accent/20 bg-surface shadow-sm">
           <table className="min-w-max border-separate border-spacing-0 text-center text-xs">
-            <thead className="sticky top-0 z-20 bg-raised">
+            <thead className="sticky top-0 z-20 text-white">
               <tr>
                 <th
                   rowSpan={2}
-                  className="sticky left-0 z-30 min-w-52 border-b border-r border-border bg-raised px-4 py-3 text-left font-semibold text-fg"
+                  className="sticky left-0 z-30 min-w-52 border-b border-r border-white/15 bg-accent px-4 py-3 text-left font-semibold text-white"
                 >
-                  Outbound source
+                  <span className="block text-[10px] uppercase tracking-widest text-white/65">Asset register</span>
+                  <span className="mt-1 block text-sm">Outbound source</span>
                 </th>
                 {destinations.map((destination) => (
                   <th
                     key={destination.id}
                     colSpan={destination.ports.length}
-                    className="border-b border-r border-border px-3 py-2 font-semibold text-fg"
+                    className="border-b border-r border-white/15 bg-accent px-3 py-2 font-semibold text-white"
                   >
                     <span className="font-mono">{destination.hostname}</span>
-                    <span className="ml-2 font-mono font-normal text-fg-muted">{destination.ip_address}</span>
+                    <span className="ml-2 font-mono font-normal text-white/65">{destination.ip_address}</span>
                   </th>
                 ))}
               </tr>
@@ -136,20 +159,21 @@ export function AssetNetworkMatrix({
                   destination.ports.map((port) => (
                     <th
                       key={port.id}
-                      className="min-w-32 border-b border-r border-border bg-raised px-3 py-2 font-medium text-fg"
+                      className="min-w-36 border-b border-r border-white/15 bg-accent/90 px-3 py-2 font-medium text-white"
                       title={port.notes || port.service}
                     >
                       <span className="block font-mono">{port.port}/{port.protocol.toUpperCase()}</span>
-                      <span className="mt-0.5 block font-sans text-[11px] font-normal text-fg-muted">{port.service}</span>
+                      <span className="mt-0.5 block font-sans text-[11px] font-normal text-white/65">{port.service}</span>
                     </th>
                   )),
                 )}
               </tr>
             </thead>
             <tbody>
-              {assets.map((source) => (
-                <tr key={source.id} className="hover:bg-raised/50">
-                  <th className="sticky left-0 z-10 border-b border-r border-border bg-surface px-4 py-3 text-left">
+              {assets.map((source, sourceIndex) => (
+                <tr key={source.id} className="group">
+                  <th className="sticky left-0 z-10 border-b border-r border-accent/15 bg-accent-soft px-4 py-3 text-left shadow-[3px_0_6px_rgba(15,82,116,0.06)]">
+                    <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-accent/65">Source {sourceIndex + 1}</span>
                     <span className="block font-mono font-semibold text-fg">{source.hostname}</span>
                     <span className="mt-0.5 block font-mono font-normal text-accent">{source.ip_address}</span>
                   </th>
@@ -157,15 +181,25 @@ export function AssetNetworkMatrix({
                     destination.ports.map((port) => {
                       if (source.id === destination.id) {
                         return (
-                          <td key={port.id} className="border-b border-r border-border bg-raised/60 px-2 py-3 text-fg-subtle">
-                            —
+                          <td key={port.id} className="border-b border-r border-accent/10 bg-accent-soft/45 px-2 py-3 text-fg-subtle">
+                            <span className="inline-flex min-h-11 w-full items-center justify-center rounded-lg border border-dashed border-accent/15 text-[11px] font-medium">
+                              Same asset
+                            </span>
                           </td>
                         );
                       }
                       const status =
                         connections.get(`${source.id}:${port.id}`) ?? "not_needed";
                       return (
-                        <td key={port.id} className="border-b border-r border-border p-2">
+                        <td
+                          key={port.id}
+                          className={cn(
+                            "border-b border-r border-accent/10 p-2 transition-colors group-hover:bg-accent-soft/20",
+                            status === "connected" && "bg-success/5",
+                            status === "closed" && "bg-danger/5",
+                            status === "not_needed" && "bg-raised/35",
+                          )}
+                        >
                           <ConnectionButton
                             status={status}
                             disabled={!canEdit || isUpdating}

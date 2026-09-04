@@ -378,6 +378,156 @@ def _styled_table(
     return table
 
 
+def _connectivity_matrix_table(
+    environment_assets: list[dict[str, Any]],
+    destinations: list[tuple[dict[str, Any], dict[str, Any]]],
+    status_by_cell: dict[tuple[int, int], str],
+) -> Table:
+    """Render one UI-equivalent slice of the asset-register-driven matrix."""
+
+    base = getSampleStyleSheet()
+    source_header = ParagraphStyle(
+        "MatrixSourceHeader",
+        parent=base["Normal"],
+        fontName=FONT_BOLD,
+        fontSize=6.5,
+        leading=8,
+        textColor=colors.white,
+        alignment=TA_LEFT,
+    )
+    destination_header = ParagraphStyle(
+        "MatrixDestinationHeader",
+        parent=source_header,
+        fontSize=6,
+        leading=7.2,
+        alignment=TA_CENTER,
+    )
+    port_header = ParagraphStyle(
+        "MatrixPortHeader",
+        parent=destination_header,
+        fontName=FONT_REGULAR,
+        fontSize=5.8,
+        leading=7,
+    )
+    source_cell = ParagraphStyle(
+        "MatrixSourceCell",
+        parent=base["Normal"],
+        fontName=FONT_BOLD,
+        fontSize=6.4,
+        leading=8,
+        textColor=INK,
+    )
+    state_cell = ParagraphStyle(
+        "MatrixStateCell",
+        parent=base["Normal"],
+        fontName=FONT_BOLD,
+        fontSize=6,
+        leading=7.5,
+        textColor=INK,
+        alignment=TA_CENTER,
+    )
+
+    first_header: list[Any] = [Paragraph("OUTBOUND SOURCE", source_header)]
+    second_header: list[Any] = [""]
+    group_spans: list[tuple[int, int]] = []
+    group_start = 1
+    previous_asset_id: int | None = None
+    for index, (destination, port) in enumerate(destinations, start=1):
+        destination_id = int(destination["id"])
+        if previous_asset_id is not None and destination_id != previous_asset_id:
+            group_spans.append((group_start, index - 1))
+            group_start = index
+        first_header.append(
+            Paragraph(
+                f"{escape(_text(destination['hostname']))}<br/>"
+                f"<font color='#CFE7F3'>{escape(_text(destination['ip_address']))}</font>",
+                destination_header,
+            )
+            if destination_id != previous_asset_id
+            else ""
+        )
+        second_header.append(
+            Paragraph(
+                f"{escape(_text(port['port']))}/{escape(str(port['protocol']).upper())}<br/>"
+                f"<font color='#CFE7F3'>{escape(_text(port.get('service')))}</font>",
+                port_header,
+            )
+        )
+        previous_asset_id = destination_id
+    group_spans.append((group_start, len(destinations)))
+
+    data: list[list[Any]] = [first_header, second_header]
+    cell_states: dict[tuple[int, int], str] = {}
+    for row_index, source in enumerate(environment_assets, start=2):
+        row: list[Any] = [
+            Paragraph(
+                f"{escape(_text(source['hostname']))}<br/>"
+                f"<font color='#0B537A'>{escape(_text(source['ip_address']))}</font>",
+                source_cell,
+            )
+        ]
+        for column_index, (destination, port) in enumerate(destinations, start=1):
+            if source["id"] == destination["id"]:
+                status = "same_asset"
+            else:
+                status = status_by_cell.get(
+                    (int(source["id"]), int(port["id"])), "not_needed"
+                )
+            label = {
+                "connected": "Connected",
+                "closed": "Closed",
+                "not_needed": "Not needed",
+                "same_asset": "Same asset",
+            }.get(status, status.replace("_", " ").title())
+            row.append(Paragraph(escape(label), state_cell))
+            cell_states[(column_index, row_index)] = status
+        data.append(row)
+
+    available_mm = CONTENT_WIDTH / mm
+    source_width = 43
+    port_width = (available_mm - source_width) / max(1, len(destinations))
+    table = Table(
+        data,
+        colWidths=[source_width * mm] + [port_width * mm] * len(destinations),
+        repeatRows=2,
+        hAlign="LEFT",
+    )
+    commands: list[tuple[Any, ...]] = [
+        ("SPAN", (0, 0), (0, 1)),
+        ("BACKGROUND", (0, 0), (-1, 1), NAVY),
+        ("BOX", (0, 0), (-1, -1), 0.7, NAVY),
+        ("INNERGRID", (0, 0), (-1, -1), 0.35, LINE),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("BACKGROUND", (0, 2), (0, -1), PALE_BLUE),
+        ("LEFTPADDING", (0, 0), (-1, -1), 1.8 * mm),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 1.8 * mm),
+        ("TOPPADDING", (0, 0), (-1, 1), 2 * mm),
+        ("BOTTOMPADDING", (0, 0), (-1, 1), 2 * mm),
+        ("TOPPADDING", (0, 2), (-1, -1), 2.5 * mm),
+        ("BOTTOMPADDING", (0, 2), (-1, -1), 2.5 * mm),
+    ]
+    for start, end in group_spans:
+        if start < end:
+            commands.append(("SPAN", (start, 0), (end, 0)))
+    state_backgrounds = {
+        "connected": PALE_GREEN,
+        "closed": PALE_RED,
+        "not_needed": ROW_ALT,
+        "same_asset": PALE_BLUE,
+    }
+    state_text = {
+        "connected": GREEN,
+        "closed": colors.HexColor("#C91C4D"),
+        "not_needed": MUTED,
+        "same_asset": MUTED,
+    }
+    for (column, row), status in cell_states.items():
+        commands.append(("BACKGROUND", (column, row), (column, row), state_backgrounds[status]))
+        commands.append(("TEXTCOLOR", (column, row), (column, row), state_text[status]))
+    table.setStyle(TableStyle(commands))
+    return table
+
+
 def build_asset_inventory_pdf(
     project_name: str,
     project_type: str,
@@ -577,14 +727,97 @@ def build_asset_inventory_pdf(
         else _empty_panel("No destination ports are recorded for this project.")
     )
 
+    status_by_cell = {
+        (int(rule["source_asset_id"]), int(rule["port_id"])): rule["status"]
+        for rule in connections
+    }
+    environment_order = {
+        "production": 0,
+        "staging": 1,
+        "development": 2,
+        "test": 3,
+        "disaster_recovery": 4,
+        "other": 5,
+    }
+    environment_groups: dict[str, list[dict[str, Any]]] = {}
+    for asset in assets:
+        environment_groups.setdefault(asset["environment"], []).append(asset)
+
+    rendered_matrix = False
+    for environment, environment_assets in sorted(
+        environment_groups.items(),
+        key=lambda item: (environment_order.get(item[0], 99), item[0]),
+    ):
+        environment_assets.sort(key=lambda item: item["hostname"].lower())
+        destinations = [
+            (asset, port)
+            for asset in environment_assets
+            for port in sorted(
+                asset.get("ports", []),
+                key=lambda item: (int(item["port"]), str(item["protocol"])),
+            )
+        ]
+        if not destinations:
+            continue
+        for chunk_index in range(0, len(destinations), 5):
+            chunk = destinations[chunk_index : chunk_index + 5]
+            chunk_number = chunk_index // 5 + 1
+            chunk_count = (len(destinations) + 4) // 5
+            suffix = f" · part {chunk_number} of {chunk_count}" if chunk_count > 1 else ""
+            story.extend(
+                [
+                    PageBreak(),
+                    _brand_header(),
+                    Spacer(1, 6 * mm),
+                    _section_heading(
+                        f"{ENVIRONMENT_LABELS.get(environment, environment)} connectivity{suffix}",
+                        "Rows and destination ports mirror the Asset Register. Same-asset cells are intentionally disabled.",
+                        f"{len(environment_assets)} assets · {len(destinations)} ports",
+                    ),
+                    _connectivity_matrix_table(
+                        environment_assets,
+                        chunk,
+                        status_by_cell,
+                    ),
+                    Spacer(1, 3 * mm),
+                    Paragraph(
+                        "Green: connected  ·  Red: closed  ·  Grey: not needed  ·  Blue: same asset",
+                        ParagraphStyle(
+                            f"MatrixLegend{environment}{chunk_number}",
+                            parent=getSampleStyleSheet()["Normal"],
+                            fontName=FONT_REGULAR,
+                            fontSize=6.5,
+                            leading=8,
+                            textColor=MUTED,
+                        ),
+                    ),
+                ]
+            )
+            rendered_matrix = True
+
+    if not rendered_matrix:
+        story.extend(
+            [
+                PageBreak(),
+                _brand_header(),
+                Spacer(1, 6 * mm),
+                _section_heading(
+                    "Connectivity matrix",
+                    "Rows and destination ports mirror the Asset Register.",
+                    "0 ports",
+                ),
+                _empty_panel("No destination ports are recorded for this project."),
+            ]
+        )
+
     story.extend(
         [
             PageBreak(),
             _brand_header(),
             Spacer(1, 6 * mm),
             _section_heading(
-                "Network connection rules",
-                "Source-to-port decisions across every environment, including connected, closed, and not-needed states.",
+                "Connection log",
+                "Explicit source-to-port decisions retained for review and audit.",
                 f"{len(connections)} rules",
             ),
         ]
@@ -628,7 +861,7 @@ def build_asset_inventory_pdf(
         [
             Spacer(1, 4 * mm),
             Paragraph(
-                "This report includes every asset, destination port, and explicitly recorded network decision saved in TrackerX at export time.",
+                "This report includes every asset and destination port, the complete asset-register-derived matrix, and every explicit network decision saved in TrackerX at export time.",
                 ParagraphStyle(
                     "AssetReportDefinition",
                     parent=getSampleStyleSheet()["Normal"],

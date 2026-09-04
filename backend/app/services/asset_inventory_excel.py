@@ -144,27 +144,152 @@ def _table_sheet(
     )
 
 
+def _connectivity_matrix_sheet(
+    project_name: str,
+    assets: list[dict],
+    connections: list[dict],
+) -> str:
+    """Build the same asset-to-port matrix shown in TrackerX."""
+
+    environment_order = {
+        "production": 0,
+        "staging": 1,
+        "development": 2,
+        "test": 3,
+        "disaster_recovery": 4,
+        "other": 5,
+    }
+    grouped: dict[str, list[dict]] = {}
+    for asset in assets:
+        grouped.setdefault(asset.get("environment") or "other", []).append(asset)
+    for environment_assets in grouped.values():
+        environment_assets.sort(key=lambda asset: str(asset.get("hostname") or "").lower())
+
+    status_by_cell = {
+        (connection.get("source_asset_id"), connection.get("port_id")): connection.get("status") or "not_needed"
+        for connection in connections
+    }
+    environment_groups: list[tuple[str, list[dict], list[tuple[dict, dict]]]] = []
+    max_ports = 1
+    for environment, environment_assets in sorted(
+        grouped.items(), key=lambda item: (environment_order.get(item[0], 99), item[0])
+    ):
+        destinations = [
+            (asset, port)
+            for asset in environment_assets
+            for port in sorted(
+                asset.get("ports") or [],
+                key=lambda item: (int(item.get("port") or 0), str(item.get("protocol") or "")),
+            )
+        ]
+        max_ports = max(max_ports, len(destinations))
+        environment_groups.append((environment, environment_assets, destinations))
+
+    max_column = max(max_ports + 1, 4)
+    last_column = _column(max_column)
+    rows = [
+        _row(1, [_inline(1, 1, "CONNECTIVITY MATRIX", 1)], 34),
+        _row(
+            2,
+            [_inline(2, 1, f"{project_name} · sources and destination ports generated from the Asset Register", 2)],
+            22,
+        ),
+        _row(
+            4,
+            [_inline(4, 1, "Connected", 9), _inline(4, 2, "Closed", 12), _inline(4, 3, "Not needed", 11), _inline(4, 4, "Same asset", 13)],
+            24,
+        ),
+    ]
+    merges = [f"A1:{last_column}1", f"A2:{last_column}2"]
+    current_row = 6
+
+    if not environment_groups:
+        rows.append(_row(current_row, [_inline(current_row, 1, "No assets are recorded for this project.", 14)], 28))
+        merges.append(f"A{current_row}:{last_column}{current_row}")
+    else:
+        for environment, environment_assets, destinations in environment_groups:
+            environment_label = environment.replace("_", " ").title()
+            rows.append(
+                _row(
+                    current_row,
+                    [_inline(current_row, 1, f"{environment_label} · {len(environment_assets)} assets · {len(destinations)} destination ports", 14)],
+                    28,
+                )
+            )
+            merges.append(f"A{current_row}:{last_column}{current_row}")
+            current_row += 1
+            if not destinations:
+                rows.append(_row(current_row, [_inline(current_row, 1, "No destination ports are registered in this environment.", 13)], 28))
+                merges.append(f"A{current_row}:{last_column}{current_row}")
+                current_row += 2
+                continue
+
+            header_cells = [_inline(current_row, 1, "Outbound source", 5)]
+            for column_index, (destination, port) in enumerate(destinations, start=2):
+                label = (
+                    f'{destination.get("hostname")}\n{destination.get("ip_address")}\n'
+                    f'{port.get("port")}/{str(port.get("protocol") or "").upper()} · {port.get("service") or ""}'
+                )
+                header_cells.append(_inline(current_row, column_index, label, 5))
+            rows.append(_row(current_row, header_cells, 56))
+            current_row += 1
+
+            for source in environment_assets:
+                cells = [
+                    _inline(
+                        current_row,
+                        1,
+                        f'{source.get("hostname")}\n{source.get("ip_address")}',
+                        14,
+                    )
+                ]
+                for column_index, (destination, port) in enumerate(destinations, start=2):
+                    if source.get("id") == destination.get("id"):
+                        cells.append(_inline(current_row, column_index, "Same asset", 13))
+                        continue
+                    status = status_by_cell.get((source.get("id"), port.get("id")), "not_needed")
+                    label = str(status).replace("_", " ").title()
+                    style = 9 if status == "connected" else 12 if status == "closed" else 11
+                    cells.append(_inline(current_row, column_index, label, style))
+                rows.append(_row(current_row, cells, 38))
+                current_row += 1
+            current_row += 1
+
+    widths = [26] + [19] * (max_column - 1)
+    return _sheet(
+        rows,
+        max_column,
+        max(current_row, 6),
+        widths,
+        merges=merges,
+        freeze_rows=4,
+        freeze_columns=1,
+    )
+
+
 def _styles() -> str:
     return f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-  <fonts count="5">
+  <fonts count="6">
     <font><sz val="10"/><name val="Yu Gothic"/><family val="2"/></font>
     <font><b/><sz val="20"/><color rgb="FFFFFFFF"/><name val="Yu Gothic"/><family val="2"/></font>
     <font><sz val="10"/><color rgb="FFDCECF5"/><name val="Yu Gothic"/><family val="2"/></font>
     <font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="Yu Gothic"/><family val="2"/></font>
     <font><b/><sz val="18"/><color rgb="FF{NAVY}"/><name val="Yu Gothic"/><family val="2"/></font>
+    <font><b/><sz val="10"/><color rgb="FF{NAVY}"/><name val="Yu Gothic"/><family val="2"/></font>
   </fonts>
-  <fills count="7">
+  <fills count="8">
     <fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>
     <fill><patternFill patternType="solid"><fgColor rgb="FF{NAVY}"/></patternFill></fill>
     <fill><patternFill patternType="solid"><fgColor rgb="FF{PALE}"/></patternFill></fill>
     <fill><patternFill patternType="solid"><fgColor rgb="FFE5F5EC"/></patternFill></fill>
     <fill><patternFill patternType="solid"><fgColor rgb="FFFFF1DD"/></patternFill></fill>
     <fill><patternFill patternType="solid"><fgColor rgb="FFF0F3F7"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFFDE7EC"/></patternFill></fill>
   </fills>
   <borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left/><right/><top/><bottom style="thin"><color rgb="FF{LINE}"/></bottom><diagonal/></border></borders>
   <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-  <cellXfs count="12">
+  <cellXfs count="15">
     <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
     <xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment vertical="center"/></xf>
     <xf numFmtId="0" fontId="2" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment vertical="center"/></xf>
@@ -177,6 +302,9 @@ def _styles() -> str:
     <xf numFmtId="0" fontId="0" fillId="4" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
     <xf numFmtId="0" fontId="0" fillId="5" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
     <xf numFmtId="0" fontId="0" fillId="6" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="7" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="3" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
+    <xf numFmtId="0" fontId="5" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
   </cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
 </styleSheet>'''
 
@@ -257,7 +385,7 @@ def build_asset_inventory_excel(
                 len(environment_counts),
             ),
             _formula(9, 7, f"COUNTA('Ports'!F5:F{port_last})", len(port_records)),
-            _formula(9, 10, f"COUNTA('Connectivity'!A5:A{connection_last})", len(connections)),
+            _formula(9, 10, f"COUNTA('Connection Log'!A5:A{connection_last})", len(connections)),
         ], 34),
         _row(12, [_inline(12, 1, "ENVIRONMENT DISTRIBUTION", 5), _inline(12, 7, "STATUS DISTRIBUTION", 5)], 24),
     ]
@@ -292,24 +420,25 @@ def build_asset_inventory_excel(
         ["Port ID", "Asset ID", "Hostname", "IP Address", "Environment", "Port", "Protocol", "Service", "Notes", "Created At", "Updated At"],
         port_records, [10, 10, 20, 18, 15, 10, 12, 24, 30, 22, 22],
     )
-    connectivity_xml = _table_sheet(
-        "CONNECTIVITY MATRIX", f"{project_name} · explicit source-to-destination-port decisions",
+    connectivity_matrix_xml = _connectivity_matrix_sheet(project_name, assets, connections)
+    connection_log_xml = _table_sheet(
+        "CONNECTION LOG", f"{project_name} · explicit source-to-destination-port decisions",
         ["Connection ID", "Source Asset ID", "Source Hostname", "Source IP", "Destination Asset ID", "Destination Hostname", "Destination IP", "Port ID", "Port", "Protocol", "Service", "Status", "Updated At"],
         connection_records, [14, 14, 22, 18, 17, 24, 18, 10, 10, 12, 24, 15, 22], status_column=12,
     )
 
     workbook_xml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><bookViews><workbookView xWindow="120" yWindow="120" windowWidth="24000" windowHeight="13500"/></bookViews><sheets><sheet name="Overview" sheetId="1" r:id="rId1"/><sheet name="Assets" sheetId="2" r:id="rId2"/><sheet name="Ports" sheetId="3" r:id="rId3"/><sheet name="Connectivity" sheetId="4" r:id="rId4"/></sheets><calcPr calcId="191029" fullCalcOnLoad="1" forceFullCalc="1"/></workbook>'''
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><bookViews><workbookView xWindow="120" yWindow="120" windowWidth="24000" windowHeight="13500"/></bookViews><sheets><sheet name="Overview" sheetId="1" r:id="rId1"/><sheet name="Assets" sheetId="2" r:id="rId2"/><sheet name="Ports" sheetId="3" r:id="rId3"/><sheet name="Connectivity Matrix" sheetId="4" r:id="rId4"/><sheet name="Connection Log" sheetId="5" r:id="rId5"/></sheets><calcPr calcId="191029" fullCalcOnLoad="1" forceFullCalc="1"/></workbook>'''
     workbook_rels = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet3.xml"/><Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet4.xml"/><Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'''
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet3.xml"/><Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet4.xml"/><Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet5.xml"/><Relationship Id="rId6" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'''
     content_types = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet3.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet4.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>'''
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet3.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet4.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet5.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>'''
     package_rels = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>'''
     core_xml = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>TrackerX Asset Inventory - {_text(project_name)}</dc:title><dc:creator>{_text(exported_by)}</dc:creator><cp:lastModifiedBy>{_text(exported_by)}</cp:lastModifiedBy><dcterms:created xsi:type="dcterms:W3CDTF">{generated_at.astimezone().isoformat()}</dcterms:created></cp:coreProperties>'''
     app_xml = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"><Application>TrackerX</Application><AppVersion>1.0</AppVersion><TitlesOfParts><vt:vector size="4" baseType="lpstr"><vt:lpstr>Overview</vt:lpstr><vt:lpstr>Assets</vt:lpstr><vt:lpstr>Ports</vt:lpstr><vt:lpstr>Connectivity</vt:lpstr></vt:vector></TitlesOfParts></Properties>'''
+<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"><Application>TrackerX</Application><AppVersion>1.0</AppVersion><TitlesOfParts><vt:vector size="5" baseType="lpstr"><vt:lpstr>Overview</vt:lpstr><vt:lpstr>Assets</vt:lpstr><vt:lpstr>Ports</vt:lpstr><vt:lpstr>Connectivity Matrix</vt:lpstr><vt:lpstr>Connection Log</vt:lpstr></vt:vector></TitlesOfParts></Properties>'''
 
     output = BytesIO()
     with ZipFile(output, "w", ZIP_DEFLATED) as archive:
@@ -319,7 +448,8 @@ def build_asset_inventory_excel(
             "xl/workbook.xml": workbook_xml, "xl/_rels/workbook.xml.rels": workbook_rels,
             "xl/styles.xml": _styles(), "xl/worksheets/sheet1.xml": overview_xml,
             "xl/worksheets/sheet2.xml": assets_xml, "xl/worksheets/sheet3.xml": ports_xml,
-            "xl/worksheets/sheet4.xml": connectivity_xml,
+            "xl/worksheets/sheet4.xml": connectivity_matrix_xml,
+            "xl/worksheets/sheet5.xml": connection_log_xml,
         }.items():
             archive.writestr(path, content)
     return output.getvalue()

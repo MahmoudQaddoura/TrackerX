@@ -141,17 +141,23 @@ class AssetInventoryTests(unittest.TestCase):
                         "xl/worksheets/sheet2.xml",
                         "xl/worksheets/sheet3.xml",
                         "xl/worksheets/sheet4.xml",
+                        "xl/worksheets/sheet5.xml",
                     ],
                 )
                 workbook_xml = workbook.read("xl/workbook.xml").decode()
                 assets_xml = workbook.read("xl/worksheets/sheet2.xml").decode()
                 ports_xml = workbook.read("xl/worksheets/sheet3.xml").decode()
-                connections_xml = workbook.read("xl/worksheets/sheet4.xml").decode()
+                matrix_xml = workbook.read("xl/worksheets/sheet4.xml").decode()
+                connections_xml = workbook.read("xl/worksheets/sheet5.xml").decode()
                 self.assertIn('name="Overview"', workbook_xml)
                 self.assertIn('name="Assets"', workbook_xml)
                 self.assertIn('name="Ports"', workbook_xml)
-                self.assertIn('name="Connectivity"', workbook_xml)
+                self.assertIn('name="Connectivity Matrix"', workbook_xml)
+                self.assertIn('name="Connection Log"', workbook_xml)
                 self.assertIn("prod-web-01", assets_xml)
                 self.assertIn("3443", ports_xml)
+                self.assertIn("Outbound source", matrix_xml)
+                self.assertIn("Same asset", matrix_xml)
+                self.assertIn("Closed", matrix_xml)
                 self.assertIn("Connected", connections_xml)
             self.assertIn("asset-inventory.xlsx", response.headers["content-disposition"])
