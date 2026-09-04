@@ -554,6 +554,7 @@ export interface ClientProject {
   total_tasks: number;
   done_tasks: number;
   is_delayed: boolean;
+  access_source: "direct" | "linked_support";
 }
 
 export interface ClientProfile {

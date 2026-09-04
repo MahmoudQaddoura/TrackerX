@@ -165,7 +165,15 @@ def get_accessible_project_ids(user: User, db: Session) -> set[int] | None:
         return {row[0] for row in task_rows} | {row[0] for row in direct_rows} | leadership_ids
     if user.role == "client":
         rows = db.query(project_clients.c.project_id).filter(project_clients.c.user_id == user.id).all()
-        return {r[0] for r in rows}
+        direct_ids = {r[0] for r in rows}
+        support_ids = {
+            row[0]
+            for row in db.query(Project.id)
+            .filter(Project.project_type == "maintenance_support")
+            .filter(Project.parent_project_id.in_(direct_ids))
+            .all()
+        } if direct_ids else set()
+        return direct_ids | support_ids
     return set()
 
 

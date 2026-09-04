@@ -41,7 +41,8 @@ def _client_or_404(db: Session, client_id: int) -> User:
     return client
 
 
-def _client_projects(db: Session, client_id: int) -> list[Project]:
+def _direct_client_projects(db: Session, client_id: int) -> list[Project]:
+    """Projects explicitly granted to a client by an administrator."""
     return (
         db.query(Project)
         .join(project_clients, project_clients.c.project_id == Project.id)
@@ -51,9 +52,31 @@ def _client_projects(db: Session, client_id: int) -> list[Project]:
     )
 
 
-def _client_project_out(project: Project) -> dict:
+def _client_projects(db: Session, client_id: int) -> list[tuple[Project, bool]]:
+    """Visible client workspaces, including support workspaces linked to grants.
+
+    A maintenance workspace is part of its parent project's client experience.
+    Keeping that relationship implicit avoids duplicate assignments while making
+    assets, documents, proactive reports, and incidents available in the portal.
+    """
+    direct = _direct_client_projects(db, client_id)
+    direct_ids = {project.id for project in direct}
+    inherited = (
+        db.query(Project)
+        .filter(Project.project_type == "maintenance_support")
+        .filter(Project.parent_project_id.in_(direct_ids))
+        .all()
+        if direct_ids
+        else []
+    )
+    visible = [(project, False) for project in direct]
+    visible.extend((project, True) for project in inherited if project.id not in direct_ids)
+    return sorted(visible, key=lambda item: item[0].name.lower())
+
+
+def _client_project_out(project: Project, inherited: bool = False) -> dict:
     data = project_out(project)
-    return {
+    result = {
         key: data[key]
         for key in (
             "id",
@@ -70,6 +93,8 @@ def _client_project_out(project: Project) -> dict:
             "is_delayed",
         )
     }
+    result["access_source"] = "linked_support" if inherited else "direct"
+    return result
 
 
 def _profile_out(db: Session, client: User, include_notes: bool = True) -> dict:
@@ -91,7 +116,7 @@ def _profile_out(db: Session, client: User, include_notes: bool = True) -> dict:
         "notes": profile.notes if profile and include_notes else None,
         "is_enabled": bool(client.is_enabled),
         "must_change_password": bool(client.must_change_password),
-        "projects": [_client_project_out(project) for project in projects],
+        "projects": [_client_project_out(project, inherited) for project, inherited in projects],
         "shared_report_count": len(shares),
         "unread_report_count": sum(1 for share in shares if not share.read_at),
         "last_shared_at": shares[0].shared_at if shares else None,
@@ -180,15 +205,7 @@ def _share_out(share: ClientReportShare) -> dict:
 
 
 def _allowed_report_project_ids(db: Session, client_id: int) -> set[int]:
-    direct_ids = {project.id for project in _client_projects(db, client_id)}
-    support_ids = {
-        row[0]
-        for row in db.query(Project.id)
-        .filter(Project.project_type == "maintenance_support")
-        .filter(Project.parent_project_id.in_(direct_ids))
-        .all()
-    } if direct_ids else set()
-    return direct_ids | support_ids
+    return {project.id for project, _inherited in _client_projects(db, client_id)}
 
 
 def _set_projects(db: Session, client_id: int, project_ids: list[int]) -> None:

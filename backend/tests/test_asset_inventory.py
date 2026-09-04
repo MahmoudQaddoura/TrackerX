@@ -28,6 +28,7 @@ from app.routers.assets import (
     get_asset_matrix,
     list_assets,
 )
+from app.routers.clients import _profile_out
 
 
 class AssetInventoryTests(unittest.TestCase):
@@ -80,10 +81,28 @@ class AssetInventoryTests(unittest.TestCase):
                 access_level="read",
             )
             project = db.get(Project, 1)
+            support_project = Project(
+                id=2,
+                name="Test project Maintenance & Support",
+                project_type="maintenance_support",
+                parent_project_id=project.id,
+            )
+            unrelated_support = Project(
+                id=3,
+                name="Other Maintenance & Support",
+                project_type="maintenance_support",
+            )
+            db.add_all([support_project, unrelated_support])
             project.clients.append(client)
             db.commit()
 
-            self.assertEqual(get_accessible_project_ids(client, db), {1})
+            self.assertEqual(get_accessible_project_ids(client, db), {1, 2})
+            visible_projects = _profile_out(db, client)["projects"]
+            self.assertEqual([row["id"] for row in visible_projects], [1, 2])
+            self.assertEqual(
+                {row["id"]: row["access_source"] for row in visible_projects},
+                {1: "direct", 2: "linked_support"},
+            )
             rows = list_assets(project=project, db=db, environment=None, search=None)
             matrix = get_asset_matrix(project=project, db=db, environment="production")
 

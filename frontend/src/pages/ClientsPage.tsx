@@ -285,7 +285,7 @@ function ClientProfileDialog({ client, projects, onClose }: { client: ClientProf
     if (!client) return;
     setForm({ fullName: client.full_name, email: client.email, organization: client.organization ?? "", jobTitle: client.job_title ?? "", phone: client.phone ?? "", notes: client.notes ?? "", password: "" });
     setEnabled(client.is_enabled);
-    setProjectIds(client.projects.map((project) => project.id));
+    setProjectIds(client.projects.filter((project) => project.access_source === "direct").map((project) => project.id));
     setReportKey("");
     setMessage("");
     setError(null);
@@ -344,7 +344,7 @@ function ClientProfileDialog({ client, projects, onClose }: { client: ClientProf
               <div className="flex justify-end"><Button onClick={saveProfile} disabled={update.isPending}>{update.isPending && <Spinner className="h-4 w-4" />} Save profile</Button></div>
             </TabsContent>
             <TabsContent value="projects" className="space-y-4">
-              <div className="rounded-lg border border-accent/20 bg-accent-soft/50 p-3 text-sm text-fg-muted"><ShieldCheck className="mr-2 inline h-4 w-4 text-accent" />Only selected projects appear in this client’s dashboard. Maintenance reports linked to those projects remain private until forwarded.</div>
+              <div className="rounded-lg border border-accent/20 bg-accent-soft/50 p-3 text-sm text-fg-muted"><ShieldCheck className="mr-2 inline h-4 w-4 text-accent" />Select each main project once. Its linked Maintenance &amp; Support workspace is included automatically, with read-only access to assets, documents, service reports, and incidents.</div>
               <ProjectChecklist projects={projects} selected={projectIds} toggle={(id) => setProjectIds((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id])} />
               <div className="flex justify-end"><Button onClick={saveProjects} disabled={assignProjects.isPending}>{assignProjects.isPending && <Spinner className="h-4 w-4" />} Save project access</Button></div>
             </TabsContent>

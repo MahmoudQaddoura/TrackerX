@@ -46,6 +46,7 @@ class ClientProjectOut(BaseModel):
     total_tasks: int
     done_tasks: int
     is_delayed: bool
+    access_source: Literal["direct", "linked_support"]
 
 
 class ClientProfileOut(BaseModel):
