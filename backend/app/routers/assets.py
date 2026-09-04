@@ -36,6 +36,7 @@ from app.schemas.asset import (
     AssetUpdate,
 )
 from app.services.asset_inventory_pdf import build_asset_inventory_pdf
+from app.services.asset_inventory_xml import build_asset_inventory_xml
 
 router = APIRouter(tags=["asset-inventory"])
 
@@ -174,6 +175,75 @@ def _commit_or_conflict(db: Session, message: str) -> None:
         raise HTTPException(status_code=409, detail=message) from exc
 
 
+def _inventory_export_data(
+    db: Session,
+    project_id: int,
+) -> tuple[list[Asset], list[dict]]:
+    """Load one consistent, ordered dataset for every inventory export format."""
+
+    assets = (
+        db.query(Asset)
+        .options(selectinload(Asset.ports), selectinload(Asset.created_by))
+        .filter(Asset.project_id == project_id)
+        .order_by(Asset.environment, Asset.hostname)
+        .all()
+    )
+    if not assets:
+        raise HTTPException(
+            status_code=422,
+            detail="Add at least one asset before exporting the inventory.",
+        )
+
+    asset_ids = [asset.id for asset in assets]
+    port_ids = [port.id for asset in assets for port in asset.ports]
+    connections = (
+        db.query(AssetConnection)
+        .options(
+            selectinload(AssetConnection.source_asset),
+            selectinload(AssetConnection.port_record).selectinload(AssetPort.asset),
+        )
+        .filter(
+            AssetConnection.source_asset_id.in_(asset_ids),
+            AssetConnection.port_id.in_(port_ids),
+        )
+        .all()
+        if port_ids
+        else []
+    )
+    connections.sort(
+        key=lambda connection: (
+            connection.source_asset.hostname,
+            connection.port_record.asset.hostname,
+            connection.port_record.port,
+            connection.port_record.protocol,
+        )
+    )
+    connection_rows = [
+        {
+            "id": connection.id,
+            "source_asset_id": connection.source_asset_id,
+            "source_hostname": connection.source_asset.hostname,
+            "source_ip_address": connection.source_asset.ip_address,
+            "destination_asset_id": connection.port_record.asset_id,
+            "destination_hostname": connection.port_record.asset.hostname,
+            "destination_ip_address": connection.port_record.asset.ip_address,
+            "port_id": connection.port_id,
+            "port": connection.port_record.port,
+            "protocol": connection.port_record.protocol,
+            "service": connection.port_record.service,
+            "status": connection.status,
+            "updated_at": connection.updated_at,
+        }
+        for connection in connections
+    ]
+    return assets, connection_rows
+
+
+def _inventory_filename(project: Project, extension: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", project.name.lower()).strip("-")
+    return f"trackerx-{slug or f'project-{project.id}'}-asset-inventory.{extension}"
+
+
 @router.get("/projects/{project_id}/assets", response_model=list[AssetOut])
 def list_assets(
     project: Project = Depends(require_project_access),
@@ -212,56 +282,7 @@ def export_asset_inventory_pdf(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    assets = (
-        db.query(Asset)
-        .options(selectinload(Asset.ports), selectinload(Asset.created_by))
-        .filter(Asset.project_id == project.id)
-        .order_by(Asset.environment, Asset.hostname)
-        .all()
-    )
-    if not assets:
-        raise HTTPException(
-            status_code=422,
-            detail="Add at least one asset before exporting the inventory.",
-        )
-
-    asset_ids = [asset.id for asset in assets]
-    port_ids = [port.id for asset in assets for port in asset.ports]
-    connections = (
-        db.query(AssetConnection)
-        .options(
-            selectinload(AssetConnection.source_asset),
-            selectinload(AssetConnection.port_record).selectinload(AssetPort.asset),
-        )
-        .filter(
-            AssetConnection.source_asset_id.in_(asset_ids),
-            AssetConnection.port_id.in_(port_ids),
-        )
-        .all()
-        if port_ids
-        else []
-    )
-    connections.sort(
-        key=lambda connection: (
-            connection.source_asset.hostname,
-            connection.port_record.asset.hostname,
-            connection.port_record.port,
-            connection.port_record.protocol,
-        )
-    )
-    connection_rows = [
-        {
-            "source_hostname": connection.source_asset.hostname,
-            "source_ip_address": connection.source_asset.ip_address,
-            "destination_hostname": connection.port_record.asset.hostname,
-            "destination_ip_address": connection.port_record.asset.ip_address,
-            "port": connection.port_record.port,
-            "protocol": connection.port_record.protocol,
-            "service": connection.port_record.service,
-            "status": connection.status,
-        }
-        for connection in connections
-    ]
+    assets, connection_rows = _inventory_export_data(db, project.id)
     pdf = build_asset_inventory_pdf(
         project_name=project.name,
         project_type=project.project_type,
@@ -269,11 +290,33 @@ def export_asset_inventory_pdf(
         connections=connection_rows,
         prepared_by=user.full_name,
     )
-    slug = re.sub(r"[^a-z0-9]+", "-", project.name.lower()).strip("-") or f"project-{project.id}"
-    filename = f"trackerx-{slug}-asset-inventory.pdf"
+    filename = _inventory_filename(project, "pdf")
     return Response(
         content=pdf,
         media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/projects/{project_id}/assets/export/xml")
+def export_asset_inventory_xml(
+    project: Project = Depends(require_project_access),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    assets, connection_rows = _inventory_export_data(db, project.id)
+    xml = build_asset_inventory_xml(
+        project_id=project.id,
+        project_name=project.name,
+        project_type=project.project_type,
+        assets=[_asset_out(asset) for asset in assets],
+        connections=connection_rows,
+        exported_by=user.full_name,
+    )
+    filename = _inventory_filename(project, "xml")
+    return Response(
+        content=xml,
+        media_type="application/xml",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 

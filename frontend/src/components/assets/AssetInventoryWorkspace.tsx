@@ -2,6 +2,7 @@ import {
   Boxes,
   Database,
   Download,
+  FileCode2,
   Maximize2,
   Minimize2,
   Network,
@@ -11,7 +12,11 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-import { exportAssetInventoryPdf, type AssetPayload } from "@/api/assets";
+import {
+  exportAssetInventoryPdf,
+  exportAssetInventoryXml,
+  type AssetPayload,
+} from "@/api/assets";
 import { AssetFormDialog } from "@/components/assets/AssetFormDialog";
 import { AssetNetworkMatrix } from "@/components/assets/AssetNetworkMatrix";
 import { AssetPortDialog } from "@/components/assets/AssetPortDialog";
@@ -50,7 +55,7 @@ export function AssetInventoryWorkspace({
   const [portAsset, setPortAsset] = useState<ProjectAsset>();
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>();
   const [actionError, setActionError] = useState("");
-  const [exporting, setExporting] = useState(false);
+  const [exporting, setExporting] = useState<"pdf" | "xml" | null>(null);
   const [expanded, setExpanded] = useState(false);
 
   const assets = assetsQuery.data ?? [];
@@ -125,23 +130,27 @@ export function AssetInventoryWorkspace({
     return created;
   }
 
-  async function exportPdf() {
+  async function exportInventory(format: "pdf" | "xml") {
     setActionError("");
-    setExporting(true);
+    setExporting(format);
     try {
-      const blob = await exportAssetInventoryPdf(projectId);
+      const blob = format === "pdf"
+        ? await exportAssetInventoryPdf(projectId)
+        : await exportAssetInventoryXml(projectId);
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = `trackerx-project-${projectId}-asset-inventory.pdf`;
+      anchor.download = `trackerx-project-${projectId}-asset-inventory.${format}`;
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
     } catch (error) {
-      setActionError(getApiErrorMessage(error, "Could not export the asset inventory PDF."));
+      setActionError(
+        getApiErrorMessage(error, `Could not export the asset inventory ${format.toUpperCase()}.`),
+      );
     } finally {
-      setExporting(false);
+      setExporting(null);
     }
   }
 
@@ -181,12 +190,22 @@ export function AssetInventoryWorkspace({
             <Button
               variant="outline"
               className="border-white/30 bg-white/10 text-white hover:bg-white/20"
-              disabled={exporting || assets.length === 0}
-              onClick={exportPdf}
+              disabled={exporting !== null || assets.length === 0}
+              onClick={() => exportInventory("pdf")}
               title={assets.length ? "Export the complete asset register, ports, and network rules" : "Add an asset before exporting"}
             >
-              {exporting ? <Spinner /> : <Download className="h-4 w-4" />}
+              {exporting === "pdf" ? <Spinner /> : <Download className="h-4 w-4" />}
               Export PDF
+            </Button>
+            <Button
+              variant="outline"
+              className="border-white/30 bg-white/10 text-white hover:bg-white/20"
+              disabled={exporting !== null || assets.length === 0}
+              onClick={() => exportInventory("xml")}
+              title={assets.length ? "Export structured XML for the complete project inventory" : "Add an asset before exporting"}
+            >
+              {exporting === "xml" ? <Spinner /> : <FileCode2 className="h-4 w-4" />}
+              Export XML
             </Button>
             {canEdit && (
               <Button
