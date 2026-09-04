@@ -53,8 +53,8 @@ export async function exportAssetInventoryPdf(projectId: number): Promise<Blob> 
   return data;
 }
 
-export async function exportAssetInventoryXml(projectId: number): Promise<Blob> {
-  const { data } = await api.get<Blob>(`/projects/${projectId}/assets/export/xml`, {
+export async function exportAssetInventoryExcel(projectId: number): Promise<Blob> {
+  const { data } = await api.get<Blob>(`/projects/${projectId}/assets/export/excel`, {
     responseType: "blob",
   });
   return data;

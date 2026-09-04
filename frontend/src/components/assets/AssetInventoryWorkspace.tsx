@@ -2,7 +2,7 @@ import {
   Boxes,
   Database,
   Download,
-  FileCode2,
+  FileSpreadsheet,
   Maximize2,
   Minimize2,
   Network,
@@ -11,10 +11,11 @@ import {
   Wrench,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 
 import {
+  exportAssetInventoryExcel,
   exportAssetInventoryPdf,
-  exportAssetInventoryXml,
   type AssetPayload,
 } from "@/api/assets";
 import { AssetFormDialog } from "@/components/assets/AssetFormDialog";
@@ -55,7 +56,7 @@ export function AssetInventoryWorkspace({
   const [portAsset, setPortAsset] = useState<ProjectAsset>();
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>();
   const [actionError, setActionError] = useState("");
-  const [exporting, setExporting] = useState<"pdf" | "xml" | null>(null);
+  const [exporting, setExporting] = useState<"pdf" | "xlsx" | null>(null);
   const [expanded, setExpanded] = useState(false);
 
   const assets = assetsQuery.data ?? [];
@@ -73,14 +74,19 @@ export function AssetInventoryWorkspace({
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setExpanded(false);
+      if (
+        event.key === "Escape"
+        && !assetOpen
+        && !portOpen
+        && !deleteTarget
+      ) setExpanded(false);
     };
     window.addEventListener("keydown", closeOnEscape);
     return () => {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", closeOnEscape);
     };
-  }, [expanded]);
+  }, [assetOpen, deleteTarget, expanded, portOpen]);
 
   if (assetsQuery.isLoading) return <Skeleton className="h-[32rem] w-full" />;
   if (assetsQuery.isError) {
@@ -130,13 +136,13 @@ export function AssetInventoryWorkspace({
     return created;
   }
 
-  async function exportInventory(format: "pdf" | "xml") {
+  async function exportInventory(format: "pdf" | "xlsx") {
     setActionError("");
     setExporting(format);
     try {
       const blob = format === "pdf"
         ? await exportAssetInventoryPdf(projectId)
-        : await exportAssetInventoryXml(projectId);
+        : await exportAssetInventoryExcel(projectId);
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
@@ -154,17 +160,19 @@ export function AssetInventoryWorkspace({
     }
   }
 
-  return (
+  const workspace = (
     <section
       className={cn(
         "rounded-xl border border-border bg-surface shadow-card",
         expanded
-          ? "fixed inset-3 z-[70] overflow-y-auto shadow-pop sm:inset-5"
+          ? "fixed inset-0 z-[45] flex h-[100dvh] w-screen flex-col overflow-hidden rounded-none border-0 shadow-none"
           : "overflow-hidden",
       )}
       aria-label="Project asset inventory"
+      aria-modal={expanded || undefined}
+      role={expanded ? "dialog" : undefined}
     >
-      <div className="bg-accent px-5 py-5 text-accent-fg sm:px-6">
+      <div className="shrink-0 bg-accent px-5 py-5 text-accent-fg sm:px-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex min-w-0 items-start gap-3">
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 text-white ring-1 ring-white/20">
@@ -201,11 +209,11 @@ export function AssetInventoryWorkspace({
               variant="outline"
               className="border-white/30 bg-white/10 text-white hover:bg-white/20"
               disabled={exporting !== null || assets.length === 0}
-              onClick={() => exportInventory("xml")}
-              title={assets.length ? "Export structured XML for the complete project inventory" : "Add an asset before exporting"}
+              onClick={() => exportInventory("xlsx")}
+              title={assets.length ? "Export a complete, filterable Excel workbook" : "Add an asset before exporting"}
             >
-              {exporting === "xml" ? <Spinner /> : <FileCode2 className="h-4 w-4" />}
-              Export XML
+              {exporting === "xlsx" ? <Spinner /> : <FileSpreadsheet className="h-4 w-4" />}
+              Export Excel
             </Button>
             {canEdit && (
               <Button
@@ -222,7 +230,7 @@ export function AssetInventoryWorkspace({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-px border-b border-border bg-border sm:grid-cols-4">
+      <div className="grid shrink-0 grid-cols-2 gap-px border-b border-border bg-border sm:grid-cols-4">
         <div className="bg-surface p-3 sm:px-5">
           <Metric label="Assets" value={assets.length} icon={Server} />
         </div>
@@ -237,7 +245,7 @@ export function AssetInventoryWorkspace({
         </div>
       </div>
 
-      <div className="p-4 sm:p-6">
+      <div className={cn("p-4 sm:p-6", expanded && "min-h-0 flex-1 overflow-auto")}>
         <Tabs defaultValue="inventory">
           <TabsList className="grid w-full grid-cols-2 sm:max-w-lg">
             <TabsTrigger value="inventory" className="justify-center gap-2">
@@ -312,6 +320,8 @@ export function AssetInventoryWorkspace({
       />
     </section>
   );
+
+  return expanded ? createPortal(workspace, document.body) : workspace;
 }
 
 function Metric({

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import io
 import os
 from pathlib import Path
 import tempfile
 import unittest
-from xml.etree import ElementTree
+from zipfile import ZipFile
 
 # unittest imports all discovered modules before running them. Establish a
 # disposable database before any app module can construct the shared engine,
@@ -23,7 +24,7 @@ from app.deps import get_accessible_project_ids, require_project_content_editor
 from app.models import Asset, AssetConnection, Project, User
 from app.routers.assets import (
     export_asset_inventory_pdf,
-    export_asset_inventory_xml,
+    export_asset_inventory_excel,
     get_asset_matrix,
     list_assets,
 )
@@ -111,7 +112,7 @@ class AssetInventoryTests(unittest.TestCase):
             self.assertGreater(len(response.body), 8_000)
             self.assertIn("asset-inventory.pdf", response.headers["content-disposition"])
 
-    def test_xml_export_contains_assets_ports_and_connection_rules(self):
+    def test_excel_export_contains_assets_ports_and_connection_rules(self):
         with Session(self.engine) as db:
             load_inventory(db, 1)
             project = db.get(Project, 1)
@@ -123,16 +124,34 @@ class AssetInventoryTests(unittest.TestCase):
                 access_level="write",
             )
 
-            response = export_asset_inventory_xml(project=project, db=db, user=user)
-            root = ElementTree.fromstring(response.body)
+            response = export_asset_inventory_excel(project=project, db=db, user=user)
 
-            self.assertEqual(response.media_type, "application/xml")
-            self.assertEqual(root.tag, "trackerx_asset_inventory")
-            self.assertEqual(root.attrib["schema_version"], "1.0")
-            self.assertEqual(root.findtext("summary/asset_count"), "6")
-            self.assertEqual(root.findtext("summary/port_count"), "7")
-            self.assertEqual(root.findtext("summary/connection_count"), "14")
-            self.assertEqual(len(root.findall("assets/asset")), 6)
-            self.assertEqual(len(root.findall("assets/asset/ports/port")), 7)
-            self.assertEqual(len(root.findall("connections/connection")), 14)
-            self.assertIn("asset-inventory.xml", response.headers["content-disposition"])
+            self.assertEqual(
+                response.media_type,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+            self.assertTrue(response.body.startswith(b"PK"))
+            with ZipFile(io.BytesIO(response.body)) as workbook:
+                self.assertIn("xl/workbook.xml", workbook.namelist())
+                self.assertIn("xl/styles.xml", workbook.namelist())
+                self.assertEqual(
+                    [name for name in workbook.namelist() if name.startswith("xl/worksheets/sheet")],
+                    [
+                        "xl/worksheets/sheet1.xml",
+                        "xl/worksheets/sheet2.xml",
+                        "xl/worksheets/sheet3.xml",
+                        "xl/worksheets/sheet4.xml",
+                    ],
+                )
+                workbook_xml = workbook.read("xl/workbook.xml").decode()
+                assets_xml = workbook.read("xl/worksheets/sheet2.xml").decode()
+                ports_xml = workbook.read("xl/worksheets/sheet3.xml").decode()
+                connections_xml = workbook.read("xl/worksheets/sheet4.xml").decode()
+                self.assertIn('name="Overview"', workbook_xml)
+                self.assertIn('name="Assets"', workbook_xml)
+                self.assertIn('name="Ports"', workbook_xml)
+                self.assertIn('name="Connectivity"', workbook_xml)
+                self.assertIn("prod-web-01", assets_xml)
+                self.assertIn("3443", ports_xml)
+                self.assertIn("Connected", connections_xml)
+            self.assertIn("asset-inventory.xlsx", response.headers["content-disposition"])

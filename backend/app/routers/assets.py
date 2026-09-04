@@ -35,8 +35,8 @@ from app.schemas.asset import (
     AssetPortOut,
     AssetUpdate,
 )
+from app.services.asset_inventory_excel import build_asset_inventory_excel
 from app.services.asset_inventory_pdf import build_asset_inventory_pdf
-from app.services.asset_inventory_xml import build_asset_inventory_xml
 
 router = APIRouter(tags=["asset-inventory"])
 
@@ -298,14 +298,14 @@ def export_asset_inventory_pdf(
     )
 
 
-@router.get("/projects/{project_id}/assets/export/xml")
-def export_asset_inventory_xml(
+@router.get("/projects/{project_id}/assets/export/excel")
+def export_asset_inventory_excel(
     project: Project = Depends(require_project_access),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     assets, connection_rows = _inventory_export_data(db, project.id)
-    xml = build_asset_inventory_xml(
+    workbook = build_asset_inventory_excel(
         project_id=project.id,
         project_name=project.name,
         project_type=project.project_type,
@@ -313,10 +313,10 @@ def export_asset_inventory_xml(
         connections=connection_rows,
         exported_by=user.full_name,
     )
-    filename = _inventory_filename(project, "xml")
+    filename = _inventory_filename(project, "xlsx")
     return Response(
-        content=xml,
-        media_type="application/xml",
+        content=workbook,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
