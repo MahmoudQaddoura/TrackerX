@@ -51,6 +51,7 @@ import {
 } from "@/hooks/useAnalytics";
 import { useMilestones } from "@/hooks/useMilestones";
 import { useProject, useProjectMutations, useProjects } from "@/hooks/useProjects";
+import { useProjectTasks } from "@/hooks/useTasks";
 import { formatDate } from "@/lib/utils";
 import { ClientProjectWorkspace } from "@/pages/ClientProjectWorkspace";
 
@@ -268,6 +269,7 @@ function OverviewTab({ projectId }: { projectId: number }) {
   const summary = useSummary(projectId);
   const status = useStatusBreakdown(projectId);
   const milestones = useMilestones(projectId);
+  const projectTasks = useProjectTasks(projectId);
   const delayed = useDelayedTasks(projectId);
 
   return (
@@ -291,11 +293,24 @@ function OverviewTab({ projectId }: { projectId: number }) {
         </div>
       )}
       <div className="grid gap-4 lg:grid-cols-2">
-        {status.data && <StatusBreakdownChart data={status.data} />}
+        {status.data && (
+          <StatusBreakdownChart
+            data={status.data}
+            tasks={projectTasks.data ?? []}
+            milestones={milestones.data ?? []}
+            isLoadingTasks={projectTasks.isLoading}
+          />
+        )}
         {milestones.isLoading ? (
           <Skeleton className="h-64" />
         ) : (
-          milestones.data && <MilestonesTable milestones={milestones.data} />
+          milestones.data && (
+            <MilestonesTable
+              milestones={milestones.data}
+              tasks={projectTasks.data ?? []}
+              isLoadingTasks={projectTasks.isLoading}
+            />
+          )
         )}
       </div>
       {delayed.data && <DelaysTable data={delayed.data} showProject={false} />}
