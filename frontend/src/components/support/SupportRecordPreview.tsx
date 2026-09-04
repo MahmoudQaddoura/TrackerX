@@ -67,7 +67,7 @@ export function SupportRecordPreview({
 
         <DialogFooter data-no-print>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
-          {report && onDownload && <Button onClick={onDownload} disabled={isDownloading}>
+          {onDownload && <Button onClick={onDownload} disabled={isDownloading}>
             {isDownloading ? <Spinner /> : <FileDown className="h-4 w-4" />} Download PDF
           </Button>}
         </DialogFooter>
@@ -103,6 +103,12 @@ function IncidentReportBody({ incident }: { incident: SupportIncident }) {
         <ReportMeta label="Time reported" value={formatDateTime(incident.reported_at)} />
         <ReportMeta label="Response time" value={formatDateTime(incident.response_at)} />
       </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <ReportMeta label="Detected by" value={`${incident.detection_source.replace(/_/g, " ")}${incident.reported_by_name ? ` · ${incident.reported_by_name}` : ""}`} />
+        <ReportMeta label="Affected service" value={incident.affected_service || "Not recorded"} />
+        <ReportMeta label="Reference" value={`INC-${String(incident.id).padStart(4, "0")}`} />
+      </div>
+      <h3 className="border-b border-border pb-2 font-display text-lg font-semibold text-fg">1. Incident detection and triage</h3>
       <div className="grid gap-6 sm:grid-cols-2">
         <ReportSection title="Client report" value={incident.client_report} />
         <ReportSection title="Reason / suspected cause" value={incident.reason} />
@@ -110,11 +116,15 @@ function IncidentReportBody({ incident }: { incident: SupportIncident }) {
       <ReportSection title="Description and impact" value={incident.description} />
       <ReportSection title="Recommended method" value={incident.recommendation} />
       <div className="border-t border-border pt-5">
-        <h3 className="mb-4 font-display text-lg font-semibold text-fg">Investigation and response</h3>
+        <h3 className="mb-4 font-display text-lg font-semibold text-fg">2. Response and recovery</h3>
         <div className="flex flex-col gap-6">
+          <ReportSection title="Containment actions" value={incident.containment_actions} />
           <ReportSection title="Investigation" value={incident.investigation} />
-          <ReportSection title="Response description" value={incident.response_description} />
+          <ReportSection title="Confirmed root cause" value={incident.root_cause} />
+          <ReportSection title="Recovery actions" value={incident.response_description} />
+          <ReportSection title="Recovery validation" value={incident.recovery_validation} />
           <ReportSection title="Resolution / unresolved notes" value={incident.resolution_notes} />
+          <ReportSection title="Lessons learned and prevention" value={incident.lessons_learned} />
         </div>
       </div>
       <AssigneeLine names={incident.assigned_members.map((member) => member.name)} />

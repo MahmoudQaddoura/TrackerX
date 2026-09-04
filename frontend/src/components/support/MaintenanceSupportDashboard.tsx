@@ -45,7 +45,7 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/context/AuthContext";
-import { exportProactiveReportPdf } from "@/api/support";
+import { exportIncidentReportPdf, exportProactiveReportPdf } from "@/api/support";
 import { useClients, useClientMutations } from "@/hooks/useClients";
 import {
   useProactiveReports,
@@ -95,7 +95,9 @@ export function MaintenanceSupportDashboard({
   const [previewReport, setPreviewReport] = useState<ProactiveServiceReport | undefined>();
   const [previewIncident, setPreviewIncident] = useState<SupportIncident | undefined>();
   const [forwardReport, setForwardReport] = useState<ProactiveServiceReport | undefined>();
+  const [forwardIncident, setForwardIncident] = useState<SupportIncident | undefined>();
   const [downloadingReportId, setDownloadingReportId] = useState<number | null>(null);
+  const [downloadingIncidentId, setDownloadingIncidentId] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<
     { type: "report"; item: ProactiveServiceReport } | { type: "incident"; item: SupportIncident } | null
   >(null);
@@ -144,6 +146,21 @@ export function MaintenanceSupportDashboard({
       URL.revokeObjectURL(url);
     } finally {
       setDownloadingReportId(null);
+    }
+  }
+
+  async function downloadIncident(incident: SupportIncident) {
+    setDownloadingIncidentId(incident.id);
+    try {
+      const blob = await exportIncidentReportPdf(incident.id);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `incident-report-${String(incident.id).padStart(4, "0")}.pdf`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setDownloadingIncidentId(null);
     }
   }
 
@@ -285,6 +302,10 @@ export function MaintenanceSupportDashboard({
                 setIncidentOpen(true);
               }}
               onPreview={setPreviewIncident}
+              onDownload={downloadIncident}
+              onForward={setForwardIncident}
+              canForward={isAdmin}
+              downloadingIncidentId={downloadingIncidentId}
               onDelete={(incident) => setDeleteTarget({ type: "incident", item: incident })}
             />
           </TabsContent>
@@ -337,10 +358,11 @@ export function MaintenanceSupportDashboard({
         project={project}
         report={previewReport}
         incident={previewIncident}
-        isDownloading={!!previewReport && downloadingReportId === previewReport.id}
-        onDownload={previewReport ? () => downloadReport(previewReport) : undefined}
+        isDownloading={previewReport ? downloadingReportId === previewReport.id : !!previewIncident && downloadingIncidentId === previewIncident.id}
+        onDownload={previewReport ? () => downloadReport(previewReport) : previewIncident ? () => downloadIncident(previewIncident) : undefined}
       />
       <ForwardReportDialog open={!!forwardReport} onOpenChange={(open) => !open && setForwardReport(undefined)} project={project} report={forwardReport} clients={clients.data ?? []} isPending={clientMutations.forwardReport.isPending} onForward={(clientId, message) => clientMutations.forwardReport.mutateAsync({ clientId, reportType: "proactive", reportId: forwardReport!.id, message })} />
+      <ForwardReportDialog open={!!forwardIncident} onOpenChange={(open) => !open && setForwardIncident(undefined)} project={project} report={forwardIncident} reportType="incident" clients={clients.data ?? []} isPending={clientMutations.forwardReport.isPending} onForward={(clientId, message) => clientMutations.forwardReport.mutateAsync({ clientId, reportType: "incident", reportId: forwardIncident!.id, message })} />
       <DeleteConfirmDialog
         open={!!deleteTarget}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
@@ -467,7 +489,7 @@ function ProactiveReportCard({ report, canEdit, canManage, canForward, onOpen, o
   );
 }
 
-function ReactiveWorkspace({ incidents, metrics, canEdit, canManage, onAdd, onOpen, onPreview, onDelete }: { incidents: SupportIncident[]; metrics: { open: number; critical: number; resolved: number; averageResponse: number | null }; canEdit: boolean; canManage: boolean; onAdd: () => void; onOpen: (incident: SupportIncident) => void; onPreview: (incident: SupportIncident) => void; onDelete: (incident: SupportIncident) => void }) {
+function ReactiveWorkspace({ incidents, metrics, canEdit, canManage, canForward, onAdd, onOpen, onPreview, onDownload, onForward, downloadingIncidentId, onDelete }: { incidents: SupportIncident[]; metrics: { open: number; critical: number; resolved: number; averageResponse: number | null }; canEdit: boolean; canManage: boolean; canForward: boolean; onAdd: () => void; onOpen: (incident: SupportIncident) => void; onPreview: (incident: SupportIncident) => void; onDownload: (incident: SupportIncident) => void; onForward: (incident: SupportIncident) => void; downloadingIncidentId: number | null; onDelete: (incident: SupportIncident) => void }) {
   return (
     <div className="flex flex-col gap-5">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -479,7 +501,7 @@ function ReactiveWorkspace({ incidents, metrics, canEdit, canManage, onAdd, onOp
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="font-display text-lg font-semibold text-fg">Incident and response register</h2>
-          <p className="mt-1 max-w-3xl text-sm text-fg-muted">Capture the client report, reason, impact, response method, investigation, timing, and final resolution in one accountable record.</p>
+          <p className="mt-1 max-w-3xl text-sm text-fg-muted">Log detection and triage first, then manage containment, investigation, recovery, and client-ready closure in a separate response phase.</p>
         </div>
         {canEdit && <Button onClick={onAdd}><Plus className="h-4 w-4" /> Report incident</Button>}
       </div>
@@ -488,7 +510,7 @@ function ReactiveWorkspace({ incidents, metrics, canEdit, canManage, onAdd, onOp
       ) : (
         <div className="flex flex-col gap-3">
           {incidents.map((incident) => (
-            <IncidentCard key={incident.id} incident={incident} canEdit={canEdit} canManage={canManage} onOpen={() => onOpen(incident)} onPreview={() => onPreview(incident)} onDelete={() => onDelete(incident)} />
+            <IncidentCard key={incident.id} incident={incident} canEdit={canEdit} canManage={canManage} canForward={canForward} onOpen={() => onOpen(incident)} onPreview={() => onPreview(incident)} onDownload={() => onDownload(incident)} onForward={() => onForward(incident)} isDownloading={downloadingIncidentId === incident.id} onDelete={() => onDelete(incident)} />
           ))}
         </div>
       )}
@@ -496,18 +518,20 @@ function ReactiveWorkspace({ incidents, metrics, canEdit, canManage, onAdd, onOp
   );
 }
 
-function IncidentCard({ incident, canEdit, canManage, onOpen, onPreview, onDelete }: { incident: SupportIncident; canEdit: boolean; canManage: boolean; onOpen: () => void; onPreview: () => void; onDelete: () => void }) {
+function IncidentCard({ incident, canEdit, canManage, canForward, onOpen, onPreview, onDownload, onForward, onDelete, isDownloading }: { incident: SupportIncident; canEdit: boolean; canManage: boolean; canForward: boolean; onOpen: () => void; onPreview: () => void; onDownload: () => void; onForward: () => void; onDelete: () => void; isDownloading: boolean }) {
   return (
     <Card className="cursor-pointer transition-colors hover:border-accent/60" onClick={onOpen}>
       <CardContent className="grid gap-4 pt-5 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center">
         <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-danger/10 text-danger"><AlertTriangle className="h-5 w-5" /></span>
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold text-fg">{incident.title}</h3><SeverityBadge severity={incident.severity} /><IncidentStatusBadge status={incident.status} /></div>
-          <p className="mt-1 line-clamp-1 text-sm text-fg-muted">{incident.client_report || incident.description || "No client report recorded."}</p>
-          <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-fg-subtle"><span>Reported {formatDateTime(incident.reported_at)}</span><span>Response {incident.response_at ? formatDateTime(incident.response_at) : "not recorded"}</span><span>{incident.assigned_members.length ? incident.assigned_members.map((member) => member.name).join(", ") : "Unassigned"}</span></div>
+          <p className="mt-1 line-clamp-1 text-sm text-fg-muted">{incident.affected_service || "Affected service not recorded"} · {incident.description || incident.client_report || "No impact recorded."}</p>
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-fg-subtle"><span>Detected by {(incident.reported_by_name || incident.detection_source).replace(/_/g, " ")}</span><span>{formatDateTime(incident.reported_at)}</span><span>Response {incident.response_at ? formatDateTime(incident.response_at) : "not started"}</span><span>{incident.assigned_members.length ? incident.assigned_members.map((member) => member.name).join(", ") : "Unassigned"}</span></div>
         </div>
         <div className="flex items-center justify-end gap-1" onClick={(event) => event.stopPropagation()}>
           <Button variant="outline" size="sm" onClick={onPreview}><FileOutput className="h-4 w-4" /> Report</Button>
+          <Button variant="ghost" size="icon" aria-label="Download incident PDF" disabled={isDownloading} onClick={onDownload}><Download className="h-4 w-4" /></Button>
+          {canForward && ["resolved", "unresolved"].includes(incident.status) && <Button variant="ghost" size="icon" aria-label="Forward incident to client" onClick={onForward}><Send className="h-4 w-4" /></Button>}
           {canEdit && <Button variant="ghost" size="icon" aria-label="Edit incident" onClick={onOpen}><Pencil className="h-4 w-4" /></Button>}
           {canManage && <Button variant="ghost" size="icon" aria-label="Delete incident" onClick={onDelete}><Trash2 className="h-4 w-4" /></Button>}
         </div>

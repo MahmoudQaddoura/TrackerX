@@ -16,6 +16,7 @@ from app.deps import (
 from app.models import Project, ProactiveServiceReport, SupportIncident, TeamMember, User
 from app.models.support import (
     INCIDENT_SEVERITIES,
+    INCIDENT_DETECTION_SOURCES,
     INCIDENT_STATUSES,
     PROACTIVE_CATEGORIES,
     PROACTIVE_STATUSES,
@@ -28,7 +29,7 @@ from app.schemas.support import (
     SupportIncidentOut,
     SupportIncidentUpdate,
 )
-from app.services.support_report_pdf import build_proactive_report_pdf
+from app.services.support_report_pdf import build_incident_report_pdf, build_proactive_report_pdf
 
 router = APIRouter(tags=["maintenance-support"])
 
@@ -91,14 +92,26 @@ def _validate_report(data: dict, existing: ProactiveServiceReport | None = None)
 def _validate_incident(data: dict, existing: SupportIncident | None = None) -> None:
     status = data.get("status", existing.status if existing else None)
     severity = data.get("severity", existing.severity if existing else None)
+    detection_source = data.get(
+        "detection_source", existing.detection_source if existing else "team"
+    )
     reported_at = data.get("reported_at", existing.reported_at if existing else None)
     response_at = data.get("response_at", existing.response_at if existing else None)
     if status not in INCIDENT_STATUSES:
         raise HTTPException(status_code=422, detail="Invalid incident status.")
     if severity not in INCIDENT_SEVERITIES:
         raise HTTPException(status_code=422, detail="Invalid incident severity.")
+    if detection_source not in INCIDENT_DETECTION_SOURCES:
+        raise HTTPException(status_code=422, detail="Invalid incident detection source.")
     if not reported_at:
         raise HTTPException(status_code=422, detail="Incident report time is required.")
+    if existing is None:
+        required_triage = ("reported_by_name", "affected_service", "client_report", "description")
+        if any(not data.get(field) for field in required_triage):
+            raise HTTPException(
+                status_code=422,
+                detail="A new incident needs its detection source, affected service, initial evidence, and impact.",
+            )
     if response_at and response_at < reported_at:
         raise HTTPException(status_code=422, detail="Response time cannot precede report time.")
     if status in ("resolved", "unresolved"):
@@ -151,17 +164,24 @@ def _incident_out(incident: SupportIncident) -> dict:
         "id": incident.id,
         "project_id": incident.project_id,
         "title": incident.title,
+        "detection_source": incident.detection_source,
+        "reported_by_name": incident.reported_by_name,
+        "affected_service": incident.affected_service,
         "client_report": incident.client_report,
         "reason": incident.reason,
         "description": incident.description,
         "reported_at": incident.reported_at,
         "severity": incident.severity,
         "recommendation": incident.recommendation,
+        "containment_actions": incident.containment_actions,
         "investigation": incident.investigation,
+        "root_cause": incident.root_cause,
         "response_at": incident.response_at,
         "response_description": incident.response_description,
+        "recovery_validation": incident.recovery_validation,
         "status": incident.status,
         "resolution_notes": incident.resolution_notes,
+        "lessons_learned": incident.lessons_learned,
         "assigned_members": [
             {"id": member.id, "name": member.name, "role": member.role}
             for member in incident.assignees
@@ -359,3 +379,23 @@ def delete_support_incident(
     check_project_access(db, user, incident.project_id)
     db.delete(incident)
     db.commit()
+
+
+@router.get("/support/incidents/{incident_id}/export/pdf")
+def export_incident_report_pdf(
+    incident_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    incident = db.get(SupportIncident, incident_id)
+    if incident is None:
+        raise HTTPException(status_code=404, detail="Support incident not found.")
+    if user.role == "client":
+        raise HTTPException(status_code=403, detail="Clients can download only forwarded reports.")
+    check_project_access(db, user, incident.project_id)
+    pdf = build_incident_report_pdf(incident, prepared_by=user.full_name)
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="incident-report-{incident.id:04d}.pdf"'},
+    )

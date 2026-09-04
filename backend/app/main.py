@@ -72,11 +72,32 @@ def _migrate_local_schema() -> None:
     proactive_report_columns = {
         column["name"] for column in inspect(engine).get_columns("proactive_service_reports")
     }
+    support_incident_columns = {
+        column["name"] for column in inspect(engine).get_columns("support_incidents")
+    }
     with engine.begin() as connection:
         if "service_area_name" not in proactive_report_columns:
             connection.exec_driver_sql(
                 "ALTER TABLE proactive_service_reports ADD COLUMN service_area_name TEXT"
             )
+        incident_additions = {
+            "detection_source": "TEXT NOT NULL DEFAULT 'team'",
+            "reported_by_name": "TEXT",
+            "affected_service": "TEXT",
+            "containment_actions": "TEXT",
+            "root_cause": "TEXT",
+            "recovery_validation": "TEXT",
+            "lessons_learned": "TEXT",
+        }
+        for column_name, definition in incident_additions.items():
+            if column_name not in support_incident_columns:
+                connection.exec_driver_sql(
+                    f"ALTER TABLE support_incidents ADD COLUMN {column_name} {definition}"
+                )
+        connection.exec_driver_sql(
+            "CREATE INDEX IF NOT EXISTS ix_support_incidents_detection_source "
+            "ON support_incidents (detection_source)"
+        )
         # Correct the original demo seed where the patch report inherited the
         # health-check category, which otherwise under-counts service coverage.
         connection.exec_driver_sql(

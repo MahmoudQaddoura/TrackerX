@@ -4,6 +4,7 @@ import {
   Building2,
   CheckCircle2,
   FileCheck2,
+  Download,
   Inbox,
   Mail,
   ShieldCheck,
@@ -21,6 +22,7 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/context/AuthContext";
 import { useClientPortal, useMarkClientReportRead } from "@/hooks/useClients";
+import { exportForwardedReportPdf } from "@/api/clients";
 import { timeGreeting } from "@/lib/greeting";
 import { formatDate } from "@/lib/utils";
 import type { ClientReportShare } from "@/types";
@@ -43,16 +45,23 @@ const FIELD_LABELS: Record<string, string> = {
   work_completed: "Work completed",
   recommendations: "Recommendations",
   next_action_date: "Next action date",
+  detection_source: "Detected by",
+  reported_by_name: "Reporter / detection source",
+  affected_service: "Affected service",
   client_report: "Client report",
   reason: "Reason",
   description: "Description",
   reported_at: "Reported at",
   severity: "Severity",
   recommendation: "Recommendation",
+  containment_actions: "Containment actions",
   investigation: "Investigation",
+  root_cause: "Confirmed root cause",
   response_at: "Response time",
   response_description: "Response description",
+  recovery_validation: "Recovery validation",
   resolution_notes: "Resolution notes",
+  lessons_learned: "Lessons learned and prevention",
 };
 
 export function ClientDashboardPage() {
@@ -120,6 +129,16 @@ function PortalMetric({ icon: Icon, label, value, detail, attention = false }: {
 }
 
 function ReportDialog({ report, onClose }: { report: ClientReportShare | null; onClose: () => void }) {
-  const visibleFields = report ? Object.entries(report.report).filter(([key, value]) => value != null && value !== "" && !["title", "status", "category", "updated_at"].includes(key)) : [];
-  return <Dialog open={!!report} onOpenChange={(open) => !open && onClose()}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">{report && <><DialogHeader><DialogTitle>{report.title}</DialogTitle></DialogHeader><div className="flex flex-wrap items-center gap-2"><Badge variant={report.report_type === "incident" ? "warning" : "default"}>{report.report_type === "incident" ? "Incident report" : REPORT_LABELS[report.category ?? ""] || "Service report"}</Badge><Badge variant="outline">{report.status.split("_").join(" ")}</Badge><span className="text-xs text-fg-muted">{report.project_name}</span></div>{report.message && <div className="rounded-lg border border-accent/20 bg-accent-soft/50 p-4"><p className="text-xs font-semibold uppercase tracking-wide text-accent">Message from TrackerX</p><p className="mt-1 whitespace-pre-wrap text-sm text-fg">{report.message}</p></div>}<div className="space-y-3">{visibleFields.map(([key, value]) => <div key={key} className="rounded-lg border border-border p-4"><p className="text-xs font-semibold uppercase tracking-wide text-fg-subtle">{FIELD_LABELS[key] || key.split("_").join(" ")}</p><p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-fg">{String(value)}</p></div>)}</div><div className="flex items-center justify-between border-t border-border pt-4 text-xs text-fg-muted"><span>Forwarded by {report.shared_by_name || "TrackerX administrator"}</span><span>{formatDate(report.shared_at)}</span></div></>}</DialogContent></Dialog>;
+  const visibleFields = report ? Object.entries(report.report).filter(([key, value]) => value != null && value !== "" && !["title", "status", "category", "service_area_name", "updated_at"].includes(key)) : [];
+  async function download() {
+    if (!report) return;
+    const blob = await exportForwardedReportPdf(report.id);
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${report.report_type === "incident" ? "incident" : "service"}-report-${String(report.report_id).padStart(4, "0")}.pdf`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+  return <Dialog open={!!report} onOpenChange={(open) => !open && onClose()}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">{report && <><DialogHeader><div className="flex items-center justify-between gap-4 pr-8"><DialogTitle>{report.title}</DialogTitle><Button size="sm" onClick={download}><Download className="h-4 w-4" /> Download PDF</Button></div></DialogHeader><div className="flex flex-wrap items-center gap-2"><Badge variant={report.report_type === "incident" ? "warning" : "default"}>{report.report_type === "incident" ? "Incident report" : String(report.report.service_area_name || REPORT_LABELS[report.category ?? ""] || "Service report")}</Badge><Badge variant="outline">{report.status.split("_").join(" ")}</Badge><span className="text-xs text-fg-muted">{report.project_name}</span></div>{report.message && <div className="rounded-lg border border-accent/20 bg-accent-soft/50 p-4"><p className="text-xs font-semibold uppercase tracking-wide text-accent">Message from TrackerX</p><p className="mt-1 whitespace-pre-wrap text-sm text-fg">{report.message}</p></div>}<div className="space-y-3">{visibleFields.map(([key, value]) => <div key={key} className="rounded-lg border border-border p-4"><p className="text-xs font-semibold uppercase tracking-wide text-fg-subtle">{FIELD_LABELS[key] || key.split("_").join(" ")}</p><p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-fg">{String(value)}</p></div>)}</div><div className="flex items-center justify-between border-t border-border pt-4 text-xs text-fg-muted"><span>Forwarded by {report.shared_by_name || "TrackerX administrator"}</span><span>{formatDate(report.shared_at)}</span></div></>}</DialogContent></Dialog>;
 }

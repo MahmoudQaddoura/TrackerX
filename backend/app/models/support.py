@@ -18,6 +18,7 @@ PROACTIVE_CATEGORIES = (
 PROACTIVE_STATUSES = ("pending", "in_progress", "completed", "attention_required")
 INCIDENT_STATUSES = ("reported", "investigating", "resolved", "unresolved")
 INCIDENT_SEVERITIES = ("low", "medium", "high", "critical")
+INCIDENT_DETECTION_SOURCES = ("client", "team", "monitoring", "third_party")
 
 PROACTIVE_CATEGORY_TEMPLATES = (
     ("health_check", "Health Check Report"),
@@ -116,17 +117,24 @@ class SupportIncident(Base):
         index=True,
     )
     title = Column(Text, nullable=False)
+    detection_source = Column(Text, nullable=False, default="team", index=True)
+    reported_by_name = Column(Text, nullable=True)
+    affected_service = Column(Text, nullable=True)
     client_report = Column(Text, nullable=True)
     reason = Column(Text, nullable=True)
     description = Column(Text, nullable=True)
     reported_at = Column(Text, nullable=False)
     severity = Column(Text, nullable=False, default="medium", index=True)
     recommendation = Column(Text, nullable=True)
+    containment_actions = Column(Text, nullable=True)
     investigation = Column(Text, nullable=True)
+    root_cause = Column(Text, nullable=True)
     response_at = Column(Text, nullable=True)
     response_description = Column(Text, nullable=True)
+    recovery_validation = Column(Text, nullable=True)
     status = Column(Text, nullable=False, default="reported", index=True)
     resolution_notes = Column(Text, nullable=True)
+    lessons_learned = Column(Text, nullable=True)
     created_by_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(Text, nullable=False, default=now_iso)
     updated_at = Column(Text, nullable=False, default=now_iso, onupdate=now_iso)
@@ -143,6 +151,10 @@ class SupportIncident(Base):
         CheckConstraint(
             "severity IN ('low','medium','high','critical')",
             name="ck_support_incident_severity",
+        ),
+        CheckConstraint(
+            "detection_source IN ('client','team','monitoring','third_party')",
+            name="ck_support_incident_detection_source",
         ),
         CheckConstraint(
             "status IN ('reported','investigating','resolved','unresolved')",

@@ -29,7 +29,7 @@ from app.schemas.client import (
 )
 from app.security import hash_password
 from app.services.serialize import project_out
-from app.services.support_report_pdf import build_proactive_report_pdf
+from app.services.support_report_pdf import build_incident_report_pdf, build_proactive_report_pdf
 
 router = APIRouter(tags=["clients"])
 
@@ -120,17 +120,24 @@ def _proactive_payload(report: ProactiveServiceReport) -> dict:
 def _incident_payload(incident: SupportIncident) -> dict:
     return {
         "title": incident.title,
+        "detection_source": incident.detection_source,
+        "reported_by_name": incident.reported_by_name,
+        "affected_service": incident.affected_service,
         "client_report": incident.client_report,
         "reason": incident.reason,
         "description": incident.description,
         "reported_at": incident.reported_at,
         "severity": incident.severity,
         "recommendation": incident.recommendation,
+        "containment_actions": incident.containment_actions,
         "investigation": incident.investigation,
+        "root_cause": incident.root_cause,
         "response_at": incident.response_at,
         "response_description": incident.response_description,
+        "recovery_validation": incident.recovery_validation,
         "status": incident.status,
         "resolution_notes": incident.resolution_notes,
+        "lessons_learned": incident.lessons_learned,
         "updated_at": incident.updated_at,
     }
 
@@ -504,11 +511,21 @@ def export_forwarded_report_pdf(
     if user.role != "client":
         raise HTTPException(status_code=403, detail="This area is for client accounts.")
     share = db.get(ClientReportShare, share_id)
-    if share is None or share.client_user_id != user.id or share.proactive_report is None:
-        raise HTTPException(status_code=404, detail="Forwarded proactive report not found.")
-    pdf = build_proactive_report_pdf(share.proactive_report, prepared_by=share.shared_by.full_name if share.shared_by else "TrackerX Administration")
+    if share is None or share.client_user_id != user.id:
+        raise HTTPException(status_code=404, detail="Forwarded report not found.")
+    prepared_by = share.shared_by.full_name if share.shared_by else "TrackerX Administration"
+    if share.proactive_report is not None:
+        pdf = build_proactive_report_pdf(share.proactive_report, prepared_by=prepared_by)
+        report_id = share.proactive_report.id
+        prefix = "service-report"
+    elif share.incident is not None:
+        pdf = build_incident_report_pdf(share.incident, prepared_by=prepared_by)
+        report_id = share.incident.id
+        prefix = "incident-report"
+    else:
+        raise HTTPException(status_code=410, detail="The forwarded report is no longer available.")
     return Response(
         content=pdf,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="service-report-{share.proactive_report.id:04d}.pdf"'},
+        headers={"Content-Disposition": f'attachment; filename="{prefix}-{report_id:04d}.pdf"'},
     )
