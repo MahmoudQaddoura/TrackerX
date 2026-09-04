@@ -28,6 +28,7 @@ from app.schemas.client import (
     ShareableReportOut,
 )
 from app.security import hash_password
+from app.services.password_policy import validate_password
 from app.services.serialize import project_out
 from app.services.support_report_pdf import build_incident_report_pdf, build_proactive_report_pdf
 
@@ -239,6 +240,10 @@ def create_client(
     email = inp.email.lower()
     if db.query(User).filter(func.lower(User.email) == email).first() is not None:
         raise HTTPException(status_code=409, detail="A user with this email already exists.")
+    try:
+        validate_password(inp.temporary_password, (email, inp.full_name))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
     client = User(
         email=email,
         full_name=inp.full_name.strip(),
@@ -280,6 +285,7 @@ def update_client(
 ):
     client = _client_or_404(db, client_id)
     data = inp.model_dump(exclude_unset=True)
+    invalidates_session = False
     if "email" in data:
         email = str(data.pop("email")).lower()
         duplicate = (
@@ -289,15 +295,27 @@ def update_client(
         )
         if duplicate:
             raise HTTPException(status_code=409, detail="A user with this email already exists.")
-        client.email = email
+        if client.email != email:
+            client.email = email
+            invalidates_session = True
     if "full_name" in data:
         client.full_name = data.pop("full_name").strip()
     if "is_enabled" in data:
-        client.is_enabled = int(data.pop("is_enabled"))
+        is_enabled = int(data.pop("is_enabled"))
+        if client.is_enabled != is_enabled:
+            client.is_enabled = is_enabled
+            invalidates_session = True
     temporary_password = data.pop("temporary_password", None)
     if temporary_password:
+        try:
+            validate_password(temporary_password, (client.email, client.full_name))
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
         client.hashed_password = hash_password(temporary_password)
         client.must_change_password = 1
+        invalidates_session = True
+    if invalidates_session:
+        client.auth_version = int(client.auth_version or 0) + 1
     profile = client.client_profile
     if profile is None:
         profile = ClientProfile(user_id=client.id)

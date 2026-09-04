@@ -22,6 +22,8 @@ import re
 _MILESTONE_RE = re.compile(r"^Milestone\s", re.IGNORECASE)
 _TASK_RE = re.compile(r"^\d+\.\d+")
 _SUMMARY_RE = re.compile(r"Estimated Effort", re.IGNORECASE)
+MAX_CSV_ROWS = 10_000
+MAX_CELL_LENGTH = 20_000
 
 
 def _classify(cells: list[str]) -> str:
@@ -52,6 +54,10 @@ def parse_project_csv(text: str) -> dict:
     Raises ValueError if no tasks/milestones can be found.
     """
     rows = list(csv.reader(io.StringIO(text)))
+    if len(rows) > MAX_CSV_ROWS:
+        raise ValueError(f"CSV contains more than {MAX_CSV_ROWS:,} rows.")
+    if any(len(cell) > MAX_CELL_LENGTH for row in rows for cell in row):
+        raise ValueError("CSV contains a cell larger than the 20,000-character limit.")
     # Drop a header row if present.
     if rows and rows[0] and rows[0][0].strip() == "#":
         rows = rows[1:]

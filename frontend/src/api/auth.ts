@@ -3,7 +3,7 @@ import { api } from "@/lib/apiClient";
 import type { AccessLevel, AuthUser, Role } from "@/types";
 
 export interface LoginResponse {
-  access_token: string;
+  access_token: string | null;
   token_type: string;
   role: Role;
   full_name: string;
@@ -30,4 +30,8 @@ export async function changePassword(
     new_password: newPassword,
   });
   return data;
+}
+
+export async function logout(): Promise<void> {
+  await api.post("/auth/logout");
 }

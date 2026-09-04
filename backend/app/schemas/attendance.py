@@ -13,11 +13,11 @@ class AttendanceInput(BaseModel):
 
 
 class AttendanceBulkInput(BaseModel):
-    records: list[AttendanceInput]
+    records: list[AttendanceInput] = Field(max_length=500)
 
 
 class AttendanceExportInput(BaseModel):
-    records: list[AttendanceInput]
+    records: list[AttendanceInput] = Field(max_length=500)
 
 
 class AttendanceOut(BaseModel):

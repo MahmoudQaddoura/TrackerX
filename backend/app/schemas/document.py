@@ -7,7 +7,7 @@ there is no DocumentInput model — see routers/documents.py.)
 Note: file_path is deliberately never exposed.
 """
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class DocumentOut(BaseModel):
@@ -26,6 +26,6 @@ class DocumentOut(BaseModel):
 
 
 class DocumentUpdate(BaseModel):
-    title: str | None = None
-    description: str | None = None
+    title: str | None = Field(default=None, min_length=1, max_length=300)
+    description: str | None = Field(default=None, max_length=10_000)
     category: str | None = None

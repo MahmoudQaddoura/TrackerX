@@ -11,15 +11,15 @@ from pydantic import BaseModel, Field
 
 class TaskInput(BaseModel):
     title: str = Field(min_length=1, max_length=300)
-    description: str | None = None
+    description: str | None = Field(default=None, max_length=20_000)
     start_date: str | None = None
     end_date: str | None = None
     status: str = "todo"
     is_delayed: bool = False
     delay_cause: str | None = None  # 'Company' | 'Client'
-    delay_comment: str | None = None
-    est_days: float | None = None
-    assigned_member_ids: list[int] = Field(default_factory=list)
+    delay_comment: str | None = Field(default=None, max_length=5_000)
+    est_days: float | None = Field(default=None, ge=0, le=10_000)
+    assigned_member_ids: list[int] = Field(default_factory=list, max_length=100)
     # Deprecated single-assignee field retained for older API clients.
     assigned_member_id: int | None = None
     sort_order: int = 0
@@ -33,15 +33,15 @@ class TaskStatusUpdate(BaseModel):
 
 class TaskUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=300)
-    description: str | None = None
+    description: str | None = Field(default=None, max_length=20_000)
     start_date: str | None = None
     end_date: str | None = None
     status: str | None = None
     is_delayed: bool | None = None
     delay_cause: str | None = None
-    delay_comment: str | None = None
-    est_days: float | None = None
-    assigned_member_ids: list[int] | None = None
+    delay_comment: str | None = Field(default=None, max_length=5_000)
+    est_days: float | None = Field(default=None, ge=0, le=10_000)
+    assigned_member_ids: list[int] | None = Field(default=None, max_length=100)
     assigned_member_id: int | None = None
     sort_order: int | None = None
 

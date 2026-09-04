@@ -15,11 +15,12 @@ projects can this user see" — `None` means no filter (admin/pm), otherwise a
 concrete (possibly empty) set of project ids.
 """
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
 from app.db import get_db
+from app.config import settings
 from app.models import (
     Milestone,
     Project,
@@ -45,20 +46,27 @@ _FORBIDDEN_PROJECT = HTTPException(
 
 
 def get_authenticated_user(
+    request: Request,
     token: str | None = Depends(oauth2_scheme),
     db: Session = Depends(get_db),
 ) -> User:
     """Resolve identity even when a mandatory password change is pending."""
+    token = token or request.cookies.get(settings.auth_cookie_name)
     if not token:
         raise _CREDENTIALS_ERROR
     try:
         payload = decode_access_token(token)
         user_id = int(payload["sub"])
-    except (ValueError, KeyError, TypeError):
-        raise _CREDENTIALS_ERROR
+        auth_version = int(payload["ver"])
+    except (ValueError, KeyError, TypeError) as exc:
+        raise _CREDENTIALS_ERROR from exc
 
     user = db.get(User, user_id)
-    if user is None or not bool(user.is_enabled):
+    if (
+        user is None
+        or not bool(user.is_enabled)
+        or int(user.auth_version or 0) != auth_version
+    ):
         raise _CREDENTIALS_ERROR
     return user
 

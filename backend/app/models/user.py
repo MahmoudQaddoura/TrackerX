@@ -29,6 +29,7 @@ class User(Base):
     is_enabled = Column(Integer, nullable=False, default=1)
     is_primary_admin = Column(Integer, nullable=False, default=0)
     must_change_password = Column(Integer, nullable=False, default=0)
+    auth_version = Column(Integer, nullable=False, default=0)
     created_at = Column(Text, nullable=False, default=now_iso)
 
     client_profile = relationship(

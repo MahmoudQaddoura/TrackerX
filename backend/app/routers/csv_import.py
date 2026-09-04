@@ -22,6 +22,7 @@ from app.services.employee_numbers import assign_employee_number
 from app.services.serialize import project_out
 
 router = APIRouter(tags=["projects"])
+MAX_CSV_BYTES = 5 * 1024 * 1024
 
 
 def _find_or_create_member(db: Session, cache: dict[str, TeamMember], name: str) -> TeamMember:
@@ -42,9 +43,11 @@ def _find_or_create_member(db: Session, cache: dict[str, TeamMember], name: str)
 async def import_project_csv(
     file: UploadFile = File(...), db: Session = Depends(get_db), _=Depends(require_admin)
 ):
-    raw = await file.read()
+    raw = await file.read(MAX_CSV_BYTES + 1)
     if not raw:
         raise HTTPException(status_code=422, detail="Uploaded CSV is empty.")
+    if len(raw) > MAX_CSV_BYTES:
+        raise HTTPException(status_code=413, detail="CSV exceeds the 5 MB limit.")
     try:
         outline = parse_project_csv(raw.decode("utf-8-sig"))
     except (UnicodeDecodeError, ValueError) as exc:

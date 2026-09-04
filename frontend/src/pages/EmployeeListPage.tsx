@@ -185,8 +185,8 @@ export function EmployeeListPage() {
   async function handleCredentials() {
     if (!credentialTarget) return;
     if (!credentialEmail.trim()) return setCredentialError("Email is required.");
-    if (!credentialTarget.has_login && temporaryPassword.length < 8)
-      return setCredentialError("A temporary password of at least 8 characters is required.");
+    if (!credentialTarget.has_login && temporaryPassword.length < 12)
+      return setCredentialError("A temporary password of at least 12 characters is required.");
     setCredentialSaving(true);
     setCredentialError(null);
     try {
@@ -558,7 +558,9 @@ export function EmployeeListPage() {
                   id="credential-password"
                   value={temporaryPassword}
                   onChange={(event) => setTemporaryPassword(event.target.value)}
-                  placeholder={credentialTarget.has_login ? "Leave blank to keep current password" : "Minimum 8 characters"}
+                  minLength={credentialTarget.has_login ? undefined : 12}
+                  maxLength={128}
+                  placeholder={credentialTarget.has_login ? "Leave blank to keep current password" : "12+ characters; use 3 character types"}
                 />
               </div>
               {isPrimaryAdmin ? (

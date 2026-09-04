@@ -73,6 +73,8 @@ def get_meeting(
 ):
     m = _meeting_or_404(db, meeting_id)
     check_project_access(db, user, m.project_id)
+    if user.role == "client" and m.meeting_type != "client":
+        raise HTTPException(status_code=404, detail="Meeting not found.")
     return m
 
 

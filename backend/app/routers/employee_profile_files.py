@@ -116,6 +116,8 @@ async def upload_profile_files(
         )
 
     for upload in files:
+        if len(upload.filename or "profile-file") > 255:
+            raise HTTPException(status_code=422, detail="File name exceeds 255 characters.")
         suffix = Path(upload.filename or "").suffix.lower()
         if suffix not in _ALLOWED_SUFFIXES:
             raise HTTPException(

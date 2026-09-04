@@ -7,7 +7,6 @@ from html import escape
 from io import BytesIO
 
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
@@ -176,7 +175,7 @@ def build_incident_report_pdf(incident, prepared_by: str) -> bytes:
         story.append(Paragraph(phase_title, section_style))
         story.append(Spacer(1, 2 * mm))
         table_rows = []
-        for index, (label, value) in enumerate(rows):
+        for label, value in rows:
             table_rows.append([Paragraph(label.upper(), label_style), Paragraph(_text(value).replace("\n", "<br/>"), body_style)])
         table = Table(table_rows, colWidths=[48 * mm, 111 * mm], repeatRows=0)
         table.setStyle(TableStyle([("GRID", (0,0), (-1,-1), .45, LINE), ("BACKGROUND", (0,0), (0,-1), PALE_BLUE), ("ROWBACKGROUNDS", (1,0), (1,-1), [colors.white, ROW_ALT]), ("VALIGN", (0,0), (-1,-1), "TOP"), ("LEFTPADDING", (0,0), (-1,-1), 3*mm), ("RIGHTPADDING", (0,0), (-1,-1), 3*mm), ("TOPPADDING", (0,0), (-1,-1), 2.2*mm), ("BOTTOMPADDING", (0,0), (-1,-1), 2.2*mm)]))

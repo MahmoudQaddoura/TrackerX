@@ -6,8 +6,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 
-import { changePassword as changePasswordRequest, fetchMe, login as loginRequest } from "@/api/auth";
-import { clearToken, getToken, setToken } from "@/lib/auth";
+import { changePassword as changePasswordRequest, fetchMe, login as loginRequest, logout as logoutRequest } from "@/api/auth";
 import type { AuthUser } from "@/types";
 
 interface AuthContextValue {
@@ -36,24 +35,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!getToken()) {
-      setLoading(false);
-      return;
-    }
     fetchMe()
       .then(setUser)
-      .catch(() => clearToken())
+      .catch(() => setUser(null))
       .finally(() => setLoading(false));
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    const res = await loginRequest(email, password);
-    setToken(res.access_token);
+    await loginRequest(email, password);
     setUser(await fetchMe());
   }, []);
 
   const logout = useCallback(() => {
-    clearToken();
+    void logoutRequest().catch(() => undefined);
     setUser(null);
   }, []);
 

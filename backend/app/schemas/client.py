@@ -10,12 +10,12 @@ from pydantic import BaseModel, EmailStr, Field
 class ClientCreateInput(BaseModel):
     email: EmailStr
     full_name: str = Field(min_length=1, max_length=200)
-    temporary_password: str = Field(min_length=8, max_length=200)
+    temporary_password: str = Field(min_length=12, max_length=128)
     organization: str | None = Field(default=None, max_length=250)
     job_title: str | None = Field(default=None, max_length=200)
     phone: str | None = Field(default=None, max_length=100)
-    notes: str | None = None
-    project_ids: list[int] = Field(default_factory=list)
+    notes: str | None = Field(default=None, max_length=10_000)
+    project_ids: list[int] = Field(default_factory=list, max_length=500)
 
 
 class ClientUpdateInput(BaseModel):
@@ -24,13 +24,13 @@ class ClientUpdateInput(BaseModel):
     organization: str | None = Field(default=None, max_length=250)
     job_title: str | None = Field(default=None, max_length=200)
     phone: str | None = Field(default=None, max_length=100)
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=10_000)
     is_enabled: bool | None = None
-    temporary_password: str | None = Field(default=None, min_length=8, max_length=200)
+    temporary_password: str | None = Field(default=None, min_length=12, max_length=128)
 
 
 class ClientProjectAssignmentInput(BaseModel):
-    project_ids: list[int] = Field(default_factory=list)
+    project_ids: list[int] = Field(default_factory=list, max_length=500)
 
 
 class ClientProjectOut(BaseModel):

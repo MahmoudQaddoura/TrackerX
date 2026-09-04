@@ -8,12 +8,15 @@ Every router is mounted under /api. One purpose: wire the app together.
 
 import logging
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import inspect
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy import inspect, text
+from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.db import Base, SessionLocal, engine
+from app.db import Base, SessionLocal, engine, get_db
 from app import models  # noqa: F401 — importing registers all tables on Base
 
 from app.routers import (
@@ -42,13 +45,14 @@ from app.services.document_storage import normalize_document_storage_paths
 
 
 logger = logging.getLogger(__name__)
+_production = settings.environment.strip().lower() == "production"
 
 app = FastAPI(
     title=settings.app_name,
     version="1.0.0",
-    docs_url="/api/docs",
-    redoc_url="/api/redoc",
-    openapi_url="/api/openapi.json",
+    docs_url=None if _production else "/api/docs",
+    redoc_url=None if _production else "/api/redoc",
+    openapi_url=None if _production else "/api/openapi.json",
 )
 
 
@@ -213,6 +217,10 @@ def _migrate_local_schema() -> None:
                 "UPDATE users SET must_change_password = 1 "
                 "WHERE role IN ('pm','developer')"
             )
+        if "auth_version" not in user_columns:
+            connection.exec_driver_sql(
+                "ALTER TABLE users ADD COLUMN auth_version INTEGER NOT NULL DEFAULT 0"
+            )
         # Preserve every existing single assignee as the first member of the
         # new multi-assignee relationship. The composite PK makes this safe on
         # every restart.
@@ -246,12 +254,33 @@ def _migrate_local_schema() -> None:
             )
         connection.exec_driver_sql("PRAGMA optimize")
 
+@app.middleware("http")
+async def secure_api_requests(request: Request, call_next):
+    """Require a same-origin-only header for cookie-authenticated writes."""
+    if (
+        request.url.path.startswith("/api/")
+        and request.method not in {"GET", "HEAD", "OPTIONS"}
+        and request.cookies.get(settings.auth_cookie_name)
+        and request.headers.get("X-TrackerX-Request") != "1"
+    ):
+        return JSONResponse(status_code=403, content={"detail": "Missing request verification header."})
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    response.headers["Cache-Control"] = "no-store" if request.url.path.startswith("/api/") else "no-cache"
+    return response
+
+
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-TrackerX-Request"],
+    expose_headers=["Content-Disposition", "Retry-After", "X-Preview-Truncated"],
 )
 
 
@@ -301,5 +330,10 @@ for r in (
 
 
 @app.get("/api/health", tags=["health"])
-def health() -> dict:
-    return {"status": "ok"}
+def health(db: Session = Depends(get_db)) -> dict:
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception as exc:
+        logger.exception("Database health check failed.")
+        raise HTTPException(status_code=503, detail="Database unavailable.") from exc
+    return {"status": "ok", "database": "ok"}

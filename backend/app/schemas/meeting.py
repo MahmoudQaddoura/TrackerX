@@ -12,16 +12,16 @@ class MeetingInput(BaseModel):
     meeting_type: str = "sprint"  # 'sprint' | 'client'
     title: str = Field(min_length=1, max_length=300)
     meeting_date: str  # ISO date
-    discussion_points: str | None = None
-    outcome: str | None = None
+    discussion_points: str | None = Field(default=None, max_length=20_000)
+    outcome: str | None = Field(default=None, max_length=20_000)
 
 
 class MeetingUpdate(BaseModel):
     meeting_type: str | None = None
     title: str | None = Field(default=None, min_length=1, max_length=300)
     meeting_date: str | None = None
-    discussion_points: str | None = None
-    outcome: str | None = None
+    discussion_points: str | None = Field(default=None, max_length=20_000)
+    outcome: str | None = Field(default=None, max_length=20_000)
 
 
 class MeetingOut(BaseModel):

@@ -81,6 +81,8 @@ def delete_comment(
     comment = db.get(Comment, comment_id)
     if comment is None:
         raise HTTPException(status_code=404, detail="Comment not found.")
+    project_id = _entity_project_id(db, comment.entity_type, comment.entity_id)
+    check_project_access(db, user, project_id)
     if comment.author_id != user.id and user.role not in ("admin", "pm"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="You can only delete your own comments."

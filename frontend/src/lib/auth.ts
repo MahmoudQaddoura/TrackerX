@@ -1,15 +1,16 @@
 /**
  * lib/auth.ts
- * Token persistence in localStorage. One purpose: read/write/clear the JWT.
+ * Compatibility stubs retained for older imports during rolling upgrades.
+ * Authentication now uses an HttpOnly same-site cookie managed by the API.
  */
 const TOKEN_KEY = "ptt_token";
 
 export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
+  return null;
 }
 
-export function setToken(token: string): void {
-  localStorage.setItem(TOKEN_KEY, token);
+export function setToken(_token: string): void {
+  localStorage.removeItem(TOKEN_KEY);
 }
 
 export function clearToken(): void {

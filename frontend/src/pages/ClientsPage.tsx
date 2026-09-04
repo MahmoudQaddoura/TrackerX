@@ -84,8 +84,8 @@ export function ClientsPage() {
       setError("Name and email are required.");
       return;
     }
-    if (form.password.length < 8) {
-      setError("The temporary password must contain at least 8 characters.");
+    if (form.password.length < 12) {
+      setError("The temporary password must contain at least 12 characters.");
       return;
     }
     setError(null);
@@ -256,7 +256,7 @@ function CreateClientDialog({ open, onOpenChange, form, setForm, projects, selec
           <Field label="Organization"><Input value={form.organization} onChange={field("organization")} /></Field>
           <Field label="Job title"><Input value={form.jobTitle} onChange={field("jobTitle")} /></Field>
           <Field label="Phone"><Input value={form.phone} onChange={field("phone")} /></Field>
-          <Field label="Temporary password"><PasswordInput value={form.password} onChange={field("password")} /></Field>
+          <Field label="Temporary password"><PasswordInput value={form.password} onChange={field("password")} minLength={12} maxLength={128} placeholder="12+ characters; use 3 character types" /></Field>
         </div>
         <Field label="Internal admin notes"><Textarea value={form.notes} onChange={field("notes")} /></Field>
         <ProjectChecklist projects={projects} selected={selectedProjectIds} toggle={toggleProject} />
@@ -337,7 +337,7 @@ function ClientProfileDialog({ client, projects, onClose }: { client: ClientProf
                 <Field label="Organization"><Input value={form.organization} onChange={(e) => setForm({ ...form, organization: e.target.value })} /></Field>
                 <Field label="Job title"><Input value={form.jobTitle} onChange={(e) => setForm({ ...form, jobTitle: e.target.value })} /></Field>
                 <Field label="Phone"><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
-                <Field label="Reset temporary password"><PasswordInput value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="Leave blank to keep current password" /></Field>
+                <Field label="Reset temporary password"><PasswordInput value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} minLength={12} maxLength={128} placeholder="12+ characters; use 3 character types" /></Field>
               </div>
               <Field label="Internal admin notes"><Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></Field>
               <label className="flex items-center gap-3 rounded-lg border border-border p-3 text-sm"><input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="h-4 w-4 accent-accent" /><span><span className="font-medium text-fg">Login enabled</span><span className="block text-xs text-fg-muted">Disable access without deleting the client profile.</span></span></label>

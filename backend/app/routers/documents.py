@@ -12,7 +12,7 @@ import re
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, PlainTextResponse
 from sqlalchemy.orm import Session
 
@@ -85,6 +85,13 @@ async def upload_document(
     check_project_access(db, user, project_id)
     if category not in DOCUMENT_CATEGORIES:
         raise HTTPException(status_code=422, detail=f"Invalid category '{category}'.")
+    title = title.strip()
+    if not title or len(title) > 300:
+        raise HTTPException(status_code=422, detail="Document title must contain 1 to 300 characters.")
+    if description is not None and len(description) > 10_000:
+        raise HTTPException(status_code=422, detail="Document description exceeds 10,000 characters.")
+    if len(file.filename or "file") > 255:
+        raise HTTPException(status_code=422, detail="File name exceeds 255 characters.")
     if milestone_id is not None:
         ms = db.get(Milestone, milestone_id)
         if ms is None or ms.project_id != project_id:

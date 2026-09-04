@@ -10,12 +10,12 @@ from pydantic import BaseModel, EmailStr, Field
 
 class LoginInput(BaseModel):
     email: EmailStr
-    password: str
+    password: str = Field(min_length=1, max_length=128)
 
 
 class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
+    access_token: str | None = None
+    token_type: str = "cookie"
     role: str
     full_name: str
     access_level: str
@@ -24,7 +24,7 @@ class TokenResponse(BaseModel):
 
 class ChangePasswordInput(BaseModel):
     current_password: str = Field(min_length=1, max_length=200)
-    new_password: str = Field(min_length=8, max_length=200)
+    new_password: str = Field(min_length=12, max_length=128)
 
 
 class UserOut(BaseModel):

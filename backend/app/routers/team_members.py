@@ -27,6 +27,7 @@ from app.schemas.team_member import (
     TeamMemberUpdate,
 )
 from app.security import hash_password
+from app.services.password_policy import validate_password
 from app.services.employee_numbers import assign_employee_number
 from app.services.serialize import team_member_out
 
@@ -219,6 +220,10 @@ def provision_credentials(
     if user is None:
         if not inp.temporary_password:
             raise HTTPException(status_code=422, detail="A temporary password is required for a new login.")
+        try:
+            validate_password(inp.temporary_password, (email, member.name))
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
         user = User(
             email=email,
             full_name=member.name,
@@ -232,6 +237,13 @@ def provision_credentials(
         db.flush()
         member.user_id = user.id
     else:
+        security_changed = (
+            user.email != email
+            or user.role != account_role
+            or user.access_level != ("write" if account_role == "admin" else inp.access_level)
+            or bool(user.is_enabled) != bool(inp.is_enabled)
+            or bool(inp.temporary_password)
+        )
         if user.role == "admin" and (account_role != "admin" or not inp.is_enabled):
             other_enabled_admins = (
                 db.query(User)
@@ -249,8 +261,14 @@ def provision_credentials(
         user.access_level = "write" if account_role == "admin" else inp.access_level
         user.is_enabled = 1 if inp.is_enabled else 0
         if inp.temporary_password:
+            try:
+                validate_password(inp.temporary_password, (email, member.name))
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=str(exc))
             user.hashed_password = hash_password(inp.temporary_password)
             user.must_change_password = 1
+        if security_changed:
+            user.auth_version = int(user.auth_version or 0) + 1
 
     db.commit()
     db.refresh(user)

@@ -13,24 +13,24 @@ from app.models.project import PROJECT_STATUSES, PROJECT_TYPES
 
 class ProjectInput(BaseModel):
     name: str = Field(min_length=1, max_length=200)
-    description: str | None = None
+    description: str | None = Field(default=None, max_length=10_000)
     status: str = "active"
     project_type: str = "actual_project"
     parent_project_id: int | None = None
     start_date: str | None = None
     end_date: str | None = None
-    github_repo_url: str | None = None
+    github_repo_url: str | None = Field(default=None, max_length=500)
 
 
 class ProjectUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
-    description: str | None = None
+    description: str | None = Field(default=None, max_length=10_000)
     status: str | None = None
     project_type: str | None = None
     parent_project_id: int | None = None
     start_date: str | None = None
     end_date: str | None = None
-    github_repo_url: str | None = None
+    github_repo_url: str | None = Field(default=None, max_length=500)
 
 
 class ProjectManagerInput(BaseModel):

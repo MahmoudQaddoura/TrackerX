@@ -12,6 +12,7 @@ Every response is shaped by services/serialize.project_out (computed roll-ups).
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from urllib.parse import urlparse
 
 from app.db import get_db
 from app.deps import (
@@ -46,6 +47,15 @@ def _validate(
         raise HTTPException(status_code=422, detail=f"Invalid status '{inp.status}'.")
     if inp.start_date and inp.end_date and inp.start_date > inp.end_date:
         raise HTTPException(status_code=422, detail="Start date must be on or before end date.")
+    github_repo_url = (
+        inp.github_repo_url
+        if "github_repo_url" in inp.model_fields_set
+        else existing.github_repo_url if existing else None
+    )
+    if github_repo_url:
+        parsed = urlparse(github_repo_url)
+        if parsed.scheme != "https" or parsed.hostname not in {"github.com", "www.github.com"}:
+            raise HTTPException(status_code=422, detail="GitHub repository must use an https://github.com URL.")
     project_type = inp.project_type or (existing.project_type if existing else "actual_project")
     if project_type not in TYPE_VALUES:
         raise HTTPException(status_code=422, detail=f"Invalid project type '{project_type}'.")

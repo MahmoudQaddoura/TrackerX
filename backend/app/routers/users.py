@@ -17,6 +17,7 @@ from app.models import User
 from app.schemas.auth import UserOut
 from app.schemas.user import ROLE_VALUES, UserCreateInput
 from app.security import hash_password
+from app.services.password_policy import validate_password
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -44,6 +45,10 @@ def create_user(
     email = inp.email.lower()
     if db.query(User).filter(func.lower(User.email) == email).first() is not None:
         raise HTTPException(status_code=409, detail="A user with this email already exists.")
+    try:
+        validate_password(inp.password, (email, inp.full_name))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
     user = User(
         email=email,
         full_name=inp.full_name,

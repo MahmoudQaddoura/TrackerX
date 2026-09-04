@@ -26,7 +26,7 @@ class TeamMemberUpdate(BaseModel):
 
 class EmployeeCredentialsInput(BaseModel):
     email: EmailStr
-    temporary_password: str | None = Field(default=None, min_length=8, max_length=200)
+    temporary_password: str | None = Field(default=None, min_length=12, max_length=128)
     account_role: str | None = None
     access_level: str = "read"
     is_enabled: bool = True

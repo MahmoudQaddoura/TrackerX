@@ -49,7 +49,8 @@ class SupportReportTests(unittest.TestCase):
             admin = User(email="incident@example.com", hashed_password="unused", full_name="TrackerX Admin", role="admin", access_level="write")
             project = Project(name="VerifyX Support", project_type="maintenance_support")
             incident = SupportIncident(project=project, title="API unavailable", detection_source="client", reported_by_name="PSUT Service Desk", affected_service="VerifyX API", client_report="HTTP 503 reported", description="Authentication unavailable", reported_at="2026-09-05T09:00", severity="high", status="resolved", containment_actions="Traffic routed to standby", investigation="Application logs reviewed", root_cause="Expired upstream credential", response_at="2026-09-05T09:08", response_description="Credential rotated", recovery_validation="Login tests passed", resolution_notes="Service restored", lessons_learned="Add credential expiry alert")
-            db.add_all([admin, incident]); db.commit()
+            db.add_all([admin, incident])
+            db.commit()
 
             payload = _incident_out(incident)
             response = export_incident_report_pdf(incident.id, db=db, user=admin)

@@ -12,27 +12,31 @@ from app.config import settings
 from app.db import Base, SessionLocal, engine
 from app.models import User
 from app.security import hash_password
+from app.services.password_policy import validate_password
 
 
 _INSECURE_JWT_SECRETS = {
     "",
     "CHANGE_ME_IN_PRODUCTION",
+    "CHANGE_ME_IN_PRODUCTION_USE_32_BYTES",
     "replace-with-a-strong-random-secret",
 }
 _EXAMPLE_ADMIN_PASSWORD = "replace-with-a-unique-password-of-12-or-more-characters"
 
 
 def _validate_runtime_settings() -> None:
-    if (
-        settings.environment.strip().lower() == "production"
-        and (
+    if settings.environment.strip().lower() == "production":
+        if (
             settings.jwt_secret_key in _INSECURE_JWT_SECRETS
             or len(settings.jwt_secret_key) < 32
-        )
-    ):
-        raise RuntimeError(
-            "JWT_SECRET_KEY must be set to a strong, unique value in production."
-        )
+        ):
+            raise RuntimeError(
+                "JWT_SECRET_KEY must be set to a strong, unique value in production."
+            )
+        if not settings.allowed_hosts or "*" in settings.allowed_hosts:
+            raise RuntimeError("ALLOWED_HOSTS must list the production TrackerX host names.")
+        if any(origin == "*" or not origin.startswith("https://") for origin in settings.cors_origins):
+            raise RuntimeError("CORS_ORIGINS must contain only explicit HTTPS origins in production.")
 
 
 def _create_initial_admin_if_empty() -> None:
@@ -60,8 +64,10 @@ def _create_initial_admin_if_empty() -> None:
             email = str(TypeAdapter(EmailStr).validate_python(email)).lower()
         except ValidationError as exc:
             raise RuntimeError("INITIAL_ADMIN_EMAIL must be a valid email address.") from exc
-        if len(password) < 12:
-            raise RuntimeError("INITIAL_ADMIN_PASSWORD must contain at least 12 characters.")
+        try:
+            validate_password(password, (email, full_name))
+        except ValueError as exc:
+            raise RuntimeError(f"INITIAL_ADMIN_PASSWORD: {exc}") from exc
         if db.query(User).filter(func.lower(User.email) == email).first() is not None:
             return
 

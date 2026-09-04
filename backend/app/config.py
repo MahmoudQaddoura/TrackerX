@@ -26,9 +26,12 @@ class Settings(BaseSettings):
     database_url: str = f"sqlite:///{BASE_DIR / 'data' / 'app.db'}"
 
     # Auth / JWT
-    jwt_secret_key: str = "CHANGE_ME_IN_PRODUCTION"
+    jwt_secret_key: str = "CHANGE_ME_IN_PRODUCTION_USE_32_BYTES"
     jwt_algorithm: str = "HS256"
-    access_token_expire_minutes: int = 720  # 12 hours
+    jwt_issuer: str = "trackerx"
+    jwt_audience: str = "trackerx-web"
+    access_token_expire_minutes: int = 120
+    auth_cookie_name: str = "trackerx_session"
 
     # Document storage (files on disk; metadata in DB)
     documents_dir: Path = BASE_DIR / "data" / "documents"
@@ -44,6 +47,7 @@ class Settings(BaseSettings):
         "http://localhost:5173",
         "http://127.0.0.1:5173",
     ]
+    allowed_hosts: list[str] = ["localhost", "127.0.0.1", "testserver"]
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

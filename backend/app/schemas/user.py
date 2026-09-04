@@ -14,7 +14,7 @@ class UserCreateInput(BaseModel):
     email: EmailStr
     full_name: str = Field(min_length=1, max_length=200)
     role: str
-    password: str = Field(min_length=8, max_length=200)
+    password: str = Field(min_length=12, max_length=128)
     access_level: str = "read"
 
 

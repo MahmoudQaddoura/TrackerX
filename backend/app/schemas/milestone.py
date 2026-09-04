@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 class MilestoneInput(BaseModel):
     title: str = Field(min_length=1, max_length=200)
-    description: str | None = None
+    description: str | None = Field(default=None, max_length=10_000)
     start_date: str | None = None
     end_date: str | None = None
     workstream: str = "project"
@@ -19,7 +19,7 @@ class MilestoneInput(BaseModel):
 
 class MilestoneUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
-    description: str | None = None
+    description: str | None = Field(default=None, max_length=10_000)
     start_date: str | None = None
     end_date: str | None = None
     workstream: str | None = None

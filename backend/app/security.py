@@ -8,6 +8,7 @@ No DB access, no FastAPI dependencies here — those live in deps.py.
 """
 
 from datetime import datetime, timedelta, timezone
+import uuid
 
 import jwt
 from jwt import InvalidTokenError
@@ -28,12 +29,16 @@ def verify_password(plain: str, hashed: str) -> bool:
     return _pwd.verify(plain, hashed)
 
 
-def create_access_token(user_id: int, role: str) -> str:
+def create_access_token(user_id: int, role: str, auth_version: int = 0) -> str:
     """Build a signed JWT carrying the user id (`sub`) and `role`."""
     now = datetime.now(timezone.utc)
     payload = {
         "sub": str(user_id),
         "role": role,
+        "ver": auth_version,
+        "iss": settings.jwt_issuer,
+        "aud": settings.jwt_audience,
+        "jti": uuid.uuid4().hex,
         "iat": now,
         "exp": now + timedelta(minutes=settings.access_token_expire_minutes),
     }
@@ -43,6 +48,13 @@ def create_access_token(user_id: int, role: str) -> str:
 def decode_access_token(token: str) -> dict:
     """Decode and validate a JWT. Raises ValueError on any problem."""
     try:
-        return jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
+        return jwt.decode(
+            token,
+            settings.jwt_secret_key,
+            algorithms=[settings.jwt_algorithm],
+            issuer=settings.jwt_issuer,
+            audience=settings.jwt_audience,
+            options={"require": ["exp", "iat", "sub", "ver", "iss", "aud", "jti"]},
+        )
     except InvalidTokenError as exc:  # expired, bad signature, malformed, ...
         raise ValueError("Invalid or expired token") from exc

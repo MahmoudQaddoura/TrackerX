@@ -21,7 +21,7 @@ export function ChangePasswordPage() {
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    if (newPassword.length < 8) return setError("Your new password must contain at least 8 characters.");
+    if (newPassword.length < 12) return setError("Your new password must contain at least 12 characters.");
     if (newPassword !== confirmPassword) return setError("The new password and confirmation do not match.");
     if (newPassword === currentPassword) return setError("Choose a new password different from the temporary password.");
     setSaving(true);
@@ -50,7 +50,9 @@ export function ChangePasswordPage() {
               Welcome, {user?.full_name}. Your administrator issued a temporary password. Replace it before opening your assigned projects.
             </p>
             <div className="mt-6 space-y-3 text-sm text-white/80">
-              <p className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> At least 8 characters</p>
+              <p className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> At least 12 characters</p>
+              <p className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> Three character types: lower, upper, number, symbol</p>
+              <p className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> Does not contain your name or email</p>
               <p className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> Different from the temporary password</p>
               <p className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> Visible only to you</p>
             </div>
@@ -75,11 +77,11 @@ export function ChangePasswordPage() {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="new-password">New password</Label>
-                <PasswordInput id="new-password" autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} minLength={8} required />
+                <PasswordInput id="new-password" autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} minLength={12} maxLength={128} required />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="confirm-password">Confirm new password</Label>
-                <PasswordInput id="confirm-password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} minLength={8} required />
+                <PasswordInput id="confirm-password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} minLength={12} maxLength={128} required />
               </div>
               {error && <p className="rounded-md bg-danger/5 px-3 py-2 text-sm text-danger">{error}</p>}
               <Button className="w-full" type="submit" disabled={saving}>

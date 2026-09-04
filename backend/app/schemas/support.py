@@ -19,12 +19,12 @@ class ProactiveReportInput(BaseModel):
     period_start: str | None = None
     period_end: str | None = None
     due_date: str | None = None
-    executive_summary: str | None = None
-    findings: str | None = None
-    work_completed: str | None = None
-    recommendations: str | None = None
+    executive_summary: str | None = Field(default=None, max_length=20_000)
+    findings: str | None = Field(default=None, max_length=20_000)
+    work_completed: str | None = Field(default=None, max_length=20_000)
+    recommendations: str | None = Field(default=None, max_length=20_000)
     next_action_date: str | None = None
-    assigned_member_ids: list[int] = Field(default_factory=list)
+    assigned_member_ids: list[int] = Field(default_factory=list, max_length=100)
 
 
 class ProactiveReportUpdate(BaseModel):
@@ -35,12 +35,12 @@ class ProactiveReportUpdate(BaseModel):
     period_start: str | None = None
     period_end: str | None = None
     due_date: str | None = None
-    executive_summary: str | None = None
-    findings: str | None = None
-    work_completed: str | None = None
-    recommendations: str | None = None
+    executive_summary: str | None = Field(default=None, max_length=20_000)
+    findings: str | None = Field(default=None, max_length=20_000)
+    work_completed: str | None = Field(default=None, max_length=20_000)
+    recommendations: str | None = Field(default=None, max_length=20_000)
     next_action_date: str | None = None
-    assigned_member_ids: list[int] | None = None
+    assigned_member_ids: list[int] | None = Field(default=None, max_length=100)
 
 
 class ProactiveReportOut(BaseModel):
@@ -69,22 +69,22 @@ class SupportIncidentInput(BaseModel):
     detection_source: str = "team"
     reported_by_name: str | None = Field(default=None, max_length=160)
     affected_service: str | None = Field(default=None, max_length=180)
-    client_report: str | None = None
-    reason: str | None = None
-    description: str | None = None
+    client_report: str | None = Field(default=None, max_length=20_000)
+    reason: str | None = Field(default=None, max_length=20_000)
+    description: str | None = Field(default=None, max_length=20_000)
     reported_at: str
     severity: str = "medium"
-    recommendation: str | None = None
-    containment_actions: str | None = None
-    investigation: str | None = None
-    root_cause: str | None = None
+    recommendation: str | None = Field(default=None, max_length=20_000)
+    containment_actions: str | None = Field(default=None, max_length=20_000)
+    investigation: str | None = Field(default=None, max_length=20_000)
+    root_cause: str | None = Field(default=None, max_length=20_000)
     response_at: str | None = None
-    response_description: str | None = None
-    recovery_validation: str | None = None
+    response_description: str | None = Field(default=None, max_length=20_000)
+    recovery_validation: str | None = Field(default=None, max_length=20_000)
     status: str = "reported"
-    resolution_notes: str | None = None
-    lessons_learned: str | None = None
-    assigned_member_ids: list[int] = Field(default_factory=list)
+    resolution_notes: str | None = Field(default=None, max_length=20_000)
+    lessons_learned: str | None = Field(default=None, max_length=20_000)
+    assigned_member_ids: list[int] = Field(default_factory=list, max_length=100)
 
 
 class SupportIncidentUpdate(BaseModel):
@@ -92,22 +92,22 @@ class SupportIncidentUpdate(BaseModel):
     detection_source: str | None = None
     reported_by_name: str | None = Field(default=None, max_length=160)
     affected_service: str | None = Field(default=None, max_length=180)
-    client_report: str | None = None
-    reason: str | None = None
-    description: str | None = None
+    client_report: str | None = Field(default=None, max_length=20_000)
+    reason: str | None = Field(default=None, max_length=20_000)
+    description: str | None = Field(default=None, max_length=20_000)
     reported_at: str | None = None
     severity: str | None = None
-    recommendation: str | None = None
-    containment_actions: str | None = None
-    investigation: str | None = None
-    root_cause: str | None = None
+    recommendation: str | None = Field(default=None, max_length=20_000)
+    containment_actions: str | None = Field(default=None, max_length=20_000)
+    investigation: str | None = Field(default=None, max_length=20_000)
+    root_cause: str | None = Field(default=None, max_length=20_000)
     response_at: str | None = None
-    response_description: str | None = None
-    recovery_validation: str | None = None
+    response_description: str | None = Field(default=None, max_length=20_000)
+    recovery_validation: str | None = Field(default=None, max_length=20_000)
     status: str | None = None
-    resolution_notes: str | None = None
-    lessons_learned: str | None = None
-    assigned_member_ids: list[int] | None = None
+    resolution_notes: str | None = Field(default=None, max_length=20_000)
+    lessons_learned: str | None = Field(default=None, max_length=20_000)
+    assigned_member_ids: list[int] | None = Field(default=None, max_length=100)
 
 
 class SupportIncidentOut(BaseModel):
