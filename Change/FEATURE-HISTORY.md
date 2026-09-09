@@ -49,7 +49,7 @@ Audit baseline: 5 September 2026. This inventory is reconstructed from the appli
 
 ## Persistence and operations
 
-- SQLite application data, scoped file storage, portable storage keys, preservation/recovery helpers, checksummed database-and-upload backups with retention.
+- SQLite application data; selectable local or S3-compatible/MinIO document storage; portable, traversal-safe storage keys; preservation/recovery helpers; checksummed database-and-upload backups with retention.
 - Additive compatibility migrations for existing databases, fresh-install administrator bootstrap.
 - Containerized FastAPI backend and nginx frontend, private backend network, persistent data/backups, health checks and deployment guide.
 - Source organized into backend models/schemas/routers/services and frontend API/hooks/context/pages/feature components.

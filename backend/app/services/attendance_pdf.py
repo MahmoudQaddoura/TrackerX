@@ -42,24 +42,58 @@ AMBER = colors.HexColor("#B54708")
 COMPANY_LOGO_PATH = Path(__file__).resolve().parent.parent / "assets" / "blockexe-logo.png"
 
 
+def _font_candidates() -> list[tuple[Path, Path, int]]:
+    """Windows Yu Gothic first, then common Linux/macOS TrueType faces."""
+
+    windir = Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts"
+    return [
+        (windir / "YuGothR.ttc", windir / "YuGothB.ttc", 0),
+        (
+            Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+            Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+            0,
+        ),
+        (
+            Path("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"),
+            Path("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"),
+            0,
+        ),
+        (
+            Path("/usr/share/fonts/truetype/freefont/FreeSans.ttf"),
+            Path("/usr/share/fonts/truetype/freefont/FreeSansBold.ttf"),
+            0,
+        ),
+        (
+            Path("/Library/Fonts/Arial.ttf"),
+            Path("/Library/Fonts/Arial Bold.ttf"),
+            0,
+        ),
+    ]
+
+
 def _register_report_fonts() -> tuple[str, str]:
     """Use Yu Gothic when available, with a safe deployment fallback."""
 
-    font_root = Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts"
-    regular_path = font_root / "YuGothR.ttc"
-    bold_path = font_root / "YuGothB.ttc"
-    try:
-        if "YuGothicTrackerX" not in pdfmetrics.getRegisteredFontNames():
-            pdfmetrics.registerFont(
-                TTFont("YuGothicTrackerX", str(regular_path), subfontIndex=0)
-            )
-        if "YuGothicTrackerXBold" not in pdfmetrics.getRegisteredFontNames():
-            pdfmetrics.registerFont(
-                TTFont("YuGothicTrackerXBold", str(bold_path), subfontIndex=0)
-            )
+    registered = set(pdfmetrics.getRegisteredFontNames())
+    if "YuGothicTrackerX" in registered and "YuGothicTrackerXBold" in registered:
         return "YuGothicTrackerX", "YuGothicTrackerXBold"
-    except (OSError, IOError):
-        return "Helvetica", "Helvetica-Bold"
+
+    for regular_path, bold_path, subfont_index in _font_candidates():
+        if not regular_path.is_file() or not bold_path.is_file():
+            continue
+        try:
+            if "YuGothicTrackerX" not in pdfmetrics.getRegisteredFontNames():
+                pdfmetrics.registerFont(
+                    TTFont("YuGothicTrackerX", str(regular_path), subfontIndex=subfont_index)
+                )
+            if "YuGothicTrackerXBold" not in pdfmetrics.getRegisteredFontNames():
+                pdfmetrics.registerFont(
+                    TTFont("YuGothicTrackerXBold", str(bold_path), subfontIndex=subfont_index)
+                )
+            return "YuGothicTrackerX", "YuGothicTrackerXBold"
+        except Exception:
+            continue
+    return "Helvetica", "Helvetica-Bold"
 
 
 FONT_REGULAR, FONT_BOLD = _register_report_fonts()

@@ -2,18 +2,16 @@ from __future__ import annotations
 
 """
 routers/documents.py
-Document upload/list/preview/download/update/delete. Files are written to disk under
-settings.documents_dir; the DB stores metadata only.
+Document upload/list/preview/download/update/delete. Bytes live in the configured
+object store (MinIO/S3 or local disk); the DB stores metadata only.
 - Upload / update / delete: admin or assigned staff with admin-approved write access.
 - List / preview / download: any authenticated user with access to the project.
 """
 
 import re
 import uuid
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, PlainTextResponse
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -23,11 +21,15 @@ from app.models import Document, Milestone, Project, User
 from app.models.document import DOCUMENT_CATEGORIES
 from app.schemas.document import DocumentOut, DocumentUpdate
 from app.services.serialize import document_out
-from app.services.document_preview import PreviewUnavailable, prepare_preview
-from app.services.document_storage import (
-    InvalidDocumentPath,
-    resolve_document_path,
-    storage_key_for_path,
+from app.services.document_storage import InvalidDocumentPath, build_storage_key
+from app.services.object_store import (
+    EmptyUpload,
+    UploadTooLarge,
+    consume_upload,
+    get_document_store,
+    object_key_from_stored,
+    serve_download,
+    serve_preview,
 )
 
 router = APIRouter(tags=["documents"])
@@ -40,13 +42,6 @@ def _document_or_404(db: Session, document_id: int) -> Document:
     if doc is None:
         raise HTTPException(status_code=404, detail="Document not found.")
     return doc
-
-
-def _stored_document_path(doc: Document) -> Path:
-    try:
-        return resolve_document_path(doc.file_path)
-    except InvalidDocumentPath:
-        raise HTTPException(status_code=410, detail="The stored file path is invalid.")
 
 
 @router.get("/projects/{project_id}/documents", response_model=list[DocumentOut])
@@ -97,28 +92,30 @@ async def upload_document(
         if ms is None or ms.project_id != project_id:
             raise HTTPException(status_code=422, detail="Milestone does not belong to project.")
 
-    # Build a collision-proof path: documents/<project>/<milestone?>/<category>/<uuid>_<name>
     parts = [str(project_id)]
     if milestone_id is not None:
         parts.append(str(milestone_id))
     parts.append(category)
-    folder = Path(settings.documents_dir).joinpath(*parts)
-    folder.mkdir(parents=True, exist_ok=True)
-
     safe_name = _SAFE_NAME.sub("_", file.filename or "file")
-    stored_path = folder / f"{uuid.uuid4().hex}_{safe_name}"
-    total_bytes = 0
+    storage_key = build_storage_key(*parts, f"{uuid.uuid4().hex}_{safe_name}")
+    store = get_document_store()
     try:
-        with stored_path.open("wb") as destination:
-            while chunk := await file.read(1024 * 1024):
-                total_bytes += len(chunk)
-                if total_bytes > settings.max_upload_bytes:
-                    raise HTTPException(status_code=413, detail="File exceeds the 50 MB limit.")
-                destination.write(chunk)
-        if total_bytes == 0:
-            raise HTTPException(status_code=422, detail="Uploaded file is empty.")
+        payload, total_bytes = await consume_upload(file, settings.max_upload_bytes)
+        try:
+            store.put_fileobj(
+                storage_key,
+                payload,
+                content_type=file.content_type,
+                size=total_bytes,
+            )
+        finally:
+            payload.close()
+    except UploadTooLarge:
+        raise HTTPException(status_code=413, detail="File exceeds the 50 MB limit.")
+    except EmptyUpload:
+        raise HTTPException(status_code=422, detail="Uploaded file is empty.")
     except Exception:
-        stored_path.unlink(missing_ok=True)
+        store.delete(storage_key)
         raise
 
     doc = Document(
@@ -128,7 +125,7 @@ async def upload_document(
         title=title,
         description=description,
         file_name=file.filename or safe_name,
-        file_path=storage_key_for_path(stored_path),
+        file_path=storage_key,
         content_type=file.content_type,
         file_size=total_bytes,
         uploaded_by_id=user.id,
@@ -146,15 +143,7 @@ def download_document(
     """Stream the file as an attachment (download, never inline preview)."""
     doc = _document_or_404(db, document_id)
     check_project_access(db, user, doc.project_id)
-    path = _stored_document_path(doc)
-    if not path.exists():
-        raise HTTPException(status_code=410, detail="File is no longer available on the server.")
-    return FileResponse(
-        path,
-        filename=doc.file_name,
-        media_type=doc.content_type or "application/octet-stream",
-        content_disposition_type="attachment",
-    )
+    return serve_download(doc.file_path, doc.file_name, doc.content_type)
 
 
 @router.get("/documents/{document_id}/preview")
@@ -164,26 +153,7 @@ def preview_document(
     """Return an authorized inline preview without exposing the storage path."""
     doc = _document_or_404(db, document_id)
     check_project_access(db, user, doc.project_id)
-    path = _stored_document_path(doc)
-    if not path.exists():
-        raise HTTPException(status_code=410, detail="File is no longer available on the server.")
-    try:
-        preview = prepare_preview(path, doc.file_name, doc.content_type)
-    except PreviewUnavailable as exc:
-        raise HTTPException(status_code=415, detail=str(exc))
-    headers = {
-        "Content-Disposition": "inline",
-        "X-Preview-Truncated": "true" if preview.truncated else "false",
-    }
-    if preview.kind == "binary":
-        return FileResponse(
-            path,
-            filename=doc.file_name,
-            media_type=preview.media_type,
-            content_disposition_type="inline",
-            headers=headers,
-        )
-    return PlainTextResponse(preview.text or "", media_type=preview.media_type, headers=headers)
+    return serve_preview(doc.file_path, doc.file_name, doc.content_type)
 
 
 @router.put("/documents/{document_id}", response_model=DocumentOut)
@@ -213,6 +183,9 @@ def delete_document(
 ):
     doc = _document_or_404(db, document_id)
     check_project_access(db, user, doc.project_id)
-    _stored_document_path(doc).unlink(missing_ok=True)  # remove the file from disk
+    try:
+        get_document_store().delete(object_key_from_stored(doc.file_path))
+    except InvalidDocumentPath:
+        pass
     db.delete(doc)
     db.commit()

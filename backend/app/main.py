@@ -42,6 +42,7 @@ from app.routers import (
 )
 from app.services.data_backup import create_data_backup
 from app.services.document_storage import normalize_document_storage_paths
+from app.services.object_store import get_document_store
 
 
 logger = logging.getLogger(__name__)
@@ -288,6 +289,14 @@ app.add_middleware(
 def on_startup() -> None:
     """Create any missing tables. (Simple projects skip migration tooling.)"""
     settings.documents_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        store = get_document_store()
+        store.ensure_ready()
+        logger.info("Document object storage backend: %s", store.backend_name)
+    except Exception:
+        logger.exception("Document object storage is not ready.")
+        if _production:
+            raise
     if settings.backup_on_startup:
         try:
             result = create_data_backup(reason="startup")

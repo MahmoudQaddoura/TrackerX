@@ -33,9 +33,19 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 120
     auth_cookie_name: str = "trackerx_session"
 
-    # Document storage (files on disk; metadata in DB)
+    # Document storage — local disk, or S3-compatible (MinIO) via DOCUMENT_STORAGE=s3
     documents_dir: Path = BASE_DIR / "data" / "documents"
     max_upload_bytes: int = 50 * 1024 * 1024  # 50 MB
+    document_storage: str = "local"
+    s3_endpoint: str = "http://127.0.0.1:9000"
+    s3_bucket: str = "trackerx-documents"
+    s3_access_key: str = ""
+    s3_secret_key: str = ""
+    s3_region: str = "us-east-1"
+
+    @property
+    def uses_s3_storage(self) -> bool:
+        return self.document_storage.strip().lower() in {"s3", "minio"}
 
     # Verified data backups (SQLite + uploaded files in one portable archive)
     backup_dir: Path = BASE_DIR / "backups"

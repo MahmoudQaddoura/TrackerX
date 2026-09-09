@@ -7,7 +7,6 @@ import re
 import uuid
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse, PlainTextResponse
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -15,11 +14,15 @@ from app.db import get_db
 from app.deps import get_current_user, require_admin
 from app.models import EmployeeProfileFile, TeamMember, User
 from app.schemas.employee_profile_file import EmployeeProfileFileOut
-from app.services.document_preview import PreviewUnavailable, prepare_preview
-from app.services.document_storage import (
-    InvalidDocumentPath,
-    resolve_document_path,
-    storage_key_for_path,
+from app.services.document_storage import InvalidDocumentPath, build_storage_key
+from app.services.object_store import (
+    EmptyUpload,
+    UploadTooLarge,
+    consume_upload,
+    get_document_store,
+    object_key_from_stored,
+    serve_download,
+    serve_preview,
 )
 
 router = APIRouter(tags=["employee profiles"])
@@ -52,13 +55,6 @@ def _require_file_view(user: User, member: TeamMember) -> None:
             status_code=403,
             detail="Employee files are private to the employee and administrators.",
         )
-
-
-def _stored_path(profile_file: EmployeeProfileFile) -> Path:
-    try:
-        return resolve_document_path(profile_file.file_path)
-    except InvalidDocumentPath:
-        raise HTTPException(status_code=410, detail="The stored employee file path is invalid.")
 
 
 def _file_out(profile_file: EmployeeProfileFile) -> dict:
@@ -125,32 +121,41 @@ async def upload_profile_files(
                 detail=f"{upload.filename or 'File'} is not a supported CV or profile file.",
             )
 
-    folder = settings.documents_dir / "_employee_profiles" / str(member_id)
-    folder.mkdir(parents=True, exist_ok=True)
-    stored_paths: list[Path] = []
+    store = get_document_store()
+    stored_keys: list[str] = []
     records: list[EmployeeProfileFile] = []
     try:
         for upload in files:
             original_name = upload.filename or "profile-file"
             safe_name = _SAFE_NAME.sub("_", original_name)
-            stored_path = folder / f"{uuid.uuid4().hex}_{safe_name}"
-            stored_paths.append(stored_path)
-            total_bytes = 0
-            with stored_path.open("wb") as destination:
-                while chunk := await upload.read(1024 * 1024):
-                    total_bytes += len(chunk)
-                    if total_bytes > settings.max_upload_bytes:
-                        raise HTTPException(
-                            status_code=413,
-                            detail=f"{original_name} exceeds the 50 MB limit.",
-                        )
-                    destination.write(chunk)
-            if total_bytes == 0:
+            storage_key = build_storage_key(
+                "_employee_profiles",
+                str(member_id),
+                f"{uuid.uuid4().hex}_{safe_name}",
+            )
+            try:
+                payload, total_bytes = await consume_upload(upload, settings.max_upload_bytes)
+            except UploadTooLarge:
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"{original_name} exceeds the 50 MB limit.",
+                )
+            except EmptyUpload:
                 raise HTTPException(status_code=422, detail=f"{original_name} is empty.")
+            try:
+                store.put_fileobj(
+                    storage_key,
+                    payload,
+                    content_type=upload.content_type,
+                    size=total_bytes,
+                )
+            finally:
+                payload.close()
+            stored_keys.append(storage_key)
             record = EmployeeProfileFile(
                 team_member_id=member_id,
                 file_name=original_name,
-                file_path=storage_key_for_path(stored_path),
+                file_path=storage_key,
                 content_type=upload.content_type,
                 file_size=total_bytes,
                 uploaded_by_id=admin.id,
@@ -160,8 +165,8 @@ async def upload_profile_files(
         db.commit()
     except Exception:
         db.rollback()
-        for stored_path in stored_paths:
-            stored_path.unlink(missing_ok=True)
+        for storage_key in stored_keys:
+            store.delete(storage_key)
         raise
 
     for record in records:
@@ -177,15 +182,7 @@ def download_profile_file(
 ):
     profile_file = _file_or_404(db, file_id)
     _require_file_view(user, profile_file.team_member)
-    path = _stored_path(profile_file)
-    if not path.exists():
-        raise HTTPException(status_code=410, detail="File is no longer available on the server.")
-    return FileResponse(
-        path,
-        filename=profile_file.file_name,
-        media_type=profile_file.content_type or "application/octet-stream",
-        content_disposition_type="attachment",
-    )
+    return serve_download(profile_file.file_path, profile_file.file_name, profile_file.content_type)
 
 
 @router.get("/employee-profile-files/{file_id}/preview")
@@ -196,26 +193,7 @@ def preview_profile_file(
 ):
     profile_file = _file_or_404(db, file_id)
     _require_file_view(user, profile_file.team_member)
-    path = _stored_path(profile_file)
-    if not path.exists():
-        raise HTTPException(status_code=410, detail="File is no longer available on the server.")
-    try:
-        preview = prepare_preview(path, profile_file.file_name, profile_file.content_type)
-    except PreviewUnavailable as exc:
-        raise HTTPException(status_code=415, detail=str(exc))
-    headers = {
-        "Content-Disposition": "inline",
-        "X-Preview-Truncated": "true" if preview.truncated else "false",
-    }
-    if preview.kind == "binary":
-        return FileResponse(
-            path,
-            filename=profile_file.file_name,
-            media_type=preview.media_type,
-            content_disposition_type="inline",
-            headers=headers,
-        )
-    return PlainTextResponse(preview.text or "", media_type=preview.media_type, headers=headers)
+    return serve_preview(profile_file.file_path, profile_file.file_name, profile_file.content_type)
 
 
 @router.delete("/employee-profile-files/{file_id}", status_code=204)
@@ -225,6 +203,9 @@ def delete_profile_file(
     _: User = Depends(require_admin),
 ):
     profile_file = _file_or_404(db, file_id)
-    _stored_path(profile_file).unlink(missing_ok=True)
+    try:
+        get_document_store().delete(object_key_from_stored(profile_file.file_path))
+    except InvalidDocumentPath:
+        pass
     db.delete(profile_file)
     db.commit()

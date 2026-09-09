@@ -78,6 +78,20 @@ def storage_key_from_value(value: str | Path, root: Path | None = None) -> str:
     return storage_key_for_path(resolve_document_path(value, root), root)
 
 
+def build_storage_key(*parts: str) -> str:
+    """Build a portable posix object key from relative path segments."""
+
+    if not parts:
+        raise InvalidDocumentPath("The stored document path is empty.")
+    cleaned: list[str] = []
+    for part in parts:
+        piece = str(part).strip().replace("\\", "/").strip("/")
+        if not piece or piece in {".", ".."} or "/" in piece:
+            raise InvalidDocumentPath("The document path is outside document storage.")
+        cleaned.append(piece)
+    return "/".join(cleaned)
+
+
 def normalize_document_storage_paths(db: Session, root: Path | None = None) -> dict[str, int]:
     """Replace legacy absolute database paths with portable storage keys."""
 
