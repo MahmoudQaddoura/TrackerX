@@ -150,6 +150,14 @@ def _migrate_local_schema() -> None:
                     "UPDATE team_members SET employee_number = ? WHERE id = ?",
                     (f"{number:04d}", row["id"]),
                 )
+        if "employment_type" not in team_member_columns:
+            connection.exec_driver_sql(
+                "ALTER TABLE team_members ADD COLUMN employment_type TEXT NOT NULL DEFAULT 'full_time'"
+            )
+        if "weekly_hours" not in team_member_columns:
+            connection.exec_driver_sql(
+                "ALTER TABLE team_members ADD COLUMN weekly_hours REAL DEFAULT 40"
+            )
         connection.exec_driver_sql(
             "CREATE UNIQUE INDEX IF NOT EXISTS ux_team_members_employee_number "
             "ON team_members (employee_number)"

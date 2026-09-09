@@ -227,10 +227,12 @@ class LeaveCoverageWorkflowTest(unittest.TestCase):
             self.assertEqual([member.id for member in task.assigned_members], [self.recipient_id])
             self.assertEqual(task.assigned_member_id, self.recipient_id)
 
-    def test_owner_can_assign_any_active_employee_as_project_manager(self) -> None:
+    def test_owner_can_assign_an_eligible_employee_as_project_manager(self) -> None:
         with SessionLocal() as db:
             admin = db.get(User, self.admin_id)
             manager_user = db.get(User, self.recipient_user_id)
+            manager_user.role = "pm"
+            db.flush()
             result = update_project_manager(
                 self.project_id,
                 ProjectManagerInput(project_manager_id=self.recipient_id),

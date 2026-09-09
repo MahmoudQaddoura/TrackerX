@@ -2,6 +2,7 @@ import {
   ArrowLeft,
   BriefcaseBusiness,
   CheckCircle2,
+  Clock3,
   Download,
   Eye,
   FileText,
@@ -44,14 +45,21 @@ import { ErrorState } from "@/components/ui/error-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
+import { Select } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/context/AuthContext";
 import { getApiErrorMessage } from "@/lib/apiClient";
 import { formatBytes, formatDate } from "@/lib/utils";
-import type { EmployeeProfileFile, TeamMember } from "@/types";
+import type { EmployeeProfileFile, EmploymentType, TeamMember } from "@/types";
 
 const ACCEPTED_FILES = ".pdf,.doc,.docx,.txt,.md,.rtf,.png,.jpg,.jpeg,.webp";
+const EMPLOYMENT_LABELS: Record<EmploymentType, string> = {
+  full_time: "Full-time",
+  part_time: "Part-time",
+  contractor: "Contractor",
+  intern: "Intern",
+};
 
 function initials(name: string) {
   return name
@@ -93,6 +101,8 @@ export function EmployeeProfilePage({ self = false }: { self?: boolean }) {
   const [arabicName, setArabicName] = useState("");
   const [role, setRole] = useState("");
   const [roleDescription, setRoleDescription] = useState("");
+  const [employmentType, setEmploymentType] = useState<EmploymentType>("full_time");
+  const [weeklyHours, setWeeklyHours] = useState("40");
   const [editError, setEditError] = useState<string | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -107,6 +117,8 @@ export function EmployeeProfilePage({ self = false }: { self?: boolean }) {
         name_arabic: arabicName.trim() || null,
         role: role.trim() || null,
         role_description: roleDescription.trim() || null,
+        employment_type: employmentType,
+        weekly_hours: weeklyHours.trim() ? Number(weeklyHours) : null,
       }),
     onSuccess: (updated) => {
       qc.setQueryData(["employee-profile", self ? "me" : parsedMemberId], updated);
@@ -142,6 +154,8 @@ export function EmployeeProfilePage({ self = false }: { self?: boolean }) {
     setArabicName(member.name_arabic ?? "");
     setRole(member.role ?? "");
     setRoleDescription(member.role_description ?? "");
+    setEmploymentType(member.employment_type);
+    setWeeklyHours(member.weekly_hours != null ? String(member.weekly_hours) : "");
     setEditError(null);
     setEditOpen(true);
   }
@@ -224,10 +238,14 @@ export function EmployeeProfilePage({ self = false }: { self?: boolean }) {
                   {member.role_description || "No role summary has been added yet. An administrator can document responsibilities, expertise, and scope here."}
                 </p>
               </div>
-              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <div className="rounded-lg border border-border p-3">
                   <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-fg-subtle"><IdCard className="h-3.5 w-3.5" /> Employee ID</p>
                   <p className="mt-1 font-mono text-sm font-semibold text-fg">{member.employee_number}</p>
+                </div>
+                <div className="rounded-lg border border-border p-3">
+                  <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-fg-subtle"><Clock3 className="h-3.5 w-3.5" /> Employment</p>
+                  <p className="mt-1 text-sm font-medium text-fg">{EMPLOYMENT_LABELS[member.employment_type]} · {member.weekly_hours != null ? `${member.weekly_hours}h/week` : "Hours not set"}</p>
                 </div>
                 <div className="rounded-lg border border-border p-3">
                   <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-fg-subtle"><Mail className="h-3.5 w-3.5" /> TrackerX login</p>
@@ -373,6 +391,8 @@ export function EmployeeProfilePage({ self = false }: { self?: boolean }) {
               <div className="space-y-1.5"><Label htmlFor="profile-name-en">Name in English</Label><Input id="profile-name-en" value={englishName} onChange={(event) => setEnglishName(event.target.value)} /></div>
               <div className="space-y-1.5"><Label htmlFor="profile-name-ar">Name in Arabic</Label><Input id="profile-name-ar" dir="rtl" lang="ar" value={arabicName} onChange={(event) => setArabicName(event.target.value)} placeholder="الاسم باللغة العربية" /></div>
               <div className="space-y-1.5 sm:col-span-2"><Label htmlFor="profile-role">Role</Label><Input id="profile-role" value={role} onChange={(event) => setRole(event.target.value)} placeholder="e.g. Backend Engineer" /></div>
+              <div className="space-y-1.5"><Label htmlFor="profile-employment">Employment type</Label><Select id="profile-employment" value={employmentType} onChange={(event) => setEmploymentType(event.target.value as EmploymentType)}><option value="full_time">Full-time</option><option value="part_time">Part-time</option><option value="contractor">Contractor</option><option value="intern">Intern</option></Select></div>
+              <div className="space-y-1.5"><Label htmlFor="profile-hours">Weekly hours</Label><Input id="profile-hours" type="number" min={1} max={80} step={0.5} value={weeklyHours} onChange={(event) => setWeeklyHours(event.target.value)} /></div>
               <div className="space-y-1.5 sm:col-span-2"><Label htmlFor="profile-role-description">Role information</Label><Textarea id="profile-role-description" className="min-h-32" value={roleDescription} onChange={(event) => setRoleDescription(event.target.value)} placeholder="Summarize responsibilities, expertise, and project scope." /></div>
               {editError && <p className="text-sm text-danger sm:col-span-2">{editError}</p>}
             </div>

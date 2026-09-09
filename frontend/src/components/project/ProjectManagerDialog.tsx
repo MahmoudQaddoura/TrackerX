@@ -27,7 +27,9 @@ export function ProjectManagerDialog({
   const { updateManager } = useProjectMutations();
   const [selectedMemberId, setSelectedMemberId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const activeMembers = members.filter((member) => member.is_active);
+  const activeMembers = members.filter(
+    (member) => member.is_active && member.account_role === "pm" && member.access_level === "write" && member.login_enabled,
+  );
 
   useEffect(() => {
     setSelectedMemberId(null);
@@ -65,12 +67,12 @@ export function ProjectManagerDialog({
             <div className="rounded-lg border border-border bg-raised/50 px-3 py-2.5">
               <p className="font-medium text-fg">{project.name}</p>
               <p className="mt-0.5 text-xs text-fg-muted">
-                Choose one active employee. The change is saved immediately.
+                Choose an enabled Project Manager with read and write permission. The change is saved immediately.
               </p>
             </div>
 
             {activeMembers.length === 0 ? (
-              <EmptyState title="No active employees" description="Add or reactivate an employee before assigning a Project Manager." />
+              <EmptyState title="No eligible project managers" description="The owner must first grant an active employee the Project Manager role and read & write permission." />
             ) : (
               <div className="max-h-[430px] space-y-1.5 overflow-y-auto pr-1">
                 {activeMembers.map((member) => {

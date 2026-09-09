@@ -57,6 +57,33 @@ def _member_or_404(db: Session, member_id: int) -> TeamMember:
     return m
 
 
+def _active_managed_project_names(member: TeamMember) -> list[str]:
+    return [
+        project.name
+        for project in member.managed_projects
+        if project.status not in ("completed", "archived")
+    ]
+
+
+def _require_no_active_leadership(member: TeamMember) -> None:
+    projects = _active_managed_project_names(member)
+    if projects:
+        names = ", ".join(projects[:3])
+        suffix = f" and {len(projects) - 3} more" if len(projects) > 3 else ""
+        raise HTTPException(
+            status_code=409,
+            detail=f"Reassign active project leadership before changing this employee's status: {names}{suffix}.",
+        )
+
+
+def _require_owner_profile_control(member: TeamMember, admin: User) -> None:
+    if member.user and bool(member.user.is_primary_admin) and member.user.id != admin.id:
+        raise HTTPException(
+            status_code=403,
+            detail="Only the owner can change the owner's employee profile.",
+        )
+
+
 @router.get("", response_model=list[TeamMemberOut])
 def list_members(
     active_only: bool = False,
@@ -107,6 +134,8 @@ def create_member(inp: TeamMemberInput, db: Session = Depends(get_db), _=Depends
         name_arabic=inp.name_arabic,
         role=inp.role,
         role_description=inp.role_description,
+        employment_type=inp.employment_type,
+        weekly_hours=inp.weekly_hours,
         is_active=1 if inp.is_active else 0,
     )
     db.add(m)
@@ -118,11 +147,14 @@ def create_member(inp: TeamMemberInput, db: Session = Depends(get_db), _=Depends
 
 @router.put("/{member_id}", response_model=TeamMemberOut)
 def update_member(
-    member_id: int, inp: TeamMemberUpdate, db: Session = Depends(get_db), _=Depends(require_admin)
+    member_id: int, inp: TeamMemberUpdate, db: Session = Depends(get_db), admin: User = Depends(require_admin)
 ):
     m = _member_or_404(db, member_id)
+    _require_owner_profile_control(m, admin)
     data = inp.model_dump(exclude_unset=True)
     if "is_active" in data:
+        if not data["is_active"]:
+            _require_no_active_leadership(m)
         data["is_active"] = 1 if data["is_active"] else 0
     for field, value in data.items():
         setattr(m, field, value)
@@ -168,9 +200,13 @@ def assign_member_projects(
 
 
 @router.delete("/{member_id}", status_code=204)
-def delete_member(member_id: int, db: Session = Depends(get_db), _=Depends(require_admin)):
+def delete_member(member_id: int, db: Session = Depends(get_db), admin: User = Depends(require_admin)):
     """Soft delete — keep the row so assigned tasks keep their history."""
     m = _member_or_404(db, member_id)
+    _require_owner_profile_control(m, admin)
+    if m.user and bool(m.user.is_primary_admin):
+        raise HTTPException(status_code=422, detail="The owner cannot be deactivated.")
+    _require_no_active_leadership(m)
     m.is_active = 0
     if m.user and m.user.role != "admin":
         m.user.is_enabled = 0
@@ -201,14 +237,24 @@ def provision_credentials(
 
     user = member.user
     account_role = inp.account_role or (user.role if user else "developer")
+    if account_role == "pm" and inp.access_level != "write":
+        raise HTTPException(
+            status_code=422,
+            detail="Project Manager accounts require read and write permission.",
+        )
     existing_role = user.role if user else None
-    changes_privileged_role = account_role != existing_role and (
-        account_role in ("admin", "pm") or existing_role in ("admin", "pm")
-    )
-    if changes_privileged_role and not bool(admin.is_primary_admin):
+    touches_privileged_account = account_role in ("admin", "pm") or existing_role in ("admin", "pm")
+    if touches_privileged_account and not bool(admin.is_primary_admin):
         raise HTTPException(
             status_code=403,
-            detail="Only the primary administrator can assign administrator or project-manager roles.",
+            detail="Only the owner can manage administrator or Project Manager accounts.",
+        )
+    if _active_managed_project_names(member) and (
+        account_role != "pm" or inp.access_level != "write" or not inp.is_enabled
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="Reassign this employee's active projects before removing Project Manager access.",
         )
     if user and bool(user.is_primary_admin) and (
         account_role != "admin" or not inp.is_enabled
