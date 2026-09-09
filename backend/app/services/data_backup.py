@@ -142,14 +142,16 @@ def create_data_backup(
     """Create and verify one portable TrackerX data archive."""
 
     database = (database or sqlite_database_path()).resolve()
-    documents_root = (documents_root or settings.documents_dir).resolve()
     output_dir = (output_dir or settings.backup_dir).resolve()
     retention = settings.backup_retention_count if keep is None else keep
+    use_object_store = documents_root is None and settings.uses_s3_storage
+    documents_root = (documents_root or settings.documents_dir).resolve()
 
     if not database.is_file():
         raise FileNotFoundError(f"TrackerX database not found: {database}")
     output_dir.mkdir(parents=True, exist_ok=True)
-    documents_root.mkdir(parents=True, exist_ok=True)
+    if not use_object_store:
+        documents_root.mkdir(parents=True, exist_ok=True)
 
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     safe_reason = _SAFE_REASON.sub("-", reason.strip().lower()).strip("-") or "manual"
@@ -163,10 +165,20 @@ def create_data_backup(
         _snapshot_database(database, snapshot)
         records = _document_records(snapshot, documents_root)
         profile_records = _employee_profile_file_records(snapshot, documents_root)
-        disk_files = sorted(path for path in documents_root.rglob("*") if path.is_file())
-        disk_by_key = {path.relative_to(documents_root).as_posix(): path for path in disk_files}
         linked_records = [*records, *profile_records]
-        missing = [record for record in linked_records if record["storage_key"] not in disk_by_key]
+        store = None
+        local_files: dict[str, Path] = {}
+        if use_object_store:
+            from app.services.object_store import get_document_store
+
+            store = get_document_store()
+            payload_sizes = {key: store.object_size(key) for key in store.list_keys()}
+        else:
+            disk_files = sorted(path for path in documents_root.rglob("*") if path.is_file())
+            for path in disk_files:
+                local_files[path.relative_to(documents_root).as_posix()] = path
+            payload_sizes = {key: path.stat().st_size for key, path in local_files.items()}
+        missing = [record for record in linked_records if record["storage_key"] not in payload_sizes]
         if missing:
             missing_files = ", ".join(str(record["file_name"]) for record in missing)
             raise DataBackupError(f"Database-linked uploaded files are missing: {missing_files}")
@@ -174,21 +186,12 @@ def create_data_backup(
             record
             for record in linked_records
             if record["file_size"] is not None
-            and int(record["file_size"])
-            != disk_by_key[str(record["storage_key"])].stat().st_size
+            and int(record["file_size"]) != payload_sizes[str(record["storage_key"])]
         ]
         if size_mismatches:
             mismatch_files = ", ".join(str(record["file_name"]) for record in size_mismatches)
             raise DataBackupError(f"File-size verification failed for: {mismatch_files}")
 
-        files_manifest = [
-            {
-                "path": f"documents/{key}",
-                "size": path.stat().st_size,
-                "sha256": _sha256(path),
-            }
-            for key, path in disk_by_key.items()
-        ]
         manifest = {
             "format_version": BACKUP_FORMAT_VERSION,
             "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -201,14 +204,30 @@ def create_data_backup(
             },
             "document_records": records,
             "employee_profile_file_records": profile_records,
-            "files": files_manifest,
+            "files": [],
         }
 
         try:
             with zipfile.ZipFile(partial, "w", compression=zipfile.ZIP_DEFLATED) as archive:
                 archive.write(snapshot, "database/app.db")
-                for key, path in disk_by_key.items():
-                    archive.write(path, f"documents/{key}")
+                files_manifest: list[dict[str, object]] = []
+                for key, size in payload_sizes.items():
+                    if store is not None:
+                        data = store.get_bytes(key)
+                        archive.writestr(f"documents/{key}", data)
+                        digest = hashlib.sha256(data).hexdigest()
+                    else:
+                        path = local_files[key]
+                        archive.write(path, f"documents/{key}")
+                        digest = _sha256(path)
+                    files_manifest.append(
+                        {
+                            "path": f"documents/{key}",
+                            "size": size,
+                            "sha256": digest,
+                        }
+                    )
+                manifest["files"] = files_manifest
                 archive.writestr("manifest.json", json.dumps(manifest, indent=2, sort_keys=True))
             partial.replace(destination)
         finally:

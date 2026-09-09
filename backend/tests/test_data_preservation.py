@@ -33,6 +33,39 @@ class DocumentStorageTests(unittest.TestCase):
             with self.assertRaises(InvalidDocumentPath):
                 resolve_document_path("../outside.txt", Path(temp_name) / "documents")
 
+    def test_object_keys_reject_traversal_and_backslashes(self):
+        from app.services.document_storage import InvalidDocumentPath, build_storage_key
+        from app.services.object_store import assert_object_key
+
+        self.assertEqual(
+            build_storage_key("5", "technical", "report.pdf"),
+            "5/technical/report.pdf",
+        )
+        for unsafe in ("../report.pdf", "folder\\report.pdf", "/absolute.pdf", "a//b"):
+            with self.subTest(unsafe=unsafe), self.assertRaises(InvalidDocumentPath):
+                assert_object_key(unsafe)
+
+    def test_local_object_store_round_trip(self):
+        from io import BytesIO
+
+        from app.services.object_store import LocalDocumentStore
+
+        with tempfile.TemporaryDirectory() as temp_name:
+            store = LocalDocumentStore(Path(temp_name))
+            store.ensure_ready()
+            store.put_fileobj(
+                "project/report.txt",
+                BytesIO(b"trackerx"),
+                content_type="text/plain",
+                size=8,
+            )
+            self.assertTrue(store.exists("project/report.txt"))
+            self.assertEqual(store.object_size("project/report.txt"), 8)
+            self.assertEqual(store.get_bytes("project/report.txt"), b"trackerx")
+            self.assertEqual(store.list_keys(), ["project/report.txt"])
+            store.delete("project/report.txt")
+            self.assertFalse(store.exists("project/report.txt"))
+
 
 class DataBackupTests(unittest.TestCase):
     def test_backup_contains_database_and_linked_uploads(self):

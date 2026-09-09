@@ -12,7 +12,7 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
-    allowedHosts: ["catty-playset-caterer.ngrok-free.dev"],
+    allowedHosts: ["catty-playset-caterer.ngrok-free.dev", "trackerx.defendexe.com"],
     proxy: {
       "/api": { target: "http://localhost:8000", changeOrigin: true },
     },

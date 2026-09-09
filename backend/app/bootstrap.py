@@ -37,6 +37,14 @@ def _validate_runtime_settings() -> None:
             raise RuntimeError("ALLOWED_HOSTS must list the production TrackerX host names.")
         if any(origin == "*" or not origin.startswith("https://") for origin in settings.cors_origins):
             raise RuntimeError("CORS_ORIGINS must contain only explicit HTTPS origins in production.")
+        if settings.uses_s3_storage and (
+            not settings.s3_bucket.strip()
+            or not settings.s3_access_key.strip()
+            or not settings.s3_secret_key.strip()
+        ):
+            raise RuntimeError(
+                "S3_BUCKET, S3_ACCESS_KEY, and S3_SECRET_KEY are required for object storage."
+            )
 
 
 def _create_initial_admin_if_empty() -> None:
