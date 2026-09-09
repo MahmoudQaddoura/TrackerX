@@ -124,12 +124,14 @@ export function KanbanBoard({
   project,
   focusTaskId,
   initialAssigneeId,
+  canManageProject,
 }: {
   project: Project;
   focusTaskId?: number;
   initialAssigneeId?: number;
+  canManageProject: boolean;
 }) {
-  const { canManage, canWrite, isDeveloper } = useAuth();
+  const { canWrite, isDeveloper } = useAuth();
   const milestones = useMilestones(project.id);
   const tasks = useProjectTasks(project.id);
   const documents = useDocuments(project.id);
@@ -233,13 +235,13 @@ export function KanbanBoard({
   }, [documents.data]);
 
   function canDrag(task: Task): boolean {
-    if (canManage) return true;
+    if (canManageProject) return true;
     if (isDeveloper && canWrite) return task.status !== DONE;
     return false;
   }
 
   function canDropIn(status: TaskStatus): boolean {
-    if (canManage) return true;
+    if (canManageProject) return true;
     if (isDeveloper && canWrite) return status !== DONE;
     return false;
   }
@@ -347,7 +349,7 @@ export function KanbanBoard({
                   <p className="mt-0.5 text-xs text-fg-muted">{section.description}</p>
                 </div>
               </div>
-              {canManage && (
+              {canManageProject && (
                 <Button
                   size="sm"
                   variant="default"
@@ -367,7 +369,7 @@ export function KanbanBoard({
                 icon={SectionIcon}
                 title={`No ${section.title.toLocaleLowerCase()} milestones yet`}
                 description={
-                  canManage ? section.emptyDescription : undefined
+                  canManageProject ? section.emptyDescription : undefined
                 }
               />
             ) : (
@@ -397,6 +399,7 @@ export function KanbanBoard({
                     setMsFormOpen(true);
                   }}
                   onDeleteMilestone={() => setMsToDelete(milestone)}
+                  canManageProject={canManageProject}
                 />
               ))
             )}
@@ -464,6 +467,7 @@ function MilestoneSwimlane({
   onToggle,
   onEditMilestone,
   onDeleteMilestone,
+  canManageProject,
 }: {
   project: Project;
   milestone: Milestone;
@@ -481,13 +485,14 @@ function MilestoneSwimlane({
   onToggle: () => void;
   onEditMilestone: () => void;
   onDeleteMilestone: () => void;
+  canManageProject: boolean;
 }) {
-  const { canManage } = useAuth();
   const taskMut = useTaskMutations(project.id);
   const [taskFormOpen, setTaskFormOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | undefined>();
   const [detailTask, setDetailTask] = useState<Task | null>(null);
   const [commentTask, setCommentTask] = useState<Task | null>(null);
+  const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
   const [dragOverStatus, setDragOverStatus] = useState<TaskStatus | null>(null);
 
   const byStatus = useMemo(() => {
@@ -568,7 +573,7 @@ function MilestoneSwimlane({
         <div className="flex items-center gap-2">
           <RiskBadge risk={milestone.risk_level} />
           <MilestoneDocumentsButton milestone={milestone} documents={documents} />
-          {canManage && (
+          {canManageProject && (
             <>
               <Button
                 size="sm"
@@ -636,10 +641,10 @@ function MilestoneSwimlane({
                   task={task}
                   highlighted={task.id === focusTaskId}
                   draggable={canDrag(task)}
-                  showComments={canManage}
+                  showComments={canManageProject}
                   onDragStart={(e) => e.dataTransfer.setData("text/plain", String(task.id))}
                   onClick={() => {
-                    if (canManage) {
+                    if (canManageProject) {
                       setEditingTask(task);
                       setTaskFormOpen(true);
                     } else {
@@ -650,6 +655,10 @@ function MilestoneSwimlane({
                     e.stopPropagation();
                     setCommentTask(task);
                   }}
+                  onDelete={(e) => {
+                    e.stopPropagation();
+                    setTaskToDelete(task);
+                  }}
                 />
               ))}
             </div>
@@ -657,7 +666,7 @@ function MilestoneSwimlane({
         })}
       </div>}
 
-      {canManage && (
+      {canManageProject && (
         <TaskFormDialog
           open={taskFormOpen}
           onOpenChange={setTaskFormOpen}
@@ -673,6 +682,18 @@ function MilestoneSwimlane({
       )}
 
       <TaskDetailDialog task={detailTask} onOpenChange={(o) => !o && setDetailTask(null)} />
+
+      <DeleteConfirmDialog
+        open={!!taskToDelete}
+        onOpenChange={(open) => !open && setTaskToDelete(null)}
+        title="Delete task"
+        description={taskToDelete ? `Delete “${taskToDelete.title}”? This cannot be undone.` : "Delete this task?"}
+        isPending={taskMut.remove.isPending}
+        onConfirm={() => taskToDelete && taskMut.remove.mutate(
+          { id: taskToDelete.id, milestoneId: taskToDelete.milestone_id },
+          { onSuccess: () => setTaskToDelete(null) },
+        )}
+      />
 
       <Dialog open={!!commentTask} onOpenChange={(o) => !o && setCommentTask(null)}>
         <DialogContent>
@@ -780,6 +801,7 @@ function TaskCard({
   onDragStart,
   onClick,
   onComment,
+  onDelete,
 }: {
   task: Task;
   highlighted: boolean;
@@ -788,6 +810,7 @@ function TaskCard({
   onDragStart: (e: React.DragEvent) => void;
   onClick: () => void;
   onComment: (e: React.MouseEvent) => void;
+  onDelete: (e: React.MouseEvent) => void;
 }) {
   const assignees = task.assigned_members?.length
     ? task.assigned_members
@@ -812,11 +835,10 @@ function TaskCard({
     >
       <div className="flex items-start justify-between gap-1">
         <p className="text-sm font-medium text-fg">{task.title}</p>
-        {showComments && (
-          <Button variant="ghost" size="icon" aria-label="Comments" className="h-6 w-6 shrink-0" onClick={onComment}>
-            <MessageSquare className="h-3.5 w-3.5" />
-          </Button>
-        )}
+        {showComments && <span className="flex shrink-0 items-center gap-0.5">
+          <Button variant="ghost" size="icon" aria-label="Comments" className="h-6 w-6" onClick={onComment}><MessageSquare className="h-3.5 w-3.5" /></Button>
+          <Button variant="ghost" size="icon" aria-label={`Delete ${task.title}`} className="h-6 w-6 text-fg-subtle hover:bg-danger/10 hover:text-danger" onClick={onDelete}><Trash2 className="h-3.5 w-3.5" /></Button>
+        </span>}
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
         {assignees.length === 0 ? (

@@ -607,3 +607,13 @@ export interface ClientPortal {
   profile: ClientProfile;
   reports: ClientReportShare[];
 }
+
+export interface TrackerNotification {
+  id: number;
+  kind: string;
+  title: string;
+  message: string;
+  link: string | null;
+  is_read: boolean;
+  created_at: string;
+}

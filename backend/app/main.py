@@ -34,6 +34,7 @@ from app.routers import (
     leave_requests,
     meetings,
     milestones,
+    notifications,
     projects,
     support,
     tasks,
@@ -334,6 +335,7 @@ for r in (
     support.router,
     clients.router,
     coverage.router,
+    notifications.router,
 ):
     app.include_router(r, prefix="/api")
 

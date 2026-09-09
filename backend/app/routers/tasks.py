@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.deps import (
     check_project_access,
+    check_project_manage_access,
     get_current_user,
     require_manager,
     require_project_access,
@@ -27,6 +28,7 @@ from app.models import Milestone, Project, Task, TeamMember, User
 from app.models.task import DELAY_CAUSES, TASK_STATUSES
 from app.schemas.task import TaskInput, TaskOut, TaskStatusUpdate, TaskUpdate
 from app.services.serialize import task_out
+from app.services.notifications import notify_members
 
 router = APIRouter(tags=["tasks"])
 
@@ -102,6 +104,18 @@ def _set_assignees(task: Task, members: list[TeamMember]) -> None:
     task.assigned_member_id = members[0].id if members else None
 
 
+def _validate_pm_roster(user: User, project: Project, members: list[TeamMember]) -> None:
+    if user.role != "pm":
+        return
+    allowed = {member.id for member in project.assigned_members}
+    outside = [member.name for member in members if member.id not in allowed]
+    if outside:
+        raise HTTPException(
+            status_code=422,
+            detail="Add employees to this project team before assigning their tasks.",
+        )
+
+
 @router.get("/milestones/{milestone_id}/tasks", response_model=list[TaskOut])
 def list_tasks(
     milestone_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)
@@ -129,13 +143,20 @@ def create_task(
     ms = db.get(Milestone, milestone_id)
     if ms is None:
         raise HTTPException(status_code=404, detail="Milestone not found.")
-    check_project_access(db, user, ms.project_id)
+    check_project_manage_access(db, user, ms.project_id)
     data = _normalize_and_validate(inp.model_dump())
     assignee_ids = _extract_assignee_ids(data) or []
     members = _resolve_assignees(db, assignee_ids)
+    project = db.get(Project, ms.project_id)
+    _validate_pm_roster(user, project, members)
     task = Task(milestone_id=milestone_id, **data)
     _set_assignees(task, members)
     db.add(task)
+    notify_members(
+        db, members, kind="task_assignment", title=f"New task in {project.name}",
+        message=f"{user.full_name} assigned you: {task.title}",
+        link=f"/projects/{project.id}?tab=kanban", exclude_user_id=user.id,
+    )
     db.commit()
     db.refresh(task)
     return task_out(task, include_assignees=user.role != "client")
@@ -144,7 +165,8 @@ def create_task(
 @router.get("/tasks/{task_id}", response_model=TaskOut)
 def get_task(task_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     task = _task_or_404(db, task_id)
-    check_project_access(db, user, _project_id_of(db, task))
+    project_id = _project_id_of(db, task)
+    check_project_access(db, user, project_id)
     return task_out(task, include_assignees=user.role != "client")
 
 
@@ -153,13 +175,24 @@ def update_task(
     task_id: int, inp: TaskUpdate, db: Session = Depends(get_db), user: User = Depends(require_manager)
 ):
     task = _task_or_404(db, task_id)
-    check_project_access(db, user, _project_id_of(db, task))
+    project_id = _project_id_of(db, task)
+    check_project_manage_access(db, user, project_id)
     data = _normalize_and_validate(inp.model_dump(exclude_unset=True))
     assignee_ids = _extract_assignee_ids(data)
     for field, value in data.items():
         setattr(task, field, value)
     if assignee_ids is not None:
-        _set_assignees(task, _resolve_assignees(db, assignee_ids))
+        members = _resolve_assignees(db, assignee_ids)
+        project = db.get(Project, project_id)
+        _validate_pm_roster(user, project, members)
+        previous_ids = {member.id for member in task.assigned_members}
+        _set_assignees(task, members)
+        notify_members(
+            db, [member for member in members if member.id not in previous_ids],
+            kind="task_assignment", title=f"Task assigned in {project.name}",
+            message=f"{user.full_name} assigned you: {task.title}",
+            link=f"/projects/{project.id}?tab=kanban&task={task.id}", exclude_user_id=user.id,
+        )
     db.commit()
     db.refresh(task)
     return task_out(task)
@@ -184,7 +217,10 @@ def update_task_status(
 
     task = _task_or_404(db, task_id)
     project_id = _project_id_of(db, task)
-    check_project_access(db, user, project_id)
+    if user.role == "pm":
+        check_project_manage_access(db, user, project_id)
+    else:
+        check_project_access(db, user, project_id)
 
     if user.role == "developer":
         if task.status == DONE_STATUS or inp.status == DONE_STATUS:
@@ -194,6 +230,15 @@ def update_task_status(
             )
 
     task.status = inp.status
+    if user.role == "developer":
+        project = db.get(Project, project_id)
+        if project.project_manager:
+            notify_members(
+                db, [project.project_manager], kind="task_update",
+                title=f"Task update in {project.name}",
+                message=f"{user.full_name} moved “{task.title}” to {inp.status.replace('_', ' ')}.",
+                link=f"/projects/{project.id}?tab=kanban&task={task.id}", exclude_user_id=user.id,
+            )
     db.commit()
     db.refresh(task)
     return task_out(task)
@@ -202,7 +247,7 @@ def update_task_status(
 @router.delete("/tasks/{task_id}", status_code=204)
 def delete_task(task_id: int, db: Session = Depends(get_db), user: User = Depends(require_manager)):
     task = _task_or_404(db, task_id)
-    check_project_access(db, user, _project_id_of(db, task))
+    check_project_manage_access(db, user, _project_id_of(db, task))
     db.delete(task)
     db.commit()
 

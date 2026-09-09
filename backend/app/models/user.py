@@ -44,6 +44,9 @@ class User(Base):
         back_populates="client",
         cascade="all, delete-orphan",
     )
+    notifications = relationship(
+        "Notification", back_populates="user", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         CheckConstraint("role IN ('admin','pm','developer','client')", name="ck_user_role"),

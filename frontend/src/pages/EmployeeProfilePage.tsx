@@ -286,6 +286,14 @@ export function EmployeeProfilePage({ self = false }: { self?: boolean }) {
           </Card>
         </div>
 
+        <div className="space-y-5">
+        {self && member.has_login && <Card className="overflow-hidden border-accent/20">
+          <CardContent className="p-5 sm:p-6">
+            <div className="flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent"><LockKeyhole className="h-5 w-5" /></span><div><h2 className="font-display text-xl font-bold text-fg">Account security</h2><p className="text-sm text-fg-muted">Keep your private TrackerX login protected.</p></div></div>
+            <div className="mt-4 rounded-xl border border-border bg-raised/35 p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-fg-subtle">Signed in as</p><p className="mt-1 truncate text-sm font-semibold text-fg">{member.login_email}</p><Button className="mt-4 w-full" asChild><Link to="/change-password"><LockKeyhole className="h-4 w-4" /> Change password</Link></Button></div>
+          </CardContent>
+        </Card>}
+
         <Card>
           <CardContent className="p-5 sm:p-6">
             <div className="flex items-start gap-3">
@@ -354,6 +362,7 @@ export function EmployeeProfilePage({ self = false }: { self?: boolean }) {
             )}
           </CardContent>
         </Card>
+        </div>
       </div>
 
       {editOpen && (

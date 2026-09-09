@@ -1,6 +1,6 @@
 /** api/projects.ts — project CRUD + CSV import. */
 import { api } from "@/lib/apiClient";
-import type { Project, ProjectType } from "@/types";
+import type { Project, ProjectType, TeamMember } from "@/types";
 
 export interface ProjectPayload {
   name: string;
@@ -15,6 +15,16 @@ export interface ProjectPayload {
 
 export interface ProjectManagerPayload {
   project_manager_id: number;
+}
+
+export async function fetchProjectTeam(id: number): Promise<TeamMember[]> {
+  const { data } = await api.get<TeamMember[]>(`/projects/${id}/team`);
+  return data;
+}
+
+export async function updateProjectTeam(id: number, memberIds: number[]): Promise<TeamMember[]> {
+  const { data } = await api.put<TeamMember[]>(`/projects/${id}/team`, { member_ids: memberIds });
+  return data;
 }
 
 export async function fetchProjects(): Promise<Project[]> {

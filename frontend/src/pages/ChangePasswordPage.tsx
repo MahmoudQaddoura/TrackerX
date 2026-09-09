@@ -23,12 +23,12 @@ export function ChangePasswordPage() {
     event.preventDefault();
     if (newPassword.length < 12) return setError("Your new password must contain at least 12 characters.");
     if (newPassword !== confirmPassword) return setError("The new password and confirmation do not match.");
-    if (newPassword === currentPassword) return setError("Choose a new password different from the temporary password.");
+    if (newPassword === currentPassword) return setError("Choose a new password different from your current password.");
     setSaving(true);
     setError(null);
     try {
       await changePassword(currentPassword, newPassword);
-      navigate("/dashboard", { replace: true });
+      navigate(user?.must_change_password ? "/dashboard" : "/my-profile", { replace: true });
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, "Could not update your password."));
     } finally {
@@ -47,13 +47,15 @@ export function ChangePasswordPage() {
             </span>
             <h1 className="mt-6 font-display text-2xl font-bold">Protect your TrackerX account</h1>
             <p className="mt-2 text-sm leading-relaxed text-white/75">
-              Welcome, {user?.full_name}. Your administrator issued a temporary password. Replace it before opening your assigned projects.
+              {user?.must_change_password
+                ? `Welcome, ${user.full_name}. Replace the temporary password before opening your workspace.`
+                : `Update the private password for ${user?.full_name ?? "your TrackerX account"}. Your active session stays protected after the change.`}
             </p>
             <div className="mt-6 space-y-3 text-sm text-white/80">
               <p className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> At least 12 characters</p>
               <p className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> Three character types: lower, upper, number, symbol</p>
               <p className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> Does not contain your name or email</p>
-              <p className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> Different from the temporary password</p>
+              <p className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> Different from your current password</p>
               <p className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> Visible only to you</p>
             </div>
           </div>
@@ -64,15 +66,15 @@ export function ChangePasswordPage() {
             <div className="mb-6">
               <div className="flex items-center gap-2 text-accent">
                 <KeyRound className="h-5 w-5" />
-                <span className="text-sm font-semibold">Required security step</span>
+                <span className="text-sm font-semibold">{user?.must_change_password ? "Required security step" : "Account security"}</span>
               </div>
-              <h2 className="mt-2 font-display text-xl font-bold text-fg">Create your private password</h2>
+              <h2 className="mt-2 font-display text-xl font-bold text-fg">{user?.must_change_password ? "Create your private password" : "Change your password"}</h2>
               <p className="mt-1 text-sm text-fg-muted">Use the eye icon to show or hide any password while typing.</p>
             </div>
 
             <form className="space-y-4" onSubmit={handleSubmit}>
               <div className="space-y-1.5">
-                <Label htmlFor="current-password">Temporary password</Label>
+                <Label htmlFor="current-password">Current password</Label>
                 <PasswordInput id="current-password" autoComplete="current-password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} required />
               </div>
               <div className="space-y-1.5">
@@ -85,7 +87,7 @@ export function ChangePasswordPage() {
               </div>
               {error && <p className="rounded-md bg-danger/5 px-3 py-2 text-sm text-danger">{error}</p>}
               <Button className="w-full" type="submit" disabled={saving}>
-                {saving && <Spinner />} Save password and continue
+                {saving && <Spinner />} {user?.must_change_password ? "Save password and continue" : "Update password"}
               </Button>
               <Button className="w-full" type="button" variant="ghost" onClick={logout}>Sign out instead</Button>
             </form>

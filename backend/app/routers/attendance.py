@@ -72,7 +72,7 @@ def _serialize(member: TeamMember, record: AttendanceRecord | None, day: str) ->
 
 
 def _scoped_members(db: Session, user: User) -> list[TeamMember]:
-    if user.role in ("admin", "pm"):
+    if user.role == "admin":
         return (
             db.query(TeamMember)
             .filter(TeamMember.is_active == 1)

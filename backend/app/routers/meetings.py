@@ -58,7 +58,7 @@ def create_meeting(
 ):
     if db.get(Project, project_id) is None:
         raise HTTPException(status_code=404, detail="Project not found.")
-    check_project_access(db, user, project_id)
+    check_project_manage_access(db, user, project_id)
     _check_type(inp.meeting_type)
     meeting = Meeting(project_id=project_id, **inp.model_dump())
     db.add(meeting)
@@ -86,7 +86,7 @@ def update_meeting(
     user: User = Depends(require_manager),
 ):
     meeting = _meeting_or_404(db, meeting_id)
-    check_project_access(db, user, meeting.project_id)
+    check_project_manage_access(db, user, meeting.project_id)
     _check_type(inp.meeting_type)
     for field, value in inp.model_dump(exclude_unset=True).items():
         setattr(meeting, field, value)
@@ -100,6 +100,6 @@ def delete_meeting(
     meeting_id: int, db: Session = Depends(get_db), user: User = Depends(require_manager)
 ):
     meeting = _meeting_or_404(db, meeting_id)
-    check_project_access(db, user, meeting.project_id)
+    check_project_manage_access(db, user, meeting.project_id)
     db.delete(meeting)
     db.commit()

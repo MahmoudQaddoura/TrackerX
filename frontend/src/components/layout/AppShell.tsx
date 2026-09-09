@@ -8,6 +8,7 @@ import { Outlet } from "react-router-dom";
 
 import { BrandLogo } from "@/components/layout/BrandLogo";
 import { Nav } from "@/components/layout/Nav";
+import { NotificationCenter } from "@/components/layout/NotificationCenter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
@@ -31,6 +32,7 @@ export function AppShell() {
             <Nav />
           </div>
           <div className="flex items-center gap-3">
+            {user && user.role !== "client" && <NotificationCenter />}
             {user && (
               <div className="hidden items-center gap-2 sm:flex">
                 <Badge variant={user.role === "admin" ? "default" : "neutral"}>
