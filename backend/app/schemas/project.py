@@ -37,6 +37,10 @@ class ProjectManagerInput(BaseModel):
     project_manager_id: int
 
 
+class ProjectTeamInput(BaseModel):
+    member_ids: list[int] = Field(default_factory=list, max_length=200)
+
+
 class ProjectOut(BaseModel):
     id: int
     name: str

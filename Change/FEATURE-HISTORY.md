@@ -10,6 +10,9 @@ Audit baseline: 5 September 2026. This inventory is reconstructed from the appli
 - Employee profiles with English/Arabic names, role descriptions, current projects, private CV/profile uploads, previews, and downloads.
 - Persistent four-digit employee numbers; owner 0001 and Yazan 0002; numbers included in attendance and leave reporting.
 - One owner-selected project manager per project through the project menu; the employee leadership panel and assistant-PM selection were removed.
+- Self-service password changes are available from every signed-in employee profile, while temporary-password replacement remains mandatory before workspace access.
+- Project managers organize a separate employee roster for each project they lead. A manager may lead multiple projects without merging their teams, and task assignment is limited to the selected project roster.
+- Persistent in-app notifications connect managers and employees: project/team assignments notify employees, and employee task-status updates notify the responsible project manager.
 
 ## Project delivery
 
@@ -28,6 +31,7 @@ Audit baseline: 5 September 2026. This inventory is reconstructed from the appli
 - Coverage considers the requested absence interval, task urgency, candidate workload, and availability.
 - Coverage offers notify the selected employee; task ownership changes after acceptance.
 - Separate daily attendance, request inbox, and coverage inbox; redundant header removed.
+- Attendance and leave are company-wide only for administrators; project managers and employees see only their own attendance and requests.
 
 ## Asset inventory
 

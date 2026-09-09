@@ -19,6 +19,7 @@ import {
   ShieldCheck,
   Trash2,
   UserRoundCheck,
+  UsersRound,
   Boxes,
   type LucideIcon,
 } from "lucide-react";
@@ -76,13 +77,17 @@ export function MaintenanceSupportDashboard({
   project,
   onEditProject,
   onDeleteProject,
+  onManageTeam,
 }: {
   project: Project;
   onEditProject: () => void;
   onDeleteProject: () => void;
+  onManageTeam: () => void;
 }) {
   const navigate = useNavigate();
-  const { isAdmin, canManage, canEditProjectContent } = useAuth();
+  const { user, isAdmin, canManage, canEditProjectContent } = useAuth();
+  const canManageProject = isAdmin || (canManage && project.project_manager_name === user?.full_name);
+  const canEditProject = isAdmin || (canEditProjectContent && project.project_manager_name === user?.full_name);
   const reports = useProactiveReports(project.id);
   const incidents = useSupportIncidents(project.id);
   const mutations = useSupportMutations(project.id);
@@ -206,8 +211,11 @@ export function MaintenanceSupportDashboard({
                 </div>
               </div>
             </div>
-            {canManage && (
+            {canManageProject && (
               <div className="flex gap-2" data-no-print>
+                <Button size="sm" variant="subtle" onClick={onManageTeam}>
+                  <UsersRound className="h-4 w-4" /> Manage team
+                </Button>
                 <Button size="sm" variant="subtle" onClick={onEditProject}>
                   <Pencil className="h-4 w-4" /> Edit
                 </Button>
@@ -268,8 +276,8 @@ export function MaintenanceSupportDashboard({
             <ProactiveWorkspace
               reports={reports.data ?? []}
               metrics={reportMetrics}
-              canEdit={canEditProjectContent}
-              canManage={canManage}
+              canEdit={canEditProject}
+              canManage={canManageProject}
               canForward={isAdmin}
               onAdd={() => {
                 setEditingReport(undefined);
@@ -291,8 +299,8 @@ export function MaintenanceSupportDashboard({
             <ReactiveWorkspace
               incidents={incidents.data ?? []}
               metrics={incidentMetrics}
-              canEdit={canEditProjectContent}
-              canManage={canManage}
+              canEdit={canEditProject}
+              canManage={canManageProject}
               onAdd={() => {
                 setEditingIncident(undefined);
                 setIncidentOpen(true);
@@ -313,7 +321,7 @@ export function MaintenanceSupportDashboard({
           <TabsContent value="assets">
             <AssetInventoryWorkspace
               projectId={project.id}
-              canEdit={canEditProjectContent}
+              canEdit={canEditProject}
             />
           </TabsContent>
 

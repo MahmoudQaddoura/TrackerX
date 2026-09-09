@@ -145,13 +145,17 @@ Prototype/
 
 ## Roles & access control
 
-| Action | PM | Owner |
-|--------|----|-------|
-| View everything, download documents | ✅ | ✅ |
-| Add comments | ✅ | ✅ |
-| Create/edit/delete project·milestone·task·team·meeting, upload/delete documents, CSV import | ✅ | ❌ |
+| Capability | Owner / admin | Project manager | Employee | Client |
+|---|---|---|---|---|
+| Projects | Company-wide | Assigned and task-linked projects | Assigned and task-linked projects | Explicitly linked projects and inherited support workspace |
+| Delivery management | All projects | Only projects they are the named manager of | Status updates when write access is granted | Read-only client view |
+| Project team | Assign managers and members | Replace the roster of each project they lead | No roster management | Hidden |
+| Attendance and leave | Company-wide sheet and request review | Own records and requests only | Own records and requests only | Not available |
+| Employee profiles | Full directory and private files | Read-only directory; own private profile | Own private profile | Not available |
+| Client administration | Full | Not available | Not available | Own portal only |
+| Notifications | Project activity | Team/task updates for managed projects | Project/task assignments and coverage | Forwarded-report inbox |
 
-Enforced in the backend by `require_pm` (source of truth) and mirrored in the UI (`isPm`) to hide authoring controls.
+Backend enforcement uses project access plus a stricter named-manager check for project-management actions. UI controls mirror the same boundary, but the API remains the source of truth.
 
 ## Deletions from the original prototype
 

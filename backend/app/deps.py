@@ -153,7 +153,10 @@ def get_accessible_project_ids(user: User, db: Session) -> set[int] | None:
             db.query(Milestone.project_id)
             .join(Task, Task.milestone_id == Milestone.id)
             .join(task_assignees, task_assignees.c.task_id == Task.id)
-            .filter(task_assignees.c.team_member_id == member.id)
+            .filter(
+                task_assignees.c.team_member_id == member.id,
+                Task.status != "done",
+            )
             .distinct()
             .all()
         )
@@ -192,6 +195,18 @@ def check_project_access(db: Session, user: User, project_id: int) -> None:
         raise _FORBIDDEN_PROJECT
 
 
+def check_project_manage_access(db: Session, user: User, project_id: int) -> None:
+    """Admin may manage every project; a PM may manage only projects they lead."""
+    if user.role == "admin":
+        return
+    if user.role != "pm" or user.access_level != "write":
+        raise HTTPException(status_code=403, detail="This action requires project-manager access.")
+    member = db.query(TeamMember).filter(TeamMember.user_id == user.id).first()
+    project = db.get(Project, project_id)
+    if member is None or project is None or project.project_manager_id != member.id:
+        raise HTTPException(status_code=403, detail="Only the assigned project manager can manage this project.")
+
+
 def require_project_access(
     project_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)
 ) -> Project:
@@ -210,5 +225,5 @@ def require_project_manage_access(
     project = db.get(Project, project_id)
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found.")
-    check_project_access(db, user, project_id)
+    check_project_manage_access(db, user, project_id)
     return project

@@ -50,7 +50,7 @@ export function DashboardPage() {
 
 function TeamDashboardPage() {
   const navigate = useNavigate();
-  const { user, canViewManagement, canManage } = useAuth();
+  const { user, canManage, isAdmin, isPm } = useAuth();
   const summary = useSummary();
   const deliveryMap = useDeliveryMap();
   const delayed = useDelayedTasks();
@@ -78,14 +78,16 @@ function TeamDashboardPage() {
           <div className="max-w-2xl">
             <Badge className="border border-white/20 bg-white/10 text-white">
               <Radio className="h-3 w-3 animate-pulse" />
-              {canViewManagement ? "Live portfolio" : "My live workspace"}
+              {isAdmin ? "Live portfolio" : isPm ? "Project manager workspace" : "My live workspace"}
             </Badge>
             <h1 className="mt-3 font-display text-3xl font-bold tracking-tight">
               {timeGreeting()}, {displayName}
             </h1>
             <p className="mt-1 text-sm text-white/75">
-              {canViewManagement
+              {isAdmin
                 ? "Your project delivery, operations, people, documents, and schedule alerts in one place."
+                : isPm
+                  ? "Lead each assigned project, organize its working team, and respond to delivery updates from one clear workspace."
                 : "Everything related to the projects you are assigned to, from tasks and Gantt schedules to documents and meetings."}
             </p>
           </div>
@@ -139,13 +141,16 @@ function TeamDashboardPage() {
         </Card>
       )}
 
-      {!canViewManagement && (
+      {!isAdmin && (
         projects.isLoading ? (
           <Skeleton className="h-64" />
         ) : projects.isError ? (
           <ErrorState message="Could not load your assigned projects." onRetry={() => projects.refetch()} />
         ) : (
-          <AssignedProjectsWorkspace projects={projects.data ?? []} />
+          <AssignedProjectsWorkspace
+            projects={(projects.data ?? []).filter((project) => !isPm || project.project_manager_name === user?.full_name)}
+            managerView={isPm}
+          />
         )
       )}
 
@@ -160,9 +165,9 @@ function TeamDashboardPage() {
       <Card className="overflow-hidden">
           <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
             <div>
-              <h2 className="font-semibold text-fg">{canViewManagement ? "Attendance today" : "My attendance today"}</h2>
+              <h2 className="font-semibold text-fg">{isAdmin ? "Attendance today" : "My attendance today"}</h2>
               <p className="mt-1 text-xs text-fg-muted">
-                {canViewManagement ? "People availability and daily recording progress" : "Your recorded availability and working hours"}
+                {isAdmin ? "People availability and daily recording progress" : "Your recorded availability and working hours"}
               </p>
             </div>
             <Button variant="outline" size="sm" asChild>
@@ -175,7 +180,7 @@ function TeamDashboardPage() {
             <div className="p-5"><ErrorState message="Could not load today's attendance." onRetry={() => attendance.refetch()} /></div>
           ) : (
             <div className="p-5">
-              {canViewManagement ? (
+              {isAdmin ? (
                 <>
                   <div className="grid grid-cols-3 gap-3">
                     <MiniMetric label="Employees" value={attendanceRows.length} />
@@ -228,7 +233,7 @@ function TeamDashboardPage() {
   );
 }
 
-function AssignedProjectsWorkspace({ projects }: { projects: Project[] }) {
+function AssignedProjectsWorkspace({ projects, managerView = false }: { projects: Project[]; managerView?: boolean }) {
   if (projects.length === 0) {
     return (
       <Card className="border-dashed p-8 text-center">
@@ -250,8 +255,8 @@ function AssignedProjectsWorkspace({ projects }: { projects: Project[] }) {
   return (
     <section>
       <div className="mb-3">
-        <h2 className="font-display text-lg font-semibold text-fg">My assigned project access</h2>
-        <p className="text-xs text-fg-muted">Every tool below follows your live task assignments</p>
+        <h2 className="font-display text-lg font-semibold text-fg">{managerView ? "Projects I manage" : "My assigned project access"}</h2>
+        <p className="text-xs text-fg-muted">{managerView ? "Each project keeps its own team, tasks, schedule, and updates." : "Every tool below follows your live task assignments"}</p>
       </div>
       <div className="grid gap-3 lg:grid-cols-2">
         {projects.map((project) => (
@@ -275,6 +280,7 @@ function AssignedProjectsWorkspace({ projects }: { projects: Project[] }) {
                   <Link to={`/projects/${project.id}?tab=${tool.tab}`}>{tool.label}</Link>
                 </Button>
               ))}
+              {managerView && <Button variant="default" size="sm" asChild><Link to={`/projects/${project.id}`}>Manage team &amp; delivery</Link></Button>}
             </div>
           </Card>
         ))}

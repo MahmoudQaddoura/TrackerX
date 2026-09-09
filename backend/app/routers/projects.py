@@ -16,6 +16,7 @@ from urllib.parse import urlparse
 
 from app.db import get_db
 from app.deps import (
+    check_project_manage_access,
     get_accessible_project_ids,
     get_current_user,
     require_admin,
@@ -23,17 +24,20 @@ from app.deps import (
     require_project_access,
     require_project_manage_access,
 )
-from app.models import Project, ProactiveServiceReport, TeamMember, User
+from app.models import Milestone, Project, ProactiveServiceReport, Task, TeamMember, User, task_assignees
 from app.models.support import PROACTIVE_CATEGORY_TEMPLATES
 from app.schemas.project import (
     ProjectInput,
     ProjectManagerInput,
+    ProjectTeamInput,
     ProjectOut,
     ProjectUpdate,
     STATUS_VALUES,
     TYPE_VALUES,
 )
 from app.services.serialize import project_out
+from app.services.serialize import team_member_out
+from app.services.notifications import notify_members
 
 router = APIRouter(tags=["projects"])
 
@@ -154,9 +158,98 @@ def update_project_manager(
     if all(item.id != project.id for item in manager.assigned_projects):
         manager.assigned_projects.append(project)
 
+    notify_members(
+        db,
+        [manager],
+        kind="project_leadership",
+        title=f"You manage {project.name}",
+        message="You can now organize this project's team, milestones, tasks, schedule, documents, meetings, and assets.",
+        link=f"/projects/{project.id}",
+        exclude_user_id=_owner.id,
+    )
+
     db.commit()
     db.refresh(project)
     return project_out(project)
+
+
+@router.get("/projects/{project_id}/team")
+def get_project_team(
+    project_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    project = db.get(Project, project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found.")
+    # Team identities are operational data, so clients use the client-safe
+    # project views and never receive the internal employee roster.
+    if user.role == "client":
+        raise HTTPException(status_code=403, detail="Employee rosters are private.")
+    require_ids = get_accessible_project_ids(user, db)
+    if require_ids is not None and project_id not in require_ids:
+        raise HTTPException(status_code=403, detail="You don't have access to this project.")
+    return [team_member_out(member) for member in sorted(project.assigned_members, key=lambda item: (item.employee_number or "", item.id))]
+
+
+@router.put("/projects/{project_id}/team")
+def replace_project_team(
+    project_id: int,
+    inp: ProjectTeamInput,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Replace one project's working team; its assigned PM may manage only this roster."""
+    project = db.get(Project, project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found.")
+    check_project_manage_access(db, user, project_id)
+    if len(inp.member_ids) != len(set(inp.member_ids)):
+        raise HTTPException(status_code=422, detail="Project team cannot contain duplicates.")
+    members = db.query(TeamMember).filter(TeamMember.id.in_(inp.member_ids)).all() if inp.member_ids else []
+    found = {member.id for member in members}
+    missing = sorted(set(inp.member_ids) - found)
+    if missing:
+        raise HTTPException(status_code=422, detail=f"Unknown employee IDs: {', '.join(map(str, missing))}.")
+    if any(not bool(member.is_active) for member in members):
+        raise HTTPException(status_code=422, detail="Inactive employees cannot join a project team.")
+
+    manager = project.project_manager
+    if manager and manager.id not in found:
+        members.append(manager)
+    old_ids = {member.id for member in project.assigned_members}
+    removed_ids = old_ids - {member.id for member in members}
+    if removed_ids:
+        active_assignments = (
+            db.query(Task)
+            .join(Milestone, Milestone.id == Task.milestone_id)
+            .join(task_assignees, task_assignees.c.task_id == Task.id)
+            .filter(
+                Milestone.project_id == project.id,
+                task_assignees.c.team_member_id.in_(removed_ids),
+                Task.status != "done",
+            )
+            .count()
+        )
+        if active_assignments:
+            raise HTTPException(
+                status_code=409,
+                detail="Reassign or complete this employee's open project tasks before removing them from the team.",
+            )
+    added = [member for member in members if member.id not in old_ids]
+    project.assigned_members = members
+    if added:
+        notify_members(
+            db,
+            added,
+            kind="project_assignment",
+            title=f"Added to {project.name}",
+            message=f"{user.full_name} added you to this project team. You can now open its tasks, schedule, documents, meetings, and assets.",
+            link=f"/projects/{project.id}",
+            exclude_user_id=user.id,
+        )
+    db.commit()
+    return [team_member_out(member) for member in sorted(project.assigned_members, key=lambda item: (item.employee_number or "", item.id))]
 
 
 @router.delete("/projects/{project_id}", status_code=204)

@@ -27,6 +27,7 @@ from app.models.support import (
 from app.models.client import ClientProfile, ClientReportShare
 from app.models.coverage import LeaveCoverageOffer
 from app.models.asset import Asset, AssetConnection, AssetPort
+from app.models.notification import Notification
 
 __all__ = [
     "User",
@@ -53,4 +54,5 @@ __all__ = [
     "Asset",
     "AssetPort",
     "AssetConnection",
+    "Notification",
 ]

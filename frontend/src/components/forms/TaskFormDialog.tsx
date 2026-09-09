@@ -31,6 +31,7 @@ import { Select } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { useTeam } from "@/hooks/useTeam";
+import { useAuth } from "@/context/AuthContext";
 import { getApiErrorMessage } from "@/lib/apiClient";
 import { cn, TASK_STATUS_LABELS, TASK_STATUS_OPTIONS, toInputDate } from "@/lib/utils";
 import type { Milestone, Task, TaskStatus } from "@/types";
@@ -59,6 +60,7 @@ export function TaskFormDialog({
   isPending?: boolean;
 }) {
   const { data: team } = useTeam(true);
+  const { isPm } = useAuth();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState<TaskStatus>("todo");
@@ -104,11 +106,12 @@ export function TaskFormDialog({
   }, [endDate, startDate]);
   const filteredTeam = useMemo(() => {
     const query = assigneeSearch.trim().toLocaleLowerCase();
-    if (!query) return team ?? [];
-    return (team ?? []).filter((member) =>
+    const available = isPm ? (team ?? []).filter((member) => member.assigned_project_ids.includes(milestone.project_id)) : (team ?? []);
+    if (!query) return available;
+    return available.filter((member) =>
       `${member.name} ${member.role ?? ""}`.toLocaleLowerCase().includes(query),
     );
-  }, [assigneeSearch, team]);
+  }, [assigneeSearch, isPm, milestone.project_id, team]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();

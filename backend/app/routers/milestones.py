@@ -70,7 +70,7 @@ def create_milestone(
     project = db.get(Project, project_id)
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found.")
-    check_project_access(db, user, project_id)
+    check_project_manage_access(db, user, project_id)
     if project.project_type == "maintenance_support":
         raise HTTPException(
             status_code=422,
@@ -107,7 +107,7 @@ def update_milestone(
     user: User = Depends(require_manager),
 ):
     ms = _milestone_or_404(db, milestone_id)
-    check_project_access(db, user, ms.project_id)
+    check_project_manage_access(db, user, ms.project_id)
     data = inp.model_dump(exclude_unset=True)
     _check_dates(data.get("start_date", ms.start_date), data.get("end_date", ms.end_date))
     if "workstream" in data:
@@ -124,6 +124,6 @@ def delete_milestone(
     milestone_id: int, db: Session = Depends(get_db), user: User = Depends(require_manager)
 ):
     ms = _milestone_or_404(db, milestone_id)
-    check_project_access(db, user, ms.project_id)
+    check_project_manage_access(db, user, ms.project_id)
     db.delete(ms)
     db.commit()

@@ -6,9 +6,11 @@ import {
   deleteProject,
   fetchProject,
   fetchProjects,
+  fetchProjectTeam,
   importProjectCsv,
   updateProject,
   updateProjectManager,
+  updateProjectTeam,
   type ProjectManagerPayload,
   type ProjectPayload,
 } from "@/api/projects";
@@ -19,6 +21,10 @@ export function useProjects() {
 
 export function useProject(id: number) {
   return useQuery({ queryKey: ["project", id], queryFn: () => fetchProject(id), enabled: !!id });
+}
+
+export function useProjectTeam(id: number, enabled = true) {
+  return useQuery({ queryKey: ["project-team", id], queryFn: () => fetchProjectTeam(id), enabled: !!id && enabled });
 }
 
 export function useProjectMutations() {
@@ -45,6 +51,14 @@ export function useProjectMutations() {
       qc.invalidateQueries({ queryKey: ["team"] });
     },
   });
+  const updateTeam = useMutation({
+    mutationFn: ({ id, memberIds }: { id: number; memberIds: number[] }) => updateProjectTeam(id, memberIds),
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: ["project-team", variables.id] });
+      qc.invalidateQueries({ queryKey: ["project", variables.id] });
+      qc.invalidateQueries({ queryKey: ["team"] });
+    },
+  });
 
-  return { create, update, remove, importCsv, updateManager };
+  return { create, update, remove, importCsv, updateManager, updateTeam };
 }

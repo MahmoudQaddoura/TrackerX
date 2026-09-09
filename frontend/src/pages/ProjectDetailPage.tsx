@@ -16,6 +16,7 @@ import {
   Pencil,
   Trash2,
   UserRoundCog,
+  UsersRound,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
@@ -34,6 +35,7 @@ import { GanttChart } from "@/components/gantt/GanttChart";
 import { KanbanBoard } from "@/components/project/KanbanBoard";
 import { MeetingsPanel } from "@/components/meetings/MeetingsPanel";
 import { ProjectGitHubButton } from "@/components/project/ProjectGitHubButton";
+import { ProjectTeamDialog } from "@/components/project/ProjectTeamDialog";
 import { MilestonesTasksBoard } from "@/components/project/MilestonesTasksBoard";
 import { MaintenanceSupportDashboard } from "@/components/support/MaintenanceSupportDashboard";
 import { Button } from "@/components/ui/button";
@@ -60,12 +62,13 @@ export function ProjectDetailPage() {
   const id = Number(projectId);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { isAdmin, isClient, canManage, canEditProjectContent } = useAuth();
+  const { user, isAdmin, isClient, canManage, canEditProjectContent } = useAuth();
   const { data: project, isLoading, isError, refetch } = useProject(id);
   const { data: availableProjects } = useProjects();
   const { update, remove } = useProjectMutations();
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [teamOpen, setTeamOpen] = useState(false);
   const [activeTab, setActiveTab] = useState(() =>
     resolveProjectTab(searchParams.get("tab"), canEditProjectContent),
   );
@@ -104,6 +107,7 @@ export function ProjectDetailPage() {
     return <ErrorState message="Could not load this project." onRetry={() => refetch()} />;
 
   const isSupport = project.project_type === "maintenance_support";
+  const canManageProject = isAdmin || (canManage && project.project_manager_name === user?.full_name);
 
   if (isClient) return <ClientProjectWorkspace project={project} />;
 
@@ -114,6 +118,7 @@ export function ProjectDetailPage() {
           project={project}
           onEditProject={() => setEditOpen(true)}
           onDeleteProject={() => setDeleteOpen(true)}
+          onManageTeam={() => setTeamOpen(true)}
         />
         <ProjectFormDialog
           open={editOpen}
@@ -131,6 +136,7 @@ export function ProjectDetailPage() {
           isPending={remove.isPending}
           onConfirm={() => remove.mutate(id, { onSuccess: () => navigate("/projects") })}
         />
+        <ProjectTeamDialog project={project} open={teamOpen} onOpenChange={setTeamOpen} />
       </>
     );
   }
@@ -181,8 +187,11 @@ export function ProjectDetailPage() {
             {formatDate(project.start_date)} → {formatDate(project.end_date)}
           </p>
         </div>
-        {canManage && (
+        {canManageProject && (
           <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => setTeamOpen(true)}>
+              <UsersRound className="h-4 w-4" /> Manage team
+            </Button>
             <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
               <Pencil className="h-4 w-4" /> Edit
             </Button>
@@ -213,6 +222,7 @@ export function ProjectDetailPage() {
             <TabsContent value="kanban">
               <KanbanBoard
                 project={project}
+                canManageProject={canManageProject}
                 focusTaskId={focusTaskId}
                 initialAssigneeId={initialAssigneeId}
               />
@@ -253,6 +263,7 @@ export function ProjectDetailPage() {
         isPending={remove.isPending}
         onConfirm={() => remove.mutate(id, { onSuccess: () => navigate("/projects") })}
       />
+      <ProjectTeamDialog project={project} open={teamOpen} onOpenChange={setTeamOpen} />
     </div>
   );
 }
