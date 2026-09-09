@@ -57,9 +57,9 @@ export const TASK_STATUS_OPTIONS: TaskStatus[] = [
 /** Chart/marker colour per task status — kept in hex so Recharts + SVG agree. */
 export const STATUS_COLORS: Record<TaskStatus, string> = {
   todo: "#94a3b8",
-  in_progress: "#6d5ae6",
-  in_review: "#6366f1",
-  blocked: "#f59e0b",
+  in_progress: "#0b5278",
+  in_review: "#d97706",
+  blocked: "#dc264d",
   done: "#16a34a",
 };
 

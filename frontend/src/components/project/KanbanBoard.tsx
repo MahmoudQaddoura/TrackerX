@@ -8,6 +8,10 @@
  */
 import {
   AlertTriangle,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  CircleDot,
   Download,
   FileText,
   MessageSquare,
@@ -62,6 +66,41 @@ import type {
 
 const DONE: TaskStatus = "done";
 
+const STATUS_COLUMN_STYLES: Record<
+  TaskStatus,
+  { panel: string; marker: string; count: string }
+> = {
+  todo: {
+    panel: "border-border bg-raised/35",
+    marker: "bg-fg-subtle",
+    count: "bg-raised text-fg-muted",
+  },
+  in_progress: {
+    panel: "border-accent/25 bg-accent-soft/35",
+    marker: "bg-accent",
+    count: "bg-accent-soft text-accent",
+  },
+  blocked: {
+    panel: "border-danger/20 bg-danger/5",
+    marker: "bg-danger",
+    count: "bg-danger/10 text-danger",
+  },
+  in_review: {
+    panel: "border-warning/25 bg-warning/5",
+    marker: "bg-warning",
+    count: "bg-warning/10 text-warning",
+  },
+  done: {
+    panel: "border-success/20 bg-success/5",
+    marker: "bg-success",
+    count: "bg-success/10 text-success",
+  },
+};
+
+function isMilestoneComplete(milestone: Milestone): boolean {
+  return milestone.total_tasks > 0 && milestone.done_tasks >= milestone.total_tasks;
+}
+
 type WorkstreamSection = {
   key: MilestoneWorkstream;
   title: string;
@@ -107,13 +146,27 @@ export function KanbanBoard({
   const [assigneeFilter, setAssigneeFilter] = useState(
     initialAssigneeId ? String(initialAssigneeId) : "",
   );
+  const [expandedMilestoneId, setExpandedMilestoneId] = useState<number | null>(null);
+
+  const currentMilestoneId = useMemo(() => {
+    const ordered = (milestones.data ?? [])
+      .filter((milestone) => milestone.workstream === DELIVERY_SECTION.key)
+      .sort((left, right) => left.sort_order - right.sort_order || left.id - right.id);
+    return ordered.find((milestone) => !isMilestoneComplete(milestone))?.id ?? null;
+  }, [milestones.data]);
 
   useEffect(() => {
     setAssigneeFilter(initialAssigneeId ? String(initialAssigneeId) : "");
   }, [initialAssigneeId]);
 
   useEffect(() => {
+    setExpandedMilestoneId(currentMilestoneId);
+  }, [currentMilestoneId]);
+
+  useEffect(() => {
     if (!focusTaskId || !tasks.data?.some((task) => task.id === focusTaskId)) return;
+    const focusedTask = tasks.data.find((task) => task.id === focusTaskId);
+    if (focusedTask) setExpandedMilestoneId(focusedTask.milestone_id);
     const timer = window.setTimeout(() => {
       document.getElementById(`task-${focusTaskId}`)?.scrollIntoView({
         behavior: "smooth",
@@ -269,9 +322,9 @@ export function KanbanBoard({
 
       {workstreamSections.map((section) => {
         const SectionIcon = section.icon;
-        const sectionMilestones = (milestones.data ?? []).filter(
-          (milestone) => milestone.workstream === section.key,
-        );
+        const sectionMilestones = (milestones.data ?? [])
+          .filter((milestone) => milestone.workstream === section.key)
+          .sort((left, right) => left.sort_order - right.sort_order || left.id - right.id);
         const sectionTaskCount = sectionMilestones.reduce(
           (total, milestone) => total + (tasksByMilestone.get(milestone.id)?.length ?? 0),
           0,
@@ -318,17 +371,27 @@ export function KanbanBoard({
                 }
               />
             ) : (
-              sectionMilestones.map((milestone) => (
+              sectionMilestones.map((milestone, index) => (
                 <MilestoneSwimlane
                   key={milestone.id}
                   project={project}
                   milestone={milestone}
                   tasks={tasksByMilestone.get(milestone.id) ?? []}
                   documents={documentsByMilestone.get(milestone.id) ?? []}
+                  sequenceNumber={index + 1}
+                  sequenceTotal={sectionMilestones.length}
+                  isComplete={isMilestoneComplete(milestone)}
+                  isCurrent={milestone.id === currentMilestoneId}
+                  isExpanded={milestone.id === expandedMilestoneId}
                   focusTaskId={focusTaskId}
                   canDrag={canDrag}
                   canDropIn={canDropIn}
                   onMoveTask={moveTask}
+                  onToggle={() =>
+                    setExpandedMilestoneId((current) =>
+                      current === milestone.id ? null : milestone.id,
+                    )
+                  }
                   onEditMilestone={() => {
                     setEditingMs(milestone);
                     setMsFormOpen(true);
@@ -347,6 +410,24 @@ export function KanbanBoard({
         milestone={editingMs}
         project={project}
         defaultWorkstream={newMilestoneWorkstream}
+        sequenceNumber={
+          editingMs
+            ? (milestones.data ?? [])
+                .filter((milestone) => milestone.workstream === editingMs.workstream)
+                .sort((left, right) => left.sort_order - right.sort_order || left.id - right.id)
+                .findIndex((milestone) => milestone.id === editingMs.id) + 1
+            : (milestones.data ?? []).filter(
+                (milestone) => milestone.workstream === newMilestoneWorkstream,
+              ).length + 1
+        }
+        suggestedSortOrder={
+          Math.max(
+            -1,
+            ...(milestones.data ?? [])
+              .filter((milestone) => milestone.workstream === newMilestoneWorkstream)
+              .map((milestone) => milestone.sort_order),
+          ) + 1
+        }
         isPending={msMut.create.isPending || msMut.update.isPending}
         onSubmit={(payload) =>
           editingMs ? msMut.update.mutateAsync({ id: editingMs.id, payload }) : msMut.create.mutateAsync(payload)
@@ -371,10 +452,16 @@ function MilestoneSwimlane({
   milestone,
   tasks,
   documents,
+  sequenceNumber,
+  sequenceTotal,
+  isComplete,
+  isCurrent,
+  isExpanded,
   focusTaskId,
   canDrag,
   canDropIn,
   onMoveTask,
+  onToggle,
   onEditMilestone,
   onDeleteMilestone,
 }: {
@@ -382,10 +469,16 @@ function MilestoneSwimlane({
   milestone: Milestone;
   tasks: Task[];
   documents: DocumentMeta[];
+  sequenceNumber: number;
+  sequenceTotal: number;
+  isComplete: boolean;
+  isCurrent: boolean;
+  isExpanded: boolean;
   focusTaskId?: number;
   canDrag: (task: Task) => boolean;
   canDropIn: (status: TaskStatus) => boolean;
   onMoveTask: (taskId: number, status: TaskStatus) => void;
+  onToggle: () => void;
   onEditMilestone: () => void;
   onDeleteMilestone: () => void;
 }) {
@@ -405,20 +498,73 @@ function MilestoneSwimlane({
   }, [tasks]);
 
   return (
-    <Card id={`milestone-${milestone.id}`} className="scroll-mt-20">
-      <div className="flex flex-wrap items-start justify-between gap-2 border-b border-border p-4">
-        <div>
-          <h3 className="font-semibold text-fg">{milestone.title}</h3>
-          <p className="text-xs text-fg-subtle">
-            {formatDate(milestone.start_date)} → {formatDate(milestone.end_date)}
-          </p>
-          <div className="mt-2 flex items-center gap-2">
-            <Progress value={milestone.progress_pct} className="w-40" />
-            <span className="text-xs text-fg-muted">
-              {milestone.done_tasks}/{milestone.total_tasks} · {milestone.progress_pct}%
+    <Card
+      id={`milestone-${milestone.id}`}
+      className={cn(
+        "scroll-mt-20 overflow-hidden transition-shadow",
+        isCurrent && "border-accent/35 shadow-card",
+        isComplete && "border-success/25",
+      )}
+    >
+      <div
+        className={cn(
+          "flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3",
+          isCurrent && "bg-accent-soft/45",
+          isComplete && "bg-success/5",
+        )}
+      >
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 items-center gap-3 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-expanded={isExpanded}
+          aria-controls={`milestone-board-${milestone.id}`}
+          onClick={onToggle}
+        >
+          <span
+            className={cn(
+              "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border font-display text-sm font-bold",
+              isComplete
+                ? "border-success/20 bg-success/10 text-success"
+                : isCurrent
+                  ? "border-accent/20 bg-accent text-accent-fg"
+                  : "border-border bg-surface text-fg-muted",
+            )}
+          >
+            {isComplete ? <CheckCircle2 className="h-5 w-5" /> : sequenceNumber}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="flex flex-wrap items-center gap-2">
+              <span className="truncate font-display font-semibold text-fg">{milestone.title}</span>
+              {isComplete ? (
+                <Badge variant="success">Done</Badge>
+              ) : isCurrent ? (
+                <Badge variant="default"><CircleDot className="h-3 w-3" /> Current</Badge>
+              ) : (
+                <Badge variant="neutral">Up next</Badge>
+              )}
             </span>
-          </div>
-        </div>
+            <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-fg-muted">
+              <span>Milestone {sequenceNumber} of {sequenceTotal}</span>
+              <span>{formatDate(milestone.start_date)} → {formatDate(milestone.end_date)}</span>
+              <span>{milestone.done_tasks}/{milestone.total_tasks} tasks</span>
+            </span>
+            <span className="mt-2 flex max-w-xl items-center gap-2">
+              <Progress
+                value={milestone.progress_pct}
+                className="h-1.5 flex-1 bg-surface"
+                indicatorClassName={isComplete ? "bg-success" : "bg-accent"}
+              />
+              <span className={cn("w-9 text-right text-xs font-semibold", isComplete ? "text-success" : "text-accent")}>
+                {milestone.progress_pct}%
+              </span>
+            </span>
+          </span>
+          {isExpanded ? (
+            <ChevronDown className="h-5 w-5 shrink-0 text-accent" />
+          ) : (
+            <ChevronRight className="h-5 w-5 shrink-0 text-fg-subtle" />
+          )}
+        </button>
         <div className="flex items-center gap-2">
           <RiskBadge risk={milestone.risk_level} />
           <MilestoneDocumentsButton milestone={milestone} documents={documents} />
@@ -445,9 +591,13 @@ function MilestoneSwimlane({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 overflow-x-auto p-4 sm:grid-cols-2 lg:grid-cols-5">
+      {isExpanded && <div
+        id={`milestone-board-${milestone.id}`}
+        className="grid grid-cols-1 gap-3 overflow-x-auto bg-bg/45 p-4 sm:grid-cols-2 xl:grid-cols-5"
+      >
         {TASK_STATUS_OPTIONS.map((status) => {
           const dropOk = canDropIn(status);
+          const statusStyle = STATUS_COLUMN_STYLES[status];
           return (
             <div
               key={status}
@@ -465,16 +615,20 @@ function MilestoneSwimlane({
                 if (taskId) onMoveTask(taskId, status);
               }}
               className={cn(
-                "flex min-h-[80px] flex-col gap-2 rounded-md border border-border/60 bg-raised/40 p-2",
+                "flex min-h-28 flex-col gap-2 rounded-lg border p-2.5",
+                statusStyle.panel,
                 dragOverStatus === status && dropOk && "border-accent bg-accent-soft",
                 !dropOk && "opacity-60",
               )}
             >
-              <div className="flex items-center justify-between px-1">
-                <span className="text-xs font-semibold uppercase text-fg-subtle">
+              <div className="flex items-center justify-between px-0.5">
+                <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">
+                  <span className={cn("h-2 w-2 rounded-full", statusStyle.marker)} />
                   {TASK_STATUS_LABELS[status]}
                 </span>
-                <span className="text-xs text-fg-subtle">{byStatus.get(status)?.length ?? 0}</span>
+                <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-bold", statusStyle.count)}>
+                  {byStatus.get(status)?.length ?? 0}
+                </span>
               </div>
               {byStatus.get(status)?.map((task) => (
                 <TaskCard
@@ -501,13 +655,14 @@ function MilestoneSwimlane({
             </div>
           );
         })}
-      </div>
+      </div>}
 
       {canManage && (
         <TaskFormDialog
           open={taskFormOpen}
           onOpenChange={setTaskFormOpen}
           task={editingTask}
+          milestone={milestone}
           isPending={taskMut.create.isPending || taskMut.update.isPending}
           onSubmit={(payload) =>
             editingTask
