@@ -6,8 +6,8 @@ import type { ProjectStatus, TaskStatus } from "@/types";
 const TASK_VARIANT: Record<TaskStatus, "default" | "neutral" | "success" | "warning" | "danger"> = {
   todo: "neutral",
   in_progress: "default",
-  in_review: "default",
-  blocked: "warning",
+  in_review: "warning",
+  blocked: "danger",
   done: "success",
 };
 

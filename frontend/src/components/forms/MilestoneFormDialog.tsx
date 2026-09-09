@@ -1,4 +1,5 @@
-/** forms/MilestoneFormDialog.tsx — create/edit a milestone (dates clamp to project). */
+/** forms/MilestoneFormDialog.tsx — create/edit an ordered delivery milestone. */
+import { CalendarRange, Flag, Layers3, type LucideIcon } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 
 import { type MilestonePayload } from "@/api/milestones";
@@ -6,13 +7,13 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { getApiErrorMessage } from "@/lib/apiClient";
@@ -25,6 +26,8 @@ export function MilestoneFormDialog({
   milestone,
   project,
   defaultWorkstream = "project",
+  sequenceNumber,
+  suggestedSortOrder = 0,
   onSubmit,
   isPending,
 }: {
@@ -33,6 +36,8 @@ export function MilestoneFormDialog({
   milestone?: Milestone;
   project: Project;
   defaultWorkstream?: MilestoneWorkstream;
+  sequenceNumber: number;
+  suggestedSortOrder?: number;
   onSubmit: (payload: MilestonePayload) => Promise<unknown>;
   isPending?: boolean;
 }) {
@@ -40,13 +45,12 @@ export function MilestoneFormDialog({
   const [description, setDescription] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [workstream, setWorkstream] = useState<MilestoneWorkstream>("project");
   const [error, setError] = useState<string | null>(null);
 
   const projectStart = toInputDate(project.start_date) || undefined;
   const projectEnd = toInputDate(project.end_date) || undefined;
-  const minDate = workstream === "operations" ? projectEnd ?? projectStart : projectStart;
-  const maxDate = workstream === "operations" ? undefined : projectEnd;
+  const minDate = projectStart;
+  const maxDate = projectEnd;
 
   useEffect(() => {
     if (open) {
@@ -54,7 +58,6 @@ export function MilestoneFormDialog({
       setDescription(milestone?.description ?? "");
       setStartDate(toInputDate(milestone?.start_date));
       setEndDate(toInputDate(milestone?.end_date));
-      setWorkstream(milestone?.workstream ?? defaultWorkstream);
       setError(null);
     }
   }, [defaultWorkstream, open, milestone]);
@@ -62,13 +65,12 @@ export function MilestoneFormDialog({
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!title.trim()) return setError("Title is required.");
+    if (!startDate || !endDate) return setError("Add both dates so the milestone can be scheduled and tracked.");
     if (startDate && endDate && startDate > endDate)
       return setError("Start date must be on or before end date.");
     if (minDate && startDate && startDate < minDate)
       return setError(
-        workstream === "operations"
-          ? `Maintenance starts when the project ends (${minDate}) or later.`
-          : `Start date can't be before the project start (${minDate}).`,
+        `Start date can't be before the project start (${minDate}).`,
       );
     if (maxDate && endDate && endDate > maxDate)
       return setError(`End date can't be after the project end (${maxDate}).`);
@@ -78,7 +80,8 @@ export function MilestoneFormDialog({
         description: description || null,
         start_date: startDate || null,
         end_date: endDate || null,
-        workstream,
+        workstream: milestone?.workstream ?? defaultWorkstream,
+        sort_order: milestone?.sort_order ?? suggestedSortOrder,
       });
       onOpenChange(false);
     } catch (err) {
@@ -88,68 +91,133 @@ export function MilestoneFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
+      <DialogContent className="max-w-2xl gap-0 p-0">
+        <DialogHeader className="border-b border-border bg-accent-soft/45 px-6 py-5 pr-12">
           <DialogTitle>{milestone ? "Edit milestone" : "New milestone"}</DialogTitle>
+          <DialogDescription>
+            Define one measurable delivery stage. TrackerX opens milestones in sequence as work is completed.
+          </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="m-title">Title</Label>
-            <Input id="m-title" value={title} onChange={(e) => setTitle(e.target.value)} required />
+        <form onSubmit={handleSubmit}>
+          <div className="flex flex-col gap-5 px-6 py-5">
+            <section className="rounded-lg border border-border bg-surface p-4">
+              <SectionHeading icon={Flag} title="Milestone outcome" description="Name the result this stage must deliver." />
+              <div className="mt-4 space-y-3">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="m-title">Title</Label>
+                  <Input
+                    id="m-title"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="For example: Requirements approved"
+                    autoFocus
+                    required
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="m-desc">Success criteria</Label>
+                  <Textarea
+                    id="m-desc"
+                    rows={3}
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="What must be true before TrackerX marks this stage complete?"
+                  />
+                </div>
+              </div>
+            </section>
+
+            <section className="rounded-lg border border-border bg-surface p-4">
+              <SectionHeading icon={Layers3} title="Delivery sequence" description="This milestone is placed into the project delivery flow automatically." />
+              <div className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-accent/15 bg-accent-soft/40 px-4 py-3">
+                <div>
+                  <p className="text-sm font-semibold text-fg">Project Delivery</p>
+                  <p className="text-xs text-fg-muted">Complete all tasks here to close this milestone and open the next one.</p>
+                </div>
+                <span className="shrink-0 rounded-full bg-accent px-3 py-1 text-xs font-bold text-accent-fg">
+                  Step {sequenceNumber}
+                </span>
+              </div>
+            </section>
+
+            <section className="rounded-lg border border-border bg-surface p-4">
+              <SectionHeading icon={CalendarRange} title="Schedule" description="Dates are required to keep risk and delivery status meaningful." />
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="m-start">Start date</Label>
+                  <Input
+                    id="m-start"
+                    type="date"
+                    min={minDate}
+                    max={endDate || maxDate}
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="m-end">Target completion</Label>
+                  <Input
+                    id="m-end"
+                    type="date"
+                    min={startDate || minDate}
+                    max={maxDate}
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+              {(projectStart || projectEnd) && (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-fg-muted">
+                  <span>Project window: {projectStart ?? "Open"} → {projectEnd ?? "Open"}</span>
+                  {projectStart && projectEnd && (
+                    <button type="button" className="font-semibold text-accent hover:underline" onClick={() => { setStartDate(projectStart); setEndDate(projectEnd); }}>
+                      Use project dates
+                    </button>
+                  )}
+                </div>
+              )}
+            </section>
+
+            {error && (
+              <p role="alert" className="rounded-md border border-danger/20 bg-danger/5 px-3 py-2 text-sm text-danger">
+                {error}
+              </p>
+            )}
           </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="m-workstream">Kanban section</Label>
-            <Select
-              id="m-workstream"
-              value={workstream}
-              onChange={(event) => setWorkstream(event.target.value as MilestoneWorkstream)}
-            >
-              <option value="project">Project Delivery</option>
-              <option value="operations">Maintenance &amp; Operations</option>
-            </Select>
-            <p className="text-xs text-fg-muted">
-              Maintenance milestones appear in their own Kanban section and may continue after delivery ends.
-            </p>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="m-desc">Description</Label>
-            <Textarea id="m-desc" value={description} onChange={(e) => setDescription(e.target.value)} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="m-start">Start date</Label>
-              <Input
-                id="m-start"
-                type="date"
-                min={minDate}
-                max={maxDate}
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="m-end">End date</Label>
-              <Input
-                id="m-end"
-                type="date"
-                min={minDate}
-                max={maxDate}
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-              />
-            </div>
-          </div>
-          {error && <p className="text-sm text-danger">{error}</p>}
-          <DialogFooter>
+          <DialogFooter className="sticky bottom-0 border-t border-border bg-surface px-6 py-4">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
             <Button type="submit" disabled={isPending}>
-              {isPending && <Spinner />} Save
+              {isPending && <Spinner />} {milestone ? "Save changes" : "Create milestone"}
             </Button>
           </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function SectionHeading({
+  icon: Icon,
+  title,
+  description,
+}: {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+        <Icon className="h-4 w-4" />
+      </span>
+      <div>
+        <h3 className="font-display text-sm font-semibold text-fg">{title}</h3>
+        <p className="mt-0.5 text-xs text-fg-muted">{description}</p>
+      </div>
+    </div>
   );
 }

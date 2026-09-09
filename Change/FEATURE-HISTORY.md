@@ -16,6 +16,7 @@ Audit baseline: 5 September 2026. This inventory is reconstructed from the appli
 - Actual delivery projects and linked Maintenance & Support workspaces, including VerifyX-PSUT and VerifyX Maintenance & Support.
 - Project overview, milestone/task progress, delay/risk indicators, assignees, project GitHub links.
 - Kanban, milestone-grouped Gantt, workstreams, CSV import, task comments, multiple assignees, task status updates.
+- Progressive Kanban milestones: the current stage opens by default, fully completed stages collapse with a Done state, and the next ordered stage opens automatically. Milestone/task forms use guided outcome, ownership, schedule, status, and delay sections with milestone-bound date validation.
 - Dashboard project-progress presentation, reduced dashboard clutter, and task/milestone inspection.
 - Project documents grouped by category and milestone, uploads, safe previews, downloads, metadata editing; meeting records.
 
