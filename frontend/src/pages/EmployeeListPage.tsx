@@ -13,20 +13,22 @@
  */
 import {
   ArrowRight,
-  BriefcaseBusiness,
+  BadgeCheck,
   ChevronDown,
   ChevronRight,
+  Clock3,
   FolderPlus,
   KeyRound,
   ListChecks,
   Pencil,
   Plus,
   Search,
-  ShieldCheck,
   Trash2,
   UserCircle,
   UserCheck,
+  UserRoundCog,
   Users,
+  type LucideIcon,
 } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -40,10 +42,10 @@ import {
   updateMember,
   type TeamMemberPayload,
 } from "@/api/team";
+import { updateProjectManager } from "@/api/projects";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { KpiCard } from "@/components/dashboard/KpiCard";
+import { Card } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -58,13 +60,32 @@ import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Select } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
+import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/context/AuthContext";
 import { useTeam } from "@/hooks/useTeam";
 import { useProjects } from "@/hooks/useProjects";
 import { getApiErrorMessage } from "@/lib/apiClient";
 import { timeGreeting } from "@/lib/greeting";
 import { useQueryClient } from "@tanstack/react-query";
-import type { EmployeeAccountRole, TeamMember } from "@/types";
+import type { EmployeeAccountRole, EmploymentType, Project, TeamMember } from "@/types";
+
+const EMPLOYMENT_OPTIONS: { value: EmploymentType; label: string }[] = [
+  { value: "full_time", label: "Full-time" },
+  { value: "part_time", label: "Part-time" },
+  { value: "contractor", label: "Contractor" },
+  { value: "intern", label: "Intern" },
+];
+
+function employmentLabel(value: EmploymentType) {
+  return EMPLOYMENT_OPTIONS.find((option) => option.value === value)?.label ?? "Full-time";
+}
+
+function accountRoleLabel(role: EmployeeAccountRole | null) {
+  if (role === "admin") return "Administrator";
+  if (role === "pm") return "Project manager";
+  if (role === "developer") return "Employee";
+  return "No login";
+}
 
 export function EmployeeListPage() {
   const { isAdmin, isPrimaryAdmin, user } = useAuth();
@@ -78,6 +99,8 @@ export function EmployeeListPage() {
   const [error, setError] = useState<string | null>(null);
   const [showDeactivated, setShowDeactivated] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [employmentFilter, setEmploymentFilter] = useState<"all" | EmploymentType>("all");
+  const [accessFilter, setAccessFilter] = useState<"all" | "manager" | "employee" | "no_login">("all");
 
   // Credential and access state (admin only)
   const [credentialTarget, setCredentialTarget] = useState<TeamMember | null>(null);
@@ -94,6 +117,7 @@ export function EmployeeListPage() {
   const [selectedProjectIds, setSelectedProjectIds] = useState<number[]>([]);
   const [projectSaving, setProjectSaving] = useState(false);
   const [projectError, setProjectError] = useState<string | null>(null);
+  const [managerSavingProjectId, setManagerSavingProjectId] = useState<number | null>(null);
 
   // Delegate state
   const [delegateTarget, setDelegateTarget] = useState<TeamMember | null>(null);
@@ -102,27 +126,50 @@ export function EmployeeListPage() {
 
   // Form state
   const [name, setName] = useState("");
+  const [nameArabic, setNameArabic] = useState("");
   const [role, setRole] = useState("");
+  const [roleDescription, setRoleDescription] = useState("");
+  const [employmentType, setEmploymentType] = useState<EmploymentType>("full_time");
+  const [weeklyHours, setWeeklyHours] = useState("40");
 
   const rows = members ?? [];
   const allActiveMembers = rows.filter((m) => m.is_active);
   const normalizedSearch = searchQuery.trim().toLowerCase();
-  const matchesSearch = (member: TeamMember) =>
-    !normalizedSearch ||
-    member.employee_number.includes(normalizedSearch) ||
-    member.name.toLowerCase().includes(normalizedSearch) ||
-    member.role?.toLowerCase().includes(normalizedSearch) ||
-    member.projects.some((project) => project.name.toLowerCase().includes(normalizedSearch));
+  const matchesSearch = (member: TeamMember) => {
+    const searchMatches =
+      !normalizedSearch ||
+      member.employee_number.includes(normalizedSearch) ||
+      member.name.toLowerCase().includes(normalizedSearch) ||
+      member.role?.toLowerCase().includes(normalizedSearch) ||
+      member.projects.some((project) => project.name.toLowerCase().includes(normalizedSearch));
+    const employmentMatches = employmentFilter === "all" || member.employment_type === employmentFilter;
+    const accessMatches = accessFilter === "all" ||
+      (accessFilter === "manager" && member.account_role === "pm") ||
+      (accessFilter === "employee" && member.has_login && member.account_role === "developer") ||
+      (accessFilter === "no_login" && !member.has_login);
+    return searchMatches && employmentMatches && accessMatches;
+  };
   const activeMembers = allActiveMembers.filter(matchesSearch);
   const deactivatedMembers = rows.filter((m) => !m.is_active && matchesSearch(m));
   const assignedProjectCount = new Set(rows.flatMap((member) => member.projects.map((project) => project.id))).size;
   const linkedLogins = rows.filter((member) => member.has_login && member.login_enabled).length;
   const openTasks = rows.reduce((total, member) => total + member.total_tasks - member.done_tasks, 0);
+  const projectManagers = rows.filter((member) => member.account_role === "pm" && member.login_enabled).length;
+  const canReceiveLeadership = Boolean(
+    projectTarget?.account_role === "pm" &&
+    projectTarget.login_enabled &&
+    projectTarget.access_level === "write" &&
+    projectTarget.is_active,
+  );
 
   function openCreate() {
     setEditing(null);
     setName("");
+    setNameArabic("");
     setRole("");
+    setRoleDescription("");
+    setEmploymentType("full_time");
+    setWeeklyHours("40");
     setError(null);
     setFormOpen(true);
   }
@@ -130,7 +177,11 @@ export function EmployeeListPage() {
   function openEdit(member: TeamMember) {
     setEditing(member);
     setName(member.name);
+    setNameArabic(member.name_arabic ?? "");
     setRole(member.role ?? "");
+    setRoleDescription(member.role_description ?? "");
+    setEmploymentType(member.employment_type);
+    setWeeklyHours(member.weekly_hours != null ? String(member.weekly_hours) : "");
     setError(null);
     setFormOpen(true);
   }
@@ -155,6 +206,25 @@ export function EmployeeListPage() {
     setProjectTarget(member);
     setSelectedProjectIds(member.assigned_project_ids);
     setProjectError(null);
+    setManagerSavingProjectId(null);
+  }
+
+  async function handleAssignProjectManager(project: Project) {
+    if (!projectTarget || !isPrimaryAdmin || !canReceiveLeadership) return;
+    setManagerSavingProjectId(project.id);
+    setProjectError(null);
+    try {
+      await updateProjectManager(project.id, { project_manager_id: projectTarget.id });
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["team"] }),
+        qc.invalidateQueries({ queryKey: ["projects"] }),
+        qc.invalidateQueries({ queryKey: ["project", project.id] }),
+      ]);
+    } catch (requestError) {
+      setProjectError(getApiErrorMessage(requestError, "Could not assign project leadership."));
+    } finally {
+      setManagerSavingProjectId(null);
+    }
   }
 
   function toggleProject(projectId: number) {
@@ -215,7 +285,20 @@ export function EmployeeListPage() {
     setSaving(true);
     setError(null);
     try {
-      const payload: TeamMemberPayload = { name: name.trim(), role: role.trim() || null };
+      const hours = weeklyHours.trim() ? Number(weeklyHours) : null;
+      if (hours != null && (!Number.isFinite(hours) || hours < 1 || hours > 80)) {
+        setError("Weekly hours must be between 1 and 80.");
+        setSaving(false);
+        return;
+      }
+      const payload: TeamMemberPayload = {
+        name: name.trim(),
+        name_arabic: nameArabic.trim() || null,
+        role: role.trim() || null,
+        role_description: roleDescription.trim() || null,
+        employment_type: employmentType,
+        weekly_hours: hours,
+      };
       if (editing) {
         await updateMember(editing.id, payload);
       } else {
@@ -259,72 +342,73 @@ export function EmployeeListPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <Card className="relative overflow-hidden border-accent/20 bg-gradient-to-br from-accent via-accent to-accent-hover px-6 py-6 text-white shadow-lg">
-        <div className="absolute -right-16 -top-20 h-56 w-56 rounded-full bg-white/10" />
-        <div className="relative flex flex-wrap items-center justify-between gap-4">
+      <section className="overflow-hidden rounded-2xl border border-accent/20 bg-surface shadow-card">
+        <div className="relative overflow-hidden bg-accent px-5 py-5 text-white sm:px-6">
+          <div className="absolute -right-20 -top-24 h-64 w-64 rounded-full border-[38px] border-white/5" />
+          <div className="relative flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/12"><Users className="h-5 w-5" /></span>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="font-display text-2xl font-bold tracking-tight">Workforce control center</h1>
+                  <Badge className="border border-white/20 bg-white/10 text-white">{isPrimaryAdmin ? "Owner controls" : isAdmin ? "Admin controls" : "Read only"}</Badge>
+                </div>
+                <p className="mt-1 max-w-2xl text-sm text-white/75">
+                  {timeGreeting()}, {user?.full_name ?? "Manager"}. Manage employment, job roles, access, project scope, and workload from one structured roster.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" variant="subtle" className="border-white/15 bg-white/10 text-white hover:bg-white/20" asChild>
+                <Link to="/attendance">Attendance <ArrowRight className="h-4 w-4" /></Link>
+              </Button>
+              {isAdmin && <Button size="sm" className="bg-white text-accent hover:bg-white/90" onClick={openCreate}><Plus className="h-4 w-4" /> Add employee</Button>}
+            </div>
+          </div>
+        </div>
+        <div className="grid divide-y divide-border bg-surface sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-4">
+          <WorkforceMetric icon={UserCheck} label="Active people" value={allActiveMembers.length} detail={`${rows.length - allActiveMembers.length} inactive`} />
+          <WorkforceMetric icon={UserRoundCog} label="Project managers" value={projectManagers} detail={isPrimaryAdmin ? "Owner-assigned leadership" : "Active PM accounts"} />
+          <WorkforceMetric icon={KeyRound} label="Portal access" value={`${linkedLogins}/${rows.length}`} detail="Enabled employee logins" />
+          <WorkforceMetric icon={ListChecks} label="Open workload" value={openTasks} detail={`${assignedProjectCount} projects covered`} />
+        </div>
+      </section>
+
+      <Card className="overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
           <div>
-            <Badge className="border border-white/20 bg-white/10 text-white">
-              <ShieldCheck className="h-3.5 w-3.5" /> Employee control center
-            </Badge>
-            <h1 className="mt-3 font-display text-3xl font-bold tracking-tight">
-              {timeGreeting()}, {user?.full_name ?? "Manager"}
-            </h1>
-            <p className="mt-1 text-sm text-white/75">
-              Keep people, assigned projects, workload, credentials, and access in one current view.
-            </p>
+            <h2 className="font-display text-xl font-bold text-fg">Employee roster</h2>
+            <p className="text-xs text-fg-muted">Personal profile, employment, system role, project responsibility, and live workload.</p>
           </div>
-          <Button size="sm" className="bg-white text-accent hover:bg-white/90" asChild>
-            <Link to="/attendance">Open attendance <ArrowRight className="h-4 w-4" /></Link>
-          </Button>
+          <Badge variant="neutral">{activeMembers.length} shown</Badge>
         </div>
-      </Card>
-
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard label="Active employees" value={allActiveMembers.length} description="Current team members" icon={UserCheck} />
-        <KpiCard label="Assigned projects" value={assignedProjectCount} description="Admin and task-linked access" icon={BriefcaseBusiness} />
-        <KpiCard label="Enabled logins" value={`${linkedLogins}/${rows.length}`} description="Employees with TrackerX access" icon={KeyRound} accent="success" />
-        <KpiCard label="Open assignments" value={openTasks} description="Tasks not completed" icon={ListChecks} />
-      </div>
-
-      <div className="relative sm:hidden">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-subtle" />
-        <Input className="pl-9" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search people, roles, or projects" />
-      </div>
-
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="font-display text-2xl font-bold text-fg">Employee directory</h2>
-          <p className="text-sm text-fg-muted">
-            {allActiveMembers.length} active · {rows.length - allActiveMembers.length} deactivated
-          </p>
+        <div className="grid gap-3 border-b border-border bg-raised/35 p-4 lg:grid-cols-[minmax(260px,1fr)_190px_190px_auto]">
+          <div className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-subtle" /><Input className="bg-surface pl-9" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search employee, ID, role, or project" /></div>
+          <Select value={employmentFilter} onChange={(event) => setEmploymentFilter(event.target.value as "all" | EmploymentType)}>
+            <option value="all">All employment types</option>
+            {EMPLOYMENT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </Select>
+          <Select value={accessFilter} onChange={(event) => setAccessFilter(event.target.value as typeof accessFilter)}>
+            <option value="all">All account roles</option>
+            <option value="manager">Project managers</option>
+            <option value="employee">Employees</option>
+            <option value="no_login">No portal login</option>
+          </Select>
+          <Button variant="ghost" size="sm" onClick={() => { setSearchQuery(""); setEmploymentFilter("all"); setAccessFilter("all"); }}>Clear filters</Button>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="relative hidden sm:block">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-subtle" />
-            <Input className="w-72 pl-9" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search people, roles, or projects" />
-          </div>
-          {isAdmin && (
-            <Button size="sm" onClick={openCreate}>
-              <Plus className="h-4 w-4" /> Add employee
-            </Button>
-          )}
-        </div>
-      </div>
 
       {/* ---- Active Employees ---- */}
       {activeMembers.length === 0 ? (
-        <EmptyState
-          title="No active employees"
-          description={normalizedSearch ? "No employee matches this search." : "Import a CSV or add one from the button above."}
-        />
+        <div className="p-6"><EmptyState title="No employees match" description="Clear or adjust the roster filters." /></div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="divide-y divide-border">
           {activeMembers.map((m) => (
-            <EmployeeCard
+            <EmployeeRow
               key={m.id}
               member={m}
               isDeactivated={false}
               isAdmin={isAdmin}
+              isPrimaryAdmin={isPrimaryAdmin}
               onViewProfile={() => navigate(`/employees/${m.id}`)}
               onEdit={() => openEdit(m)}
               onDelete={() => handleDelete(m)}
@@ -335,6 +419,7 @@ export function EmployeeListPage() {
           ))}
         </div>
       )}
+      </Card>
 
       {/* ---- Deactivated Employees ---- */}
       {deactivatedMembers.length > 0 && (
@@ -353,13 +438,14 @@ export function EmployeeListPage() {
           </button>
 
           {showDeactivated && (
-            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <Card className="mt-3 divide-y divide-border overflow-hidden">
               {deactivatedMembers.map((m) => (
-                <EmployeeCard
+                <EmployeeRow
                   key={m.id}
                   member={m}
                   isDeactivated
                   isAdmin={isAdmin}
+                  isPrimaryAdmin={isPrimaryAdmin}
                   onViewProfile={() => navigate(`/employees/${m.id}`)}
                   onEdit={() => openEdit(m)}
                   onDelete={() => handleDelete(m)}
@@ -368,7 +454,7 @@ export function EmployeeListPage() {
                   onProjects={() => openProjectAssignments(m)}
                 />
               ))}
-            </div>
+            </Card>
           )}
         </div>
       )}
@@ -376,17 +462,21 @@ export function EmployeeListPage() {
       {/* Create / Edit form dialog */}
       {formOpen && (
         <Dialog open onOpenChange={() => setFormOpen(false)}>
-          <DialogContent>
+          <DialogContent className="sm:max-w-xl">
             <DialogHeader>
-              <DialogTitle>{editing ? "Edit employee" : "Add employee"}</DialogTitle>
+              <DialogTitle>{editing ? "Edit employment profile" : "Add employee"}</DialogTitle>
             </DialogHeader>
-            <div className="flex flex-col gap-4">
+            <div className="grid gap-4 sm:grid-cols-2">
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="e-name">Name</Label>
+                <Label htmlFor="e-name">English name</Label>
                 <Input id="e-name" value={name} onChange={(e) => setName(e.target.value)} required />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="e-role">Role</Label>
+                <Label htmlFor="e-name-ar">Arabic name</Label>
+                <Input id="e-name-ar" dir="rtl" lang="ar" value={nameArabic} onChange={(event) => setNameArabic(event.target.value)} placeholder="الاسم باللغة العربية" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="e-role">Job role</Label>
                 <Input
                   id="e-role"
                   value={role}
@@ -394,7 +484,24 @@ export function EmployeeListPage() {
                   placeholder="e.g. Backend Engineer"
                 />
               </div>
-              {error && <p className="text-sm text-danger">{error}</p>}
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="e-employment">Employment type</Label>
+                <Select id="e-employment" value={employmentType} onChange={(event) => setEmploymentType(event.target.value as EmploymentType)}>
+                  {EMPLOYMENT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </Select>
+              </div>
+              <div className="flex flex-col gap-1.5 sm:col-span-2">
+                <Label htmlFor="e-role-description">Role responsibilities</Label>
+                <Textarea id="e-role-description" rows={3} value={roleDescription} onChange={(event) => setRoleDescription(event.target.value)} placeholder="Responsibilities, expertise, and scope" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="e-hours">Weekly hours</Label>
+                <Input id="e-hours" type="number" min={1} max={80} step={0.5} value={weeklyHours} onChange={(event) => setWeeklyHours(event.target.value)} placeholder="40" />
+              </div>
+              <div className="rounded-lg border border-accent/15 bg-accent-soft/60 p-3 text-xs leading-relaxed text-fg-muted sm:col-span-2">
+                Job role describes the employee’s profession. Employment type and weekly hours describe their working arrangement. Portal permissions and project leadership are managed separately.
+              </div>
+              {error && <p className="text-sm text-danger sm:col-span-2">{error}</p>}
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setFormOpen(false)}>
@@ -462,12 +569,19 @@ export function EmployeeListPage() {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <FolderPlus className="h-5 w-5" />
-                Assign projects · {projectTarget.name}
+                Project scope &amp; leadership · {projectTarget.name}
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
-              <div className="rounded-lg border border-accent/15 bg-accent-soft p-3 text-sm text-fg-muted">
-                Selected projects become available in this employee’s TrackerX workspace. Task-linked access is shown separately and remains available while the employee has assigned work.
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-lg border border-accent/15 bg-accent-soft p-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-accent">Workspace scope</p>
+                  <p className="mt-1 text-xs leading-relaxed text-fg-muted">Controls which project workspaces this employee can open. Task-linked access remains while assigned work is open.</p>
+                </div>
+                <div className="rounded-lg border border-success/20 bg-success/5 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-success">Project leadership</p>
+                  <p className="mt-1 text-xs leading-relaxed text-fg-muted">Only the owner can name a project manager. PM leadership is independent for every project.</p>
+                </div>
               </div>
               {projectsQuery.isLoading ? (
                 <div className="flex justify-center py-8"><Spinner /></div>
@@ -482,28 +596,35 @@ export function EmployeeListPage() {
                     const taskLinked = projectTarget.projects.some(
                       (item) => item.id === project.id && item.assignment_source !== "admin",
                     );
+                    const isManaged = project.project_manager_id === projectTarget.id;
                     return (
-                      <label
+                      <div
                         key={project.id}
-                        className={`flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-colors ${
-                          checked ? "border-accent bg-accent-soft" : "border-border hover:bg-raised/50"
+                        className={`flex flex-wrap items-center gap-3 rounded-lg border p-3 transition-colors ${
+                          checked ? "border-accent/35 bg-accent-soft/60" : "border-border bg-surface"
                         }`}
                       >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => toggleProject(project.id)}
-                          className="h-4 w-4 accent-[var(--accent)]"
-                        />
+                        <label className="flex cursor-pointer items-center gap-3">
+                          <input type="checkbox" checked={checked} onChange={() => toggleProject(project.id)} className="h-4 w-4 accent-[var(--accent)]" />
+                        </label>
                         <span className="min-w-0 flex-1">
                           <span className="block truncate font-medium text-fg">{project.name}</span>
-                          <span className="mt-0.5 block text-xs capitalize text-fg-muted">{project.status.replace("_", " ")}</span>
+                          <span className="mt-0.5 block text-xs capitalize text-fg-muted">{project.status.replace("_", " ")} · PM: {project.project_manager_name ?? "Not assigned"}</span>
                         </span>
                         {taskLinked && <Badge variant="outline" className="text-[10px]">Task-linked</Badge>}
-                        {checked && <Badge variant="success" className="text-[10px]">Admin assigned</Badge>}
-                      </label>
+                        {isManaged ? <Badge variant="success" className="text-[10px]"><BadgeCheck className="h-3 w-3" /> Managed</Badge> : isPrimaryAdmin && canReceiveLeadership ? (
+                          <Button type="button" variant="outline" size="sm" disabled={managerSavingProjectId != null} onClick={() => handleAssignProjectManager(project)}>
+                            {managerSavingProjectId === project.id ? <Spinner /> : <UserRoundCog className="h-3.5 w-3.5" />} Assign as PM
+                          </Button>
+                        ) : null}
+                      </div>
                     );
                   })}
+                </div>
+              )}
+              {isPrimaryAdmin && !canReceiveLeadership && (
+                <div className="rounded-lg border border-warning/25 bg-warning/5 px-3 py-2 text-xs text-fg-muted">
+                  To assign project leadership, first use <strong>Access &amp; role</strong> to give this active employee an enabled Project Manager account with read &amp; write permission.
                 </div>
               )}
               <div className="flex items-center justify-between rounded-lg bg-raised/60 px-3 py-2 text-sm">
@@ -538,7 +659,7 @@ export function EmployeeListPage() {
             </DialogHeader>
             <div className="flex flex-col gap-4">
               <div className="rounded-md border border-border bg-raised/50 p-3 text-sm text-fg-muted">
-                The admin controls this employee’s login and permission. A new or reset password is temporary, and the employee must replace it after signing in.
+                Login identity, portal role, and permission are separate from the employee’s job title. A new or reset password is temporary and must be replaced after sign-in.
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="credential-email">Login email</Label>
@@ -572,7 +693,7 @@ export function EmployeeListPage() {
                     onChange={(event) => {
                       const nextRole = event.target.value as EmployeeAccountRole;
                       setAccountRole(nextRole);
-                      if (nextRole === "admin") setAccessLevel("write");
+                      if (nextRole === "admin" || nextRole === "pm") setAccessLevel("write");
                     }}
                   >
                     <option value="developer">Employee</option>
@@ -580,7 +701,7 @@ export function EmployeeListPage() {
                     <option value="admin">Administrator</option>
                   </Select>
                   <p className="text-xs text-fg-muted">
-                    Only the primary admin can assign project-manager or administrator roles.
+                    Only the owner can grant or remove project-manager and administrator roles.
                   </p>
                 </div>
               ) : (
@@ -597,15 +718,15 @@ export function EmployeeListPage() {
                 <Select
                   id="credential-access"
                   value={accessLevel}
-                  disabled={accountRole === "admin"}
+                  disabled={accountRole === "admin" || accountRole === "pm"}
                   onChange={(event) => setAccessLevel(event.target.value as "read" | "write")}
                 >
                   <option value="read">Read only</option>
                   <option value="write">Read &amp; write</option>
                 </Select>
                 <p className="text-xs text-fg-muted">
-                  {accountRole === "admin"
-                    ? "Administrator accounts always have read and write permission."
+                  {accountRole === "admin" || accountRole === "pm"
+                    ? `${accountRole === "admin" ? "Administrator" : "Project Manager"} accounts require read and write permission.`
                     : "Write permission enables the actions available to this account role."}
                 </p>
               </div>
@@ -634,12 +755,18 @@ export function EmployeeListPage() {
   );
 }
 
-// ---------- Card Component ----------
+function WorkforceMetric({ icon: Icon, label, value, detail }: { icon: LucideIcon; label: string; value: string | number; detail: string }) {
+  return <div className="flex items-center gap-3 px-5 py-4">
+    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent"><Icon className="h-5 w-5" /></span>
+    <span><span className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-fg-subtle">{label}</span><span className="mt-0.5 flex items-baseline gap-2"><strong className="font-display text-xl text-fg">{value}</strong><span className="text-xs text-fg-muted">{detail}</span></span></span>
+  </div>;
+}
 
-function EmployeeCard({
+function EmployeeRow({
   member,
   isDeactivated,
   isAdmin,
+  isPrimaryAdmin,
   onViewProfile,
   onEdit,
   onDelete,
@@ -650,6 +777,7 @@ function EmployeeCard({
   member: TeamMember;
   isDeactivated: boolean;
   isAdmin: boolean;
+  isPrimaryAdmin: boolean;
   onViewProfile: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -657,107 +785,55 @@ function EmployeeCard({
   onCredentials: () => void;
   onProjects: () => void;
 }) {
-  const isOwner = member.role === "Owner";
+  const isOwner = member.is_primary_admin;
+  const openTasks = member.total_tasks - member.done_tasks;
+  const managedProjects = member.projects.filter((project) => project.leadership_role === "project_manager");
+  const initials = member.name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
+  const canManageAccount = isPrimaryAdmin || (member.account_role !== "admin" && member.account_role !== "pm");
+  const canEditProfile = isPrimaryAdmin || !member.is_primary_admin;
 
   return (
-    <Card className={isDeactivated ? "opacity-50" : ""}>
-      <CardContent className="flex items-center gap-3 pt-5">
+    <div className={`grid gap-4 p-4 transition-colors hover:bg-raised/30 md:grid-cols-[minmax(210px,1.3fr)_140px_minmax(170px,1fr)_auto] md:items-center ${isDeactivated ? "opacity-55" : ""}`}>
+      <div className="flex min-w-0 items-center gap-3">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent-soft font-display text-sm font-bold text-accent">{initials}</span>
         <button
           type="button"
-          className="flex flex-1 items-center gap-3 rounded-lg text-left outline-none transition-colors hover:text-accent focus-visible:ring-2 focus-visible:ring-ring"
+          className="min-w-0 rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
           onClick={onViewProfile}
         >
-          <UserCircle className="h-8 w-8 text-fg-muted shrink-0" />
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <Badge variant="outline" className="font-mono text-[10px]">
-                ID {member.employee_number}
-              </Badge>
-              <p className="truncate font-medium text-fg">{member.name}</p>
-              {isOwner && (
-                <Badge
-                  variant="neutral"
-                  className="border-amber-500/50 bg-amber-500/10 text-amber-700 text-[10px]"
-                >
-                  Owner
-                </Badge>
-              )}
-              {member.account_role === "admin" && (
-                <Badge variant="success" className="text-[10px]">
-                  Admin privileges
-                </Badge>
-              )}
-              {member.is_primary_admin && (
-                <Badge variant="default" className="text-[10px]">
-                  Primary admin
-                </Badge>
-              )}
-              {isDeactivated && !isOwner && (
-                <span className="text-[10px] text-fg-subtle">· Inactive</span>
-              )}
-            </div>
-            <p className="text-xs text-fg-muted">{member.role ?? "—"}</p>
-            {member.name_arabic && <p className="truncate text-xs text-fg-subtle" dir="rtl" lang="ar">{member.name_arabic}</p>}
-            <p className="text-xs text-fg-subtle">
-              {member.task_count} task{member.task_count !== 1 ? "s" : ""}
-              {member.has_login && (
-                <Badge variant="neutral" className="ml-1 text-[10px]">
-                  {member.login_enabled ? member.access_level : "disabled"}
-                </Badge>
-              )}
-            </p>
-            <p className="mt-1 text-xs text-fg-muted">
-              {member.projects.length} assigned project{member.projects.length !== 1 ? "s" : ""}
-            </p>
-            {member.projects.length > 0 && (
-              <div className="mt-1.5 flex flex-wrap gap-1">
-                {member.projects.slice(0, 2).map((project) => (
-                  <Badge key={project.id} variant="outline" className="max-w-[150px] truncate text-[10px]">
-                    {project.leadership_role === "project_manager" ? "PM · " : ""}
-                    {project.name}
-                  </Badge>
-                ))}
-                {member.projects.length > 2 && <Badge variant="neutral" className="text-[10px]">+{member.projects.length - 2}</Badge>}
-              </div>
-            )}
-          </div>
+          <span className="flex flex-wrap items-center gap-1.5"><span className="truncate font-semibold text-fg hover:text-accent">{member.name}</span>{isOwner && <Badge className="bg-accent text-white">Owner</Badge>}{member.account_role === "pm" && <Badge variant="success">PM</Badge>}{isDeactivated && <Badge variant="neutral">Inactive</Badge>}</span>
+          <span className="mt-0.5 block truncate text-xs text-fg-muted">ID {member.employee_number} · {member.role ?? "Job role not set"}</span>
+          {member.name_arabic && <span className="mt-0.5 block truncate text-xs text-fg-subtle" dir="rtl" lang="ar">{member.name_arabic}</span>}
         </button>
-        {isAdmin && (
-          <div className="flex gap-0.5">
-            {isDeactivated ? (
-              <Button variant="outline" size="sm" onClick={onDelegate}>
-                <Users className="h-3.5 w-3.5" /> Delegate
-              </Button>
-            ) : (
-              <>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  title="Assign project workspaces"
-                  onClick={onProjects}
-                >
-                  <FolderPlus className="h-3.5 w-3.5" /> Projects
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label={`Manage ${member.name} credentials`}
-                  title="Credentials and access"
-                  onClick={onCredentials}
-                >
-                  <KeyRound className="h-3.5 w-3.5" />
-                </Button>
-                <Button variant="ghost" size="icon" onClick={onEdit}>
-                  <Pencil className="h-3.5 w-3.5" />
-                </Button>
-                <Button variant="ghost" size="icon" onClick={onDelete}>
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </>
-            )}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+      </div>
+
+      <div>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-fg-subtle">Employment</p>
+        <p className="mt-1 text-sm font-semibold text-fg">{employmentLabel(member.employment_type)}</p>
+        <p className="mt-0.5 flex items-center gap-1 text-xs text-fg-muted"><Clock3 className="h-3 w-3" /> {member.weekly_hours != null ? `${member.weekly_hours} hours / week` : "Hours not set"}</p>
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-2 text-xs"><span className="text-fg-muted">Workload</span><span className="font-semibold text-fg">{openTasks} open · {member.active_est_days}d</span></div>
+        <div className="h-1.5 overflow-hidden rounded-full bg-raised"><div className="h-full rounded-full bg-accent" style={{ width: `${Math.min(100, member.total_tasks ? (member.done_tasks / member.total_tasks) * 100 : 0)}%` }} /></div>
+        <div className="flex flex-wrap gap-1">
+          <Badge variant="outline">{member.projects.length} project{member.projects.length === 1 ? "" : "s"}</Badge>
+          {managedProjects.length > 0 && <Badge variant="success">Leads {managedProjects.length}</Badge>}
+          <Badge variant={member.login_enabled ? "neutral" : "outline"}>{accountRoleLabel(member.account_role)}{member.has_login ? ` · ${member.login_enabled ? member.access_level : "disabled"}` : ""}</Badge>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-1.5 md:w-[156px] md:justify-end">
+        <Button variant="outline" size="sm" onClick={onViewProfile}><UserCircle className="h-3.5 w-3.5" /> Profile</Button>
+        {isAdmin && (isDeactivated ? <Button variant="outline" size="sm" onClick={onDelegate}><Users className="h-3.5 w-3.5" /> Delegate</Button> : <>
+          <Button variant="outline" size="sm" className="w-full justify-start" onClick={onProjects}><FolderPlus className="h-3.5 w-3.5" /> {isPrimaryAdmin && member.account_role === "pm" ? "Projects & PM" : "Project scope"}</Button>
+          {canManageAccount && <Button variant="outline" size="sm" className="w-full justify-start" onClick={onCredentials}><KeyRound className="h-3.5 w-3.5" /> Access & role</Button>}
+          <span className="ml-auto flex">
+            {canEditProfile && <Button variant="ghost" size="icon" aria-label={`Edit ${member.name}`} title="Edit employment profile" onClick={onEdit}><Pencil className="h-3.5 w-3.5" /></Button>}
+            {!isOwner && <Button variant="ghost" size="icon" aria-label={`Deactivate ${member.name}`} title="Deactivate employee" className="text-fg-subtle hover:bg-danger/10 hover:text-danger" onClick={onDelete}><Trash2 className="h-3.5 w-3.5" /></Button>}
+          </span>
+        </>)}
+      </div>
+    </div>
   );
 }

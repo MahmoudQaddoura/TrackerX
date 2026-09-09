@@ -1,6 +1,6 @@
 # Codebase Documentation — Project Task Tracker
 
-A full-stack project management tool: **FastAPI + SQLite** backend and a **React + TypeScript (Vite)** frontend. Projects → Milestones → Tasks, plus a team directory, document repository, sprint meeting minutes, comments, dashboards with charts, and a Gantt timeline. Two roles: **PM** (full edit) and **Owner** (read-only, can download documents and leave comments).
+A full-stack project management tool: **FastAPI + SQLite** backend and a **React + TypeScript (Vite)** frontend. Projects → Milestones → Tasks, plus workforce management, attendance and leave, asset inventory, service reporting, client delivery, documents, meetings, dashboards, and Gantt timelines. The permission model distinguishes the owner/primary administrator, administrators, project managers, employees, and clients.
 
 Design principle carried over from the original prototype: **one file, one purpose**, fully documented. This file is the map.
 
@@ -152,6 +152,9 @@ Prototype/
 | Project team | Assign managers and members | Replace the roster of each project they lead | No roster management | Hidden |
 | Attendance and leave | Company-wide sheet and request review | Own records and requests only | Own records and requests only | Not available |
 | Employee profiles | Full directory and private files | Read-only directory; own private profile | Own private profile | Not available |
+| Employment records | Manage job role, employment type, and weekly hours | Read-only workforce view | Own profile | Not available |
+| Login roles | Owner assigns/removes privileged roles; admins manage ordinary access | No access administration | Change own password | Not available |
+| Project leadership | Owner assigns an eligible write-enabled PM | Lead only named projects; may lead multiple | Not available | Hidden |
 | Client administration | Full | Not available | Not available | Own portal only |
 | Notifications | Project activity | Team/task updates for managed projects | Project/task assignments and coverage | Forwarded-report inbox |
 

@@ -11,7 +11,7 @@ Deletion is a soft delete (is_active -> 0) so historical task assignments
 and attribution survive a person leaving.
 """
 
-from sqlalchemy import Column, ForeignKey, Integer, Text
+from sqlalchemy import CheckConstraint, Column, Float, ForeignKey, Integer, Text
 from sqlalchemy.orm import relationship
 
 from app.db import Base, now_iso
@@ -26,6 +26,8 @@ class TeamMember(Base):
     name_arabic = Column(Text, nullable=True)
     role = Column(Text, nullable=True)  # free text, e.g. "Backend Engineer"
     role_description = Column(Text, nullable=True)
+    employment_type = Column(Text, nullable=False, default="full_time")
+    weekly_hours = Column(Float, nullable=True, default=40.0)
     is_active = Column(Integer, nullable=False, default=1)  # 0/1 boolean
     user_id = Column(
         Integer, ForeignKey("users.id", ondelete="SET NULL"), unique=True, nullable=True
@@ -65,3 +67,14 @@ class TeamMember(Base):
         cascade="all, delete-orphan",
     )
     user = relationship("User")
+
+    __table_args__ = (
+        CheckConstraint(
+            "employment_type IN ('full_time','part_time','contractor','intern')",
+            name="ck_team_member_employment_type",
+        ),
+        CheckConstraint(
+            "weekly_hours IS NULL OR (weekly_hours >= 1 AND weekly_hours <= 80)",
+            name="ck_team_member_weekly_hours",
+        ),
+    )

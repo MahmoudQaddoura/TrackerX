@@ -170,6 +170,8 @@ def team_member_out(member) -> dict:
         "name_arabic": member.name_arabic,
         "role": member.role,
         "role_description": member.role_description,
+        "employment_type": member.employment_type or "full_time",
+        "weekly_hours": member.weekly_hours,
         "is_active": bool(member.is_active),
         "task_count": len(tasks),
         "total_tasks": len(tasks),

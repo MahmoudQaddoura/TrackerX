@@ -153,6 +153,16 @@ def update_project_manager(
         raise HTTPException(status_code=422, detail="The selected employee no longer exists.")
     if not bool(manager.is_active):
         raise HTTPException(status_code=422, detail=f"{manager.name} is not an active employee.")
+    if (
+        manager.user is None
+        or manager.user.role != "pm"
+        or manager.user.access_level != "write"
+        or not bool(manager.user.is_enabled)
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="Project leadership requires an enabled Project Manager account with read and write permission.",
+        )
 
     project.project_manager = manager
     if all(item.id != project.id for item in manager.assigned_projects):

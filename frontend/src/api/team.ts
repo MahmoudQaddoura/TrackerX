@@ -5,6 +5,7 @@ import type {
   DelegateTasksOut,
   DelegateTasksPayload,
   EmployeeAccountRole,
+  EmploymentType,
   EmployeeProfileFile,
   TeamMember,
 } from "@/types";
@@ -14,6 +15,8 @@ export interface TeamMemberPayload {
   name_arabic?: string | null;
   role?: string | null;
   role_description?: string | null;
+  employment_type?: EmploymentType;
+  weekly_hours?: number | null;
   is_active?: boolean;
 }
 

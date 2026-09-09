@@ -5,7 +5,12 @@ schemas/team_member.py
 Team directory request/response models.
 """
 
+from typing import Literal
+
 from pydantic import BaseModel, EmailStr, Field
+
+
+EmploymentType = Literal["full_time", "part_time", "contractor", "intern"]
 
 
 class TeamMemberInput(BaseModel):
@@ -13,6 +18,8 @@ class TeamMemberInput(BaseModel):
     name_arabic: str | None = Field(default=None, max_length=200)
     role: str | None = Field(default=None, max_length=200)
     role_description: str | None = Field(default=None, max_length=2000)
+    employment_type: EmploymentType = "full_time"
+    weekly_hours: float | None = Field(default=40, ge=1, le=80)
     is_active: bool = True
 
 
@@ -21,6 +28,8 @@ class TeamMemberUpdate(BaseModel):
     name_arabic: str | None = Field(default=None, max_length=200)
     role: str | None = Field(default=None, max_length=200)
     role_description: str | None = Field(default=None, max_length=2000)
+    employment_type: EmploymentType = "full_time"
+    weekly_hours: float | None = Field(default=None, ge=1, le=80)
     is_active: bool | None = None
 
 
@@ -51,6 +60,8 @@ class TeamMemberOut(BaseModel):
     name_arabic: str | None
     role: str | None
     role_description: str | None
+    employment_type: EmploymentType
+    weekly_hours: float | None
     is_active: bool
     task_count: int
     total_tasks: int

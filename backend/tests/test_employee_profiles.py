@@ -25,6 +25,8 @@ class EmployeeProfileTests(unittest.TestCase):
             name_arabic="اسم الموظف",
             role="Engineer",
             role_description="Owns platform delivery and documentation.",
+            employment_type="part_time",
+            weekly_hours=24,
             is_active=1,
             created_at="2026-08-31T10:00:00",
             updated_at="2026-08-31T10:00:00",
@@ -42,6 +44,8 @@ class EmployeeProfileTests(unittest.TestCase):
         self.assertEqual(output["employee_number"], "0042")
         self.assertEqual(output["name_arabic"], "اسم الموظف")
         self.assertEqual(output["role_description"], "Owns platform delivery and documentation.")
+        self.assertEqual(output["employment_type"], "part_time")
+        self.assertEqual(output["weekly_hours"], 24)
         self.assertEqual(output["profile_file_count"], 1)
 
     def test_private_files_are_limited_to_admin_or_the_employee(self):

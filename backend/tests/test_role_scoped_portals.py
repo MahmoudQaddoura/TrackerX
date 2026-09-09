@@ -10,9 +10,11 @@ from app.db import Base
 from app.deps import check_project_manage_access, get_accessible_project_ids
 from app.models import Notification, Project, TeamMember, User
 from app.routers.attendance import _scoped_members
-from app.routers.projects import get_project_team, replace_project_team
+from app.routers.projects import get_project_team, replace_project_team, update_project_manager
 from app.routers.tasks import _validate_pm_roster
-from app.schemas.project import ProjectTeamInput
+from app.schemas.project import ProjectManagerInput, ProjectTeamInput
+from app.routers.team_members import provision_credentials
+from app.schemas.team_member import EmployeeCredentialsInput
 
 
 class RoleScopedPortalTests(unittest.TestCase):
@@ -95,6 +97,69 @@ class RoleScopedPortalTests(unittest.TestCase):
     def test_client_cannot_read_internal_project_team(self) -> None:
         with self.assertRaises(HTTPException) as error:
             get_project_team(self.project_one.id, db=self.db, user=self.client_user)
+        self.assertEqual(error.exception.status_code, 403)
+
+    def test_project_leadership_requires_an_enabled_write_pm_account(self) -> None:
+        with self.assertRaises(HTTPException) as error:
+            update_project_manager(
+                self.project_one.id,
+                ProjectManagerInput(project_manager_id=self.dev.id),
+                db=self.db,
+                _owner=self.admin,
+            )
+        self.assertEqual(error.exception.status_code, 422)
+
+        updated = update_project_manager(
+            self.project_one.id,
+            ProjectManagerInput(project_manager_id=self.other_pm.id),
+            db=self.db,
+            _owner=self.admin,
+        )
+        self.assertEqual(updated["project_manager_id"], self.other_pm.id)
+
+    def test_pm_permission_cannot_be_read_only_or_removed_during_active_leadership(self) -> None:
+        self.admin.is_primary_admin = 1
+        with self.assertRaises(HTTPException) as error:
+            provision_credentials(
+                self.pm.id,
+                EmployeeCredentialsInput(
+                    email="pm@example.com",
+                    account_role="pm",
+                    access_level="read",
+                    is_enabled=True,
+                ),
+                db=self.db,
+                admin=self.admin,
+            )
+        self.assertEqual(error.exception.status_code, 422)
+
+        with self.assertRaises(HTTPException) as error:
+            provision_credentials(
+                self.pm.id,
+                EmployeeCredentialsInput(
+                    email="pm@example.com",
+                    account_role="developer",
+                    access_level="write",
+                    is_enabled=True,
+                ),
+                db=self.db,
+                admin=self.admin,
+            )
+        self.assertEqual(error.exception.status_code, 409)
+
+    def test_non_owner_admin_cannot_modify_a_privileged_account(self) -> None:
+        with self.assertRaises(HTTPException) as error:
+            provision_credentials(
+                self.pm.id,
+                EmployeeCredentialsInput(
+                    email="pm@example.com",
+                    account_role="pm",
+                    access_level="write",
+                    is_enabled=True,
+                ),
+                db=self.db,
+                admin=self.admin,
+            )
         self.assertEqual(error.exception.status_code, 403)
 
 

@@ -132,6 +132,8 @@ export interface TeamMember {
   name_arabic: string | null;
   role: string | null;
   role_description: string | null;
+  employment_type: EmploymentType;
+  weekly_hours: number | null;
   is_active: boolean;
   task_count: number;
   total_tasks: number;
@@ -160,6 +162,8 @@ export interface TeamMember {
   created_at: string;
   updated_at: string;
 }
+
+export type EmploymentType = "full_time" | "part_time" | "contractor" | "intern";
 
 export interface EmployeeProfileFile {
   id: number;
