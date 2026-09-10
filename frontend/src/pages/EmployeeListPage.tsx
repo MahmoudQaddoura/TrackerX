@@ -156,9 +156,10 @@ export function EmployeeListPage() {
   const openTasks = rows.reduce((total, member) => total + member.total_tasks - member.done_tasks, 0);
   const projectManagers = rows.filter((member) => member.account_role === "pm" && member.login_enabled).length;
   const canReceiveLeadership = Boolean(
-    projectTarget?.account_role === "pm" &&
+    projectTarget &&
+    (projectTarget.account_role === "admin" ||
+      (projectTarget.account_role === "pm" && projectTarget.access_level === "write")) &&
     projectTarget.login_enabled &&
-    projectTarget.access_level === "write" &&
     projectTarget.is_active,
   );
 
@@ -580,7 +581,7 @@ export function EmployeeListPage() {
                 </div>
                 <div className="rounded-lg border border-success/20 bg-success/5 p-3">
                   <p className="text-xs font-semibold uppercase tracking-[0.12em] text-success">Project leadership</p>
-                  <p className="mt-1 text-xs leading-relaxed text-fg-muted">Only the owner can name a project manager. PM leadership is independent for every project.</p>
+                  <p className="mt-1 text-xs leading-relaxed text-fg-muted">Only the owner can name a project lead. An Administrator or Project Manager can lead one or several projects.</p>
                 </div>
               </div>
               {projectsQuery.isLoading ? (
@@ -609,12 +610,12 @@ export function EmployeeListPage() {
                         </label>
                         <span className="min-w-0 flex-1">
                           <span className="block truncate font-medium text-fg">{project.name}</span>
-                          <span className="mt-0.5 block text-xs capitalize text-fg-muted">{project.status.replace("_", " ")} · PM: {project.project_manager_name ?? "Not assigned"}</span>
+                          <span className="mt-0.5 block text-xs capitalize text-fg-muted">{project.status.replace("_", " ")} · Lead: {project.project_manager_name ?? "Not assigned"}</span>
                         </span>
                         {taskLinked && <Badge variant="outline" className="text-[10px]">Task-linked</Badge>}
                         {isManaged ? <Badge variant="success" className="text-[10px]"><BadgeCheck className="h-3 w-3" /> Managed</Badge> : isPrimaryAdmin && canReceiveLeadership ? (
                           <Button type="button" variant="outline" size="sm" disabled={managerSavingProjectId != null} onClick={() => handleAssignProjectManager(project)}>
-                            {managerSavingProjectId === project.id ? <Spinner /> : <UserRoundCog className="h-3.5 w-3.5" />} Assign as PM
+                            {managerSavingProjectId === project.id ? <Spinner /> : <UserRoundCog className="h-3.5 w-3.5" />} Assign as lead
                           </Button>
                         ) : null}
                       </div>
@@ -624,7 +625,7 @@ export function EmployeeListPage() {
               )}
               {isPrimaryAdmin && !canReceiveLeadership && (
                 <div className="rounded-lg border border-warning/25 bg-warning/5 px-3 py-2 text-xs text-fg-muted">
-                  To assign project leadership, first use <strong>Access &amp; role</strong> to give this active employee an enabled Project Manager account with read &amp; write permission.
+                  To assign project leadership, first use <strong>Access &amp; role</strong> to give this active employee an enabled Administrator account or a Project Manager account with read &amp; write permission.
                 </div>
               )}
               <div className="flex items-center justify-between rounded-lg bg-raised/60 px-3 py-2 text-sm">
@@ -826,7 +827,7 @@ function EmployeeRow({
       <div className="flex flex-wrap gap-1.5 md:w-[156px] md:justify-end">
         <Button variant="outline" size="sm" onClick={onViewProfile}><UserCircle className="h-3.5 w-3.5" /> Profile</Button>
         {isAdmin && (isDeactivated ? <Button variant="outline" size="sm" onClick={onDelegate}><Users className="h-3.5 w-3.5" /> Delegate</Button> : <>
-          <Button variant="outline" size="sm" className="w-full justify-start" onClick={onProjects}><FolderPlus className="h-3.5 w-3.5" /> {isPrimaryAdmin && member.account_role === "pm" ? "Projects & PM" : "Project scope"}</Button>
+          <Button variant="outline" size="sm" className="w-full justify-start" onClick={onProjects}><FolderPlus className="h-3.5 w-3.5" /> {isPrimaryAdmin && (member.account_role === "pm" || member.account_role === "admin") ? "Projects & leadership" : "Project scope"}</Button>
           {canManageAccount && <Button variant="outline" size="sm" className="w-full justify-start" onClick={onCredentials}><KeyRound className="h-3.5 w-3.5" /> Access & role</Button>}
           <span className="ml-auto flex">
             {canEditProfile && <Button variant="ghost" size="icon" aria-label={`Edit ${member.name}`} title="Edit employment profile" onClick={onEdit}><Pencil className="h-3.5 w-3.5" /></Button>}
