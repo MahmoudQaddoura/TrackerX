@@ -31,3 +31,9 @@ Profile-file upload, listing, preview, download, and deletion were reviewed as o
 - Production frontend build (`tsc --noEmit` and Vite): passed.
 
 This audit validates route registration, code integrity, targeted authorization behavior, dependency advisories, and the corrected workflows. It does not claim that every possible business-data combination has been exercised in production.
+
+## Post-deployment database isolation correction
+
+The first production verification run exposed a test-harness isolation flaw: the newly added API integrity module imported the application before establishing the disposable test database. A legacy leave-coverage test then reused the already-created shared engine and dropped its tables during teardown. The database was restored immediately from the verified pre-deployment backup; its 28-table schema and 14 user accounts were validated before reopening the service.
+
+The remediation removes all destructive test use of the application's shared engine. Leave-coverage tests now create and dispose their own explicit test engine, and the first-discovered API integrity module establishes a disposable database before importing the application. A sentinel-database verification confirmed the complete 40-test suite leaves a pre-existing database byte-for-byte unchanged.
