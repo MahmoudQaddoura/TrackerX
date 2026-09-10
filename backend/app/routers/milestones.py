@@ -12,7 +12,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.deps import check_project_access, get_current_user, require_manager
+from app.deps import (
+    check_project_access,
+    check_project_manage_access,
+    get_current_user,
+    require_manager,
+)
 from app.models import Milestone, Project, User
 from app.models.milestone import MILESTONE_WORKSTREAMS
 from app.schemas.milestone import MilestoneInput, MilestoneOut, MilestoneUpdate

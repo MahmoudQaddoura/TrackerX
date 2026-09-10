@@ -8,6 +8,7 @@ Audit baseline: 5 September 2026. This inventory is reconstructed from the appli
 - Owner, administrator, project manager, developer/employee, and client access paths; primary-owner controls for privileged roles.
 - Employee directory, enabled/disabled logins, temporary credentials, required password replacement, project assignments, task delegation.
 - Employee profiles with English/Arabic names, role descriptions, current projects, private CV/profile uploads, previews, and downloads.
+- Employees can upload and remove files on their own private profile; administrators retain company-wide profile-file management. Other employees, project managers, and clients cannot access another employee's private files.
 - Persistent four-digit employee numbers; owner 0001 and Yazan 0002; numbers included in attendance and leave reporting.
 - One owner-selected project lead per project, chosen from eligible Administrators or Project Managers; the employee leadership panel and assistant-PM selection were removed.
 - Self-service password changes are available from every signed-in employee profile, while temporary-password replacement remains mandatory before workspace access.
@@ -62,6 +63,7 @@ Audit baseline: 5 September 2026. This inventory is reconstructed from the appli
 - Additive compatibility migrations for existing databases, fresh-install administrator bootstrap.
 - Containerized FastAPI backend and nginx frontend, private backend network, persistent data/backups, health checks and deployment guide.
 - Source organized into backend models/schemas/routers/services and frontend API/hooks/context/pages/feature components.
+- API integrity regression coverage validates all OpenAPI method/path registrations plus complete milestone and meeting create/edit/delete workflows, preventing missing authorization dependencies from reaching production.
 
 ## This audit
 

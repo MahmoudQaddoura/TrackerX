@@ -91,6 +91,7 @@ export function EmployeeProfilePage({ self = false }: { self?: boolean }) {
   });
   const member = profileQuery.data;
   const canViewPrivateFiles = isAdmin || self;
+  const canManagePrivateFiles = isAdmin || self;
   const filesQuery = useQuery({
     queryKey: ["employee-profile-files", member?.id],
     queryFn: () => fetchEmployeeProfileFiles(member!.id),
@@ -333,7 +334,7 @@ export function EmployeeProfilePage({ self = false }: { self?: boolean }) {
               </div>
             ) : (
               <>
-                {isAdmin && (
+                {canManagePrivateFiles && (
                   <div
                     className={`mt-5 rounded-xl border-2 border-dashed p-4 text-center transition-colors ${dragging ? "border-accent bg-accent-soft" : "border-border bg-raised/25"}`}
                     onDragEnter={(event) => { event.preventDefault(); setDragging(true); }}
@@ -349,7 +350,7 @@ export function EmployeeProfilePage({ self = false }: { self?: boolean }) {
                   </div>
                 )}
 
-                {isAdmin && selectedFiles.length > 0 && (
+                {canManagePrivateFiles && selectedFiles.length > 0 && (
                   <div className="mt-3 rounded-xl border border-accent/20 bg-accent-soft/40 p-3">
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-sm font-semibold text-fg">{selectedFiles.length} file{selectedFiles.length === 1 ? "" : "s"} ready</p>
@@ -373,11 +374,11 @@ export function EmployeeProfilePage({ self = false }: { self?: boolean }) {
                         <div className="mt-3 flex gap-1 border-t border-border pt-2">
                           <Button variant="ghost" size="sm" onClick={() => setPreviewFile(file)}><Eye className="h-3.5 w-3.5" /> Preview</Button>
                           <Button variant="ghost" size="sm" onClick={() => downloadEmployeeProfileFile(file)}><Download className="h-3.5 w-3.5" /> Download</Button>
-                          {isAdmin && <Button className="ml-auto" variant="ghost" size="icon" aria-label={`Delete ${file.file_name}`} onClick={() => { if (confirm(`Delete ${file.file_name}?`)) removeFile.mutate(file.id); }}><Trash2 className="h-3.5 w-3.5" /></Button>}
+                          {canManagePrivateFiles && <Button className="ml-auto" variant="ghost" size="icon" aria-label={`Delete ${file.file_name}`} onClick={() => { if (confirm(`Delete ${file.file_name}?`)) removeFile.mutate(file.id); }}><Trash2 className="h-3.5 w-3.5" /></Button>}
                         </div>
                       </div>
                     ))
-                  ) : <EmptyState title="No profile files" description={isAdmin ? "Upload a CV or supporting employee record above." : "No CV or profile document has been added yet."} />}
+                  ) : <EmptyState title="No profile files" description="Upload a CV or supporting employee record above." />}
                 </div>
               </>
             )}
