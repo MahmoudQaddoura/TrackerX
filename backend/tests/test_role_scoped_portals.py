@@ -31,11 +31,12 @@ class RoleScopedPortalTests(unittest.TestCase):
         self.db.add_all([self.admin, self.pm_user, self.other_pm_user, self.dev_user, self.client_user])
         self.db.flush()
 
+        self.owner_member = TeamMember(employee_number="0001", name="Owner", role="Owner", user_id=self.admin.id, is_active=1)
         self.pm = TeamMember(employee_number="0002", name="Project Manager", role="PM", user_id=self.pm_user.id, is_active=1)
         self.other_pm = TeamMember(employee_number="0003", name="Other PM", role="PM", user_id=self.other_pm_user.id, is_active=1)
         self.dev = TeamMember(employee_number="0004", name="Developer", role="Engineer", user_id=self.dev_user.id, is_active=1)
         self.outside = TeamMember(employee_number="0005", name="Outside Developer", role="Engineer", is_active=1)
-        self.db.add_all([self.pm, self.other_pm, self.dev, self.outside])
+        self.db.add_all([self.owner_member, self.pm, self.other_pm, self.dev, self.outside])
         self.db.flush()
 
         self.project_one = Project(name="Project One", project_manager_id=self.pm.id, status="active")
@@ -99,7 +100,7 @@ class RoleScopedPortalTests(unittest.TestCase):
             get_project_team(self.project_one.id, db=self.db, user=self.client_user)
         self.assertEqual(error.exception.status_code, 403)
 
-    def test_project_leadership_requires_an_enabled_write_pm_account(self) -> None:
+    def test_project_leadership_accepts_an_enabled_admin_or_write_pm_account(self) -> None:
         with self.assertRaises(HTTPException) as error:
             update_project_manager(
                 self.project_one.id,
@@ -116,6 +117,14 @@ class RoleScopedPortalTests(unittest.TestCase):
             _owner=self.admin,
         )
         self.assertEqual(updated["project_manager_id"], self.other_pm.id)
+
+        updated = update_project_manager(
+            self.project_one.id,
+            ProjectManagerInput(project_manager_id=self.owner_member.id),
+            db=self.db,
+            _owner=self.admin,
+        )
+        self.assertEqual(updated["project_manager_id"], self.owner_member.id)
 
     def test_pm_permission_cannot_be_read_only_or_removed_during_active_leadership(self) -> None:
         self.admin.is_primary_admin = 1

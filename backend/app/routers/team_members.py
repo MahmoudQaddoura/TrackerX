@@ -249,12 +249,15 @@ def provision_credentials(
             status_code=403,
             detail="Only the owner can manage administrator or Project Manager accounts.",
         )
+    has_leadership_access = account_role == "admin" or (
+        account_role == "pm" and inp.access_level == "write"
+    )
     if _active_managed_project_names(member) and (
-        account_role != "pm" or inp.access_level != "write" or not inp.is_enabled
+        not has_leadership_access or not inp.is_enabled
     ):
         raise HTTPException(
             status_code=409,
-            detail="Reassign this employee's active projects before removing Project Manager access.",
+            detail="Reassign this employee's active projects before removing project leadership access.",
         )
     if user and bool(user.is_primary_admin) and (
         account_role != "admin" or not inp.is_enabled

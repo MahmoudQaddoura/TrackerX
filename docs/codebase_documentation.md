@@ -154,7 +154,7 @@ Prototype/
 | Employee profiles | Full directory and private files | Read-only directory; own private profile | Own private profile | Not available |
 | Employment records | Manage job role, employment type, and weekly hours | Read-only workforce view | Own profile | Not available |
 | Login roles | Owner assigns/removes privileged roles; admins manage ordinary access | No access administration | Change own password | Not available |
-| Project leadership | Owner assigns an eligible write-enabled PM | Lead only named projects; may lead multiple | Not available | Hidden |
+| Project leadership | Owner assigns an eligible Administrator or write-enabled PM; may self-assign | Lead only named projects; may lead multiple | Not available | Hidden |
 | Client administration | Full | Not available | Not available | Own portal only |
 | Notifications | Project activity | Team/task updates for managed projects | Project/task assignments and coverage | Forwarded-report inbox |
 

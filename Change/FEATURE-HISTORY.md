@@ -14,7 +14,8 @@ Audit baseline: 5 September 2026. This inventory is reconstructed from the appli
 - Project managers organize a separate employee roster for each project they lead. A manager may lead multiple projects without merging their teams, and task assignment is limited to the selected project roster.
 - Persistent in-app notifications connect managers and employees: project/team assignments notify employees, and employee task-status updates notify the responsible project manager.
 - Workforce control center: a filterable structured roster separates job role, employment type, weekly hours, workload, workspace scope, login permission, and project leadership. Employment types support full-time, part-time, contractor, and intern records.
-- Project leadership is owner-only and requires an active Project Manager login with write permission. Active PM assignments must be reassigned before the employee can be demoted, disabled, or deactivated.
+- Project leadership is owner-only and accepts either an active Administrator login or an active Project Manager login with write permission. The owner may lead projects directly, and one lead may manage multiple projects. Active leadership assignments must be reassigned before the employee can be demoted, disabled, or deactivated.
+- The project portfolio now uses a TrackerX command-center layout with live leadership coverage, delivery progress, attention indicators, searchable project cards, clear project-lead controls, and direct workspace actions.
 
 ## Project delivery
 

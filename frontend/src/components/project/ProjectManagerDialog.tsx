@@ -27,9 +27,11 @@ export function ProjectManagerDialog({
   const { updateManager } = useProjectMutations();
   const [selectedMemberId, setSelectedMemberId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const activeMembers = members.filter(
-    (member) => member.is_active && member.account_role === "pm" && member.access_level === "write" && member.login_enabled,
-  );
+  const activeMembers = members.filter((member) => {
+    const hasLeadershipAccess = member.account_role === "admin" ||
+      (member.account_role === "pm" && member.access_level === "write");
+    return member.is_active && hasLeadershipAccess && member.login_enabled;
+  });
 
   useEffect(() => {
     setSelectedMemberId(null);
@@ -59,7 +61,7 @@ export function ProjectManagerDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <UserRoundCog className="h-5 w-5 text-accent" />
-            Assign Project Manager
+            Assign project lead
           </DialogTitle>
         </DialogHeader>
         {project && (
@@ -67,12 +69,12 @@ export function ProjectManagerDialog({
             <div className="rounded-lg border border-border bg-raised/50 px-3 py-2.5">
               <p className="font-medium text-fg">{project.name}</p>
               <p className="mt-0.5 text-xs text-fg-muted">
-                Choose an enabled Project Manager with read and write permission. The change is saved immediately.
+                Choose an enabled Administrator or Project Manager. The owner may lead a project directly, and one person may lead multiple projects.
               </p>
             </div>
 
             {activeMembers.length === 0 ? (
-              <EmptyState title="No eligible project managers" description="The owner must first grant an active employee the Project Manager role and read & write permission." />
+              <EmptyState title="No eligible project leads" description="Grant an active employee an Administrator account or a Project Manager account with read & write permission." />
             ) : (
               <div className="max-h-[430px] space-y-1.5 overflow-y-auto pr-1">
                 {activeMembers.map((member) => {
@@ -95,9 +97,11 @@ export function ProjectManagerDialog({
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate font-medium text-fg">{member.name}</span>
-                        <span className="block truncate text-xs text-fg-muted">{member.role ?? "Employee"}</span>
+                        <span className="block truncate text-xs text-fg-muted">
+                          {member.role ?? "Employee"} · {member.account_role === "admin" ? "Administrator" : "Project Manager"}
+                        </span>
                       </span>
-                      {isCurrent && <Badge variant="success">Current PM</Badge>}
+                      {isCurrent && <Badge variant="success">Current lead</Badge>}
                     </button>
                   );
                 })}

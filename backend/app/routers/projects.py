@@ -144,7 +144,7 @@ def update_project_manager(
     db: Session = Depends(get_db),
     _owner: User = Depends(require_primary_admin),
 ):
-    """Assign one active employee as the project's PM. Owner-only."""
+    """Assign one active, privileged employee as the project's lead. Owner-only."""
     project = db.get(Project, project_id)
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found.")
@@ -153,15 +153,14 @@ def update_project_manager(
         raise HTTPException(status_code=422, detail="The selected employee no longer exists.")
     if not bool(manager.is_active):
         raise HTTPException(status_code=422, detail=f"{manager.name} is not an active employee.")
-    if (
-        manager.user is None
-        or manager.user.role != "pm"
-        or manager.user.access_level != "write"
-        or not bool(manager.user.is_enabled)
-    ):
+    manager_role = manager.user.role if manager.user is not None else None
+    has_leadership_access = manager_role == "admin" or (
+        manager_role == "pm" and manager.user.access_level == "write"
+    )
+    if manager.user is None or not has_leadership_access or not bool(manager.user.is_enabled):
         raise HTTPException(
             status_code=422,
-            detail="Project leadership requires an enabled Project Manager account with read and write permission.",
+            detail="Project leadership requires an enabled Administrator or Project Manager account with read and write permission.",
         )
 
     project.project_manager = manager
