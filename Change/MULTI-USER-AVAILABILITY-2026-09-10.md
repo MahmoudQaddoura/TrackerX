@@ -7,6 +7,8 @@
 
 TrackerX is configured for the current small-team workload with explicit overload protection rather than unbounded resource consumption. A pre-change external test completed 300 full readiness requests at 30 concurrent callers with 300 successes, zero failures, 87.37 requests per second, 312.86 ms median latency, and 499.51 ms p95 latency.
 
+After deployment, the stronger gate completed 600 full readiness requests at 75 concurrent callers with 600 successes, zero failures, 131.49 requests per second, 406.88 ms median latency, 914.14 ms p95 latency, 1,531.70 ms p99 latency, and 1,618.72 ms maximum latency. The service recorded no restart and no error-level log entry during or after the test.
+
 This validates substantially more simultaneous activity than the current enabled-user population. It does not make a single server infallible. True host-failure availability still requires redundant application nodes, PostgreSQL, replicated object storage, and an external load balancer.
 
 ## Implemented controls
@@ -29,9 +31,11 @@ TrackerX remains on one Uvicorn worker deliberately. FastAPI executes the synchr
 
 - Backend regression and concurrency-cache tests: 52/52 passed.
 - Ruff correctness scan, Bandit security scan, Python compilation, and dependency audit: passed; no known dependency vulnerabilities.
-- Production unit validation and controlled restart: pending deployment.
-- Post-deployment external concurrency test: pending deployment.
-- Production database integrity and recent error log: pending deployment.
+- Production unit validation and controlled restart: passed; service active with zero unexpected restarts.
+- Post-deployment external concurrency test: 600/600 passed at 75 concurrent callers.
+- Production database integrity and foreign keys: passed; recent error-level service log contained no entries.
+- Public readiness after the load gate: HTTP 200 with database, schema, integrity, and storage all `ok`.
+- Final service-isolation score: `2.8 OK`.
 
 ## Next architecture threshold
 
