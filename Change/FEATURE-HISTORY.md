@@ -66,6 +66,7 @@ Audit baseline: 5 September 2026. This inventory is reconstructed from the appli
 - API integrity regression coverage validates all OpenAPI method/path registrations plus complete milestone and meeting create/edit/delete workflows, preventing missing authorization dependencies from reaching production.
 - Production reliability controls add schema-aware readiness, SQLite integrity/concurrency settings, request IDs, controlled database 503 responses, one-minute automatic health recovery, daily verified backups, and test-database isolation.
 - Security remediation adds zero-finding Bandit enforcement, protected Office XML previews, production guards around destructive demo tooling, owner-only database/backup permissions, compromised demo-credential rotation, key-only SSH, and an inbound deny-by-default firewall.
+- Concurrent-use hardening adds a bounded 100-request admission limit, a 2,048-connection backlog, a 20+20 database pool, five-second single-flight readiness caching, explicit memory/file/task resource ceilings, two-second crash recovery, and a repeatable external concurrency gate with percentile latency and zero-error enforcement.
 
 ## This audit
 

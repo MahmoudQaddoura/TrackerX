@@ -9,16 +9,15 @@ Every router is mounted under /api. One purpose: wire the app together.
 import logging
 import uuid
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import inspect
 from sqlalchemy.exc import OperationalError
-from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.db import Base, SessionLocal, engine, get_db
+from app.db import Base, SessionLocal, engine
 from app import models  # noqa: F401 — importing registers all tables on Base
 from app.bootstrap import validate_runtime_settings
 
@@ -51,10 +50,15 @@ from app.services.readiness import (
     check_database_readiness,
     validate_existing_production_database,
 )
+from app.services.readiness_cache import ReadinessCache, ReadinessProbeError
 
 
 logger = logging.getLogger(__name__)
 _production = settings.environment.strip().lower() == "production"
+_readiness_cache = ReadinessCache(
+    success_ttl=settings.readiness_cache_seconds if _production else 0,
+    failure_ttl=settings.readiness_failure_cache_seconds,
+)
 
 app = FastAPI(
     title=settings.app_name,
@@ -409,25 +413,30 @@ def liveness() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.get("/api/health", tags=["health"])
-def health(db: Session = Depends(get_db)) -> dict[str, str]:
-    """Full readiness probe for the database schema and document storage."""
+def _probe_readiness() -> dict[str, str]:
+    """Perform the expensive dependency checks once for concurrent callers."""
     try:
-        result = check_database_readiness(db, require_users=_production)
-    except Exception:
+        with SessionLocal() as db:
+            result = check_database_readiness(db, require_users=_production)
+    except Exception as exc:
         logger.exception("Database health check failed.")
-        return JSONResponse(
-            status_code=503,
-            content={"status": "unavailable", "database": "failed"},
-            headers={"Retry-After": "10"},
-        )
+        raise ReadinessProbeError("database") from exc
     try:
         get_document_store().ensure_ready()
-    except Exception:
+    except Exception as exc:
         logger.exception("Document storage health check failed.")
+        raise ReadinessProbeError("storage") from exc
+    return {"status": "ok", **result, "storage": "ok"}
+
+
+@app.get("/api/health", tags=["health"])
+def health() -> dict[str, str]:
+    """Return a bounded-cost readiness snapshot for all dependencies."""
+    try:
+        return _readiness_cache.get(_probe_readiness)
+    except ReadinessProbeError as exc:
         return JSONResponse(
             status_code=503,
-            content={"status": "unavailable", "storage": "failed"},
+            content={"status": "unavailable", exc.component: "failed"},
             headers={"Retry-After": "10"},
         )
-    return {"status": "ok", **result, "storage": "ok"}
