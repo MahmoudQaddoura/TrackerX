@@ -55,9 +55,12 @@ export function AttendanceConfirmation() {
         <div className="bg-gradient-to-br from-[#073b5c] via-accent to-[#1d729a] p-6 text-white">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold"><BadgeCheck className="h-3.5 w-3.5" /> Personal attendance</span>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold"><BadgeCheck className="h-3.5 w-3.5" /> Personal attendance</span>
+                <span className="rounded-full bg-amber-300 px-3 py-1 text-xs font-bold text-[#073b5c]">Required daily</span>
+              </div>
               <h2 className="mt-3 font-display text-2xl font-bold">Confirm today’s attendance</h2>
-              <p className="mt-1 text-sm text-white/75">TrackerX records the official Amman office time. Confirmations cannot replace approved leave.</p>
+              <p className="mt-1 text-sm text-white/80">Select Office or Remote, then check in. TrackerX records the official Amman time and updates Team attendance automatically.</p>
             </div>
             <Badge className="border-white/20 bg-white/10 text-white">ID {record.employee_number}</Badge>
           </div>
@@ -71,6 +74,11 @@ export function AttendanceConfirmation() {
             </div>
           ) : (
             <>
+              <div className="mb-4 grid gap-2 sm:grid-cols-3">
+                <ConfirmationStep number="1" label="Choose location" complete={checkedIn} />
+                <ConfirmationStep number="2" label={checkedIn ? `In · ${record.check_in}` : "Check in"} complete={checkedIn} />
+                <ConfirmationStep number="3" label={checkedOut ? `Out · ${record.check_out}` : "Check out"} complete={checkedOut} />
+              </div>
               <div className="grid grid-cols-2 gap-2">
                 <button type="button" onClick={() => setWorkMode("present")} disabled={checkedIn} className={`rounded-xl border p-4 text-left transition ${selectedMode === "present" ? "border-accent bg-accent-soft" : "border-border hover:bg-raised"} disabled:cursor-not-allowed disabled:opacity-70`}>
                   <Building2 className="h-5 w-5 text-accent" />
@@ -86,9 +94,10 @@ export function AttendanceConfirmation() {
               <Textarea className="mt-4" rows={3} maxLength={500} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Optional work-location or attendance note" />
               {error && <p className="mt-3 text-sm text-danger">{error}</p>}
               <div className="mt-4 flex flex-wrap gap-2">
-                <Button onClick={() => submit("check_in")} disabled={checkedIn || confirm.isPending}>{confirm.isPending ? <Spinner /> : <LogIn className="h-4 w-4" />} {checkedIn ? "Checked in" : "Confirm check-in"}</Button>
-                <Button variant="outline" onClick={() => submit("check_out")} disabled={!checkedIn || checkedOut || confirm.isPending}>{confirm.isPending ? <Spinner /> : <LogOut className="h-4 w-4" />} {checkedOut ? "Checked out" : "Confirm check-out"}</Button>
+                <Button onClick={() => submit("check_in")} disabled={checkedIn || confirm.isPending}>{confirm.isPending ? <Spinner /> : <LogIn className="h-4 w-4" />} {checkedIn ? `Checked in at ${record.check_in}` : "Confirm check-in"}</Button>
+                <Button variant="outline" onClick={() => submit("check_out")} disabled={!checkedIn || checkedOut || confirm.isPending}>{confirm.isPending ? <Spinner /> : <LogOut className="h-4 w-4" />} {checkedOut ? `Checked out at ${record.check_out}` : "Confirm check-out"}</Button>
               </div>
+              <p className="mt-3 text-xs font-medium text-fg-muted">Saved immediately to the shared Team attendance register—no administrator entry is required.</p>
             </>
           )}
         </div>
@@ -109,6 +118,15 @@ export function AttendanceConfirmation() {
           {record.notes && <p className="mt-3 text-sm text-fg-muted">{record.notes}</p>}
         </div>
       </Card>
+    </div>
+  );
+}
+
+function ConfirmationStep({ number, label, complete }: { number: string; label: string; complete: boolean }) {
+  return (
+    <div className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold ${complete ? "border-success/20 bg-success/5 text-success" : "border-border bg-raised/35 text-fg-muted"}`}>
+      <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] ${complete ? "bg-success text-white" : "bg-surface text-fg-subtle"}`}>{complete ? "✓" : number}</span>
+      {label}
     </div>
   );
 }
