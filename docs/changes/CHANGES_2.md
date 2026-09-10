@@ -260,7 +260,7 @@ SQLite doesn't support `DROP COLUMN`, so tables were recreated:
 
 ---
 
-## 8. Demo logins (all: `ChangeMe123!`)
+## 8. Demo logins (password supplied through `TRACKERX_DEMO_PASSWORD`)
 
 | Role | Email |
 |------|-------|
@@ -381,7 +381,7 @@ curl -s http://localhost:8080 | head -20
 
 curl -s http://localhost:8080/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@demo.com","password":"ChangeMe123!"}'
+  -d '{"email":"admin@demo.com","password":"<local-temporary-password>"}'
 # Should return a JSON with an access_token
 ```
 
@@ -497,7 +497,7 @@ docker compose up -d --build
 
 1. Open `http://your-domain.com` (or `https://your-domain.com` if you set up TLS).
 2. You should see the login page.
-3. Log in with `admin@demo.com` / `ChangeMe123!`.
+3. Log in with `admin@demo.com` and the local temporary password you supplied.
 4. Verify:
    - Projects page loads with PSUT and JAF projects.
    - Gantt chart renders with auto-scheduled tasks.

@@ -6,8 +6,10 @@ from dataclasses import dataclass
 import json
 from pathlib import Path
 import re
-from xml.etree import ElementTree
 from zipfile import BadZipFile, ZipFile
+
+from defusedxml import ElementTree
+from defusedxml.common import DefusedXmlException
 
 
 MAX_TEXT_PREVIEW_BYTES = 5 * 1024 * 1024
@@ -70,18 +72,23 @@ def _safe_zip(path: Path) -> ZipFile:
 
 
 def _xml_text(raw: bytes) -> list[str]:
-    try:
-        root = ElementTree.fromstring(raw)
-    except ElementTree.ParseError as exc:
-        raise PreviewUnavailable("This document contains invalid preview content.") from exc
+    root = _parse_xml(raw)
     return [node.text or "" for node in root.iter() if _local_name(node.tag) == "t" and node.text]
+
+
+def _parse_xml(raw: bytes):
+    """Parse untrusted Office XML with entity and DTD expansion disabled."""
+    try:
+        return ElementTree.fromstring(raw)
+    except (ElementTree.ParseError, DefusedXmlException) as exc:
+        raise PreviewUnavailable("This document contains invalid preview content.") from exc
 
 
 def _docx_text(path: Path) -> str:
     with _safe_zip(path) as archive:
         if "word/document.xml" not in archive.namelist():
             raise PreviewUnavailable("This Word document cannot be previewed.")
-        root = ElementTree.fromstring(archive.read("word/document.xml"))
+        root = _parse_xml(archive.read("word/document.xml"))
         paragraphs: list[str] = []
         for node in root.iter():
             if _local_name(node.tag) != "p":
@@ -123,7 +130,7 @@ def _xlsx_text(path: Path) -> str:
     with _safe_zip(path) as archive:
         shared: list[str] = []
         if "xl/sharedStrings.xml" in archive.namelist():
-            root = ElementTree.fromstring(archive.read("xl/sharedStrings.xml"))
+            root = _parse_xml(archive.read("xl/sharedStrings.xml"))
             for item in root.iter():
                 if _local_name(item.tag) == "si":
                     shared.append("".join(_xml_text(ElementTree.tostring(item))))
@@ -139,7 +146,7 @@ def _xlsx_text(path: Path) -> str:
             raise PreviewUnavailable("This spreadsheet cannot be previewed.")
         output: list[str] = []
         for sheet_index, sheet in enumerate(sheets, start=1):
-            root = ElementTree.fromstring(archive.read(sheet))
+            root = _parse_xml(archive.read(sheet))
             output.append(f"Sheet {sheet_index}")
             for row in (node for node in root.iter() if _local_name(node.tag) == "row"):
                 values: list[str] = []
@@ -180,7 +187,7 @@ def prepare_preview(path: Path, original_name: str, declared_content_type: str |
             extracted = extractor(path)
         except PreviewUnavailable:
             raise
-        except (ElementTree.ParseError, KeyError, IndexError, OSError) as exc:
+        except (ElementTree.ParseError, DefusedXmlException, KeyError, IndexError, OSError) as exc:
             raise PreviewUnavailable("This Office document is damaged or unsupported.") from exc
         content, truncated = _limit_text(extracted)
         return PreviewResult(kind="text", media_type="text/plain; charset=utf-8", text=content, truncated=truncated)

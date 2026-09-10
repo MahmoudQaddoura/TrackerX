@@ -64,6 +64,8 @@ Audit baseline: 5 September 2026. This inventory is reconstructed from the appli
 - Containerized FastAPI backend and nginx frontend, private backend network, persistent data/backups, health checks and deployment guide.
 - Source organized into backend models/schemas/routers/services and frontend API/hooks/context/pages/feature components.
 - API integrity regression coverage validates all OpenAPI method/path registrations plus complete milestone and meeting create/edit/delete workflows, preventing missing authorization dependencies from reaching production.
+- Production reliability controls add schema-aware readiness, SQLite integrity/concurrency settings, request IDs, controlled database 503 responses, one-minute automatic health recovery, daily verified backups, and test-database isolation.
+- Security remediation adds zero-finding Bandit enforcement, protected Office XML previews, production guards around destructive demo tooling, owner-only database/backup permissions, compromised demo-credential rotation, key-only SSH, and an inbound deny-by-default firewall.
 
 ## This audit
 

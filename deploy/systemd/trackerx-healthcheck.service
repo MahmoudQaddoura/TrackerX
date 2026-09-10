@@ -1,0 +1,9 @@
+[Unit]
+Description=Check TrackerX application readiness
+After=network-online.target trackerx-backend.service minio.service
+OnFailure=trackerx-recovery.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/curl --fail --silent --show-error --max-time 10 --header "Host: trackerx.defendexe.com" http://127.0.0.1:8000/api/health
+

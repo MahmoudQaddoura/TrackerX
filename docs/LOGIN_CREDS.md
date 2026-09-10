@@ -1,6 +1,8 @@
 # Demo Login Credentials
 
-**All passwords:** `ChangeMe123!`
+Set a unique local-only password in `TRACKERX_DEMO_PASSWORD` before running
+`python -m app.seed_roles`. The seed refuses to run in production and does not
+contain a built-in password.
 
 | Role | Email |
 |------|-------|

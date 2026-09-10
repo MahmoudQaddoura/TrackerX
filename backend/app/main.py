@@ -7,17 +7,20 @@ Every router is mounted under /api. One purpose: wire the app together.
 """
 
 import logging
+import uuid
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
-from sqlalchemy import inspect, text
+from sqlalchemy import inspect
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db import Base, SessionLocal, engine, get_db
 from app import models  # noqa: F401 — importing registers all tables on Base
+from app.bootstrap import validate_runtime_settings
 
 from app.routers import (
     analytics,
@@ -44,6 +47,10 @@ from app.routers import (
 from app.services.data_backup import create_data_backup
 from app.services.document_storage import normalize_document_storage_paths
 from app.services.object_store import get_document_store
+from app.services.readiness import (
+    check_database_readiness,
+    validate_existing_production_database,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -56,6 +63,49 @@ app = FastAPI(
     redoc_url=None if _production else "/api/redoc",
     openapi_url=None if _production else "/api/openapi.json",
 )
+
+
+def _request_id(request: Request) -> str:
+    return getattr(request.state, "request_id", "unavailable")
+
+
+@app.exception_handler(OperationalError)
+async def database_error(request: Request, exc: OperationalError) -> JSONResponse:
+    request_id = _request_id(request)
+    logger.error(
+        "Database request failed [%s] %s %s",
+        request_id,
+        request.method,
+        request.url.path,
+        exc_info=(type(exc), exc, exc.__traceback__),
+    )
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": "TrackerX data is temporarily unavailable.",
+            "request_id": request_id,
+        },
+        headers={"Retry-After": "10"},
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_error(request: Request, exc: Exception) -> JSONResponse:
+    request_id = _request_id(request)
+    logger.error(
+        "Unhandled request failure [%s] %s %s",
+        request_id,
+        request.method,
+        request.url.path,
+        exc_info=(type(exc), exc, exc.__traceback__),
+    )
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "TrackerX could not complete this request.",
+            "request_id": request_id,
+        },
+    )
 
 
 def _migrate_local_schema() -> None:
@@ -267,6 +317,7 @@ def _migrate_local_schema() -> None:
 @app.middleware("http")
 async def secure_api_requests(request: Request, call_next):
     """Require a same-origin-only header for cookie-authenticated writes."""
+    request.state.request_id = uuid.uuid4().hex[:16]
     if (
         request.url.path.startswith("/api/")
         and request.method not in {"GET", "HEAD", "OPTIONS"}
@@ -280,6 +331,7 @@ async def secure_api_requests(request: Request, call_next):
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
     response.headers["Cache-Control"] = "no-store" if request.url.path.startswith("/api/") else "no-cache"
+    response.headers["X-Request-ID"] = request.state.request_id
     return response
 
 
@@ -290,13 +342,15 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-TrackerX-Request"],
-    expose_headers=["Content-Disposition", "Retry-After", "X-Preview-Truncated"],
+    expose_headers=["Content-Disposition", "Retry-After", "X-Preview-Truncated", "X-Request-ID"],
 )
 
 
 @app.on_event("startup")
 def on_startup() -> None:
     """Create any missing tables. (Simple projects skip migration tooling.)"""
+    validate_runtime_settings()
+    validate_existing_production_database(engine, production=_production)
     settings.documents_dir.mkdir(parents=True, exist_ok=True)
     try:
         store = get_document_store()
@@ -317,6 +371,7 @@ def on_startup() -> None:
     Base.metadata.create_all(bind=engine)
     _migrate_local_schema()
     with SessionLocal() as db:
+        check_database_readiness(db, require_users=_production)
         result = normalize_document_storage_paths(db)
         if result["updated"] or result["invalid"]:
             logger.info("Document path migration result: %s", result)
@@ -348,11 +403,31 @@ for r in (
     app.include_router(r, prefix="/api")
 
 
+@app.get("/api/health/live", tags=["health"])
+def liveness() -> dict[str, str]:
+    """Process liveness probe. Readiness is checked by `/api/health`."""
+    return {"status": "ok"}
+
+
 @app.get("/api/health", tags=["health"])
-def health(db: Session = Depends(get_db)) -> dict:
+def health(db: Session = Depends(get_db)) -> dict[str, str]:
+    """Full readiness probe for the database schema and document storage."""
     try:
-        db.execute(text("SELECT 1"))
-    except Exception as exc:
+        result = check_database_readiness(db, require_users=_production)
+    except Exception:
         logger.exception("Database health check failed.")
-        raise HTTPException(status_code=503, detail="Database unavailable.") from exc
-    return {"status": "ok", "database": "ok"}
+        return JSONResponse(
+            status_code=503,
+            content={"status": "unavailable", "database": "failed"},
+            headers={"Retry-After": "10"},
+        )
+    try:
+        get_document_store().ensure_ready()
+    except Exception:
+        logger.exception("Document storage health check failed.")
+        return JSONResponse(
+            status_code=503,
+            content={"status": "unavailable", "storage": "failed"},
+            headers={"Retry-After": "10"},
+        )
+    return {"status": "ok", **result, "storage": "ok"}

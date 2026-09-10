@@ -55,9 +55,13 @@ python -m venv .venv
 # Linux/macOS: source .venv/bin/activate
 pip install -r requirements.txt
 python -m app.load_sample_project
+$env:TRACKERX_DEMO_PASSWORD = "replace-with-a-unique-local-password"  # Windows PowerShell
+# export TRACKERX_DEMO_PASSWORD="replace-with-a-unique-local-password" # Linux/macOS
 python -m app.seed_roles
 uvicorn app.main:app --reload --port 8000
 ```
+
+The sample loader and demo-role seed refuse to run when `ENVIRONMENT=production`.
 
 Frontend (Node 20.19+; Node 22 LTS recommended):
 
@@ -92,5 +96,9 @@ npm ci
 npm run build
 
 cd ../backend
+python scripts/run_tests_safely.py
 python -m compileall -q app
 ```
+
+Always use the safe test runner on a server. It selects a disposable SQLite
+database before importing TrackerX and cannot migrate or clear application data.

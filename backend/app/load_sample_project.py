@@ -19,6 +19,7 @@ from pathlib import Path
 from app.db import Base, SessionLocal, engine
 from app.models import Meeting, Milestone, Project, Task, TeamMember
 from app.services.csv_parser import parse_project_csv
+from app.services.development_guard import require_non_production
 from app.services.employee_numbers import assign_employee_number
 
 DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
@@ -153,6 +154,7 @@ def _load_project(db, outline: dict, member_cache: dict) -> Project:
 
 
 def load() -> None:
+    require_non_production("the destructive sample-project loader")
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:

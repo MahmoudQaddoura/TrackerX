@@ -19,12 +19,24 @@ Idempotent: does nothing if the admin user already exists. Run after
 `python -m app.load_sample_project`:  python -m app.seed_roles
 """
 
+import os
+
 from app.db import Base, SessionLocal, engine
 from app.models import Project, TeamMember, User
 from app.models.team import project_clients
 from app.security import hash_password
+from app.services.development_guard import require_non_production
+from app.services.password_policy import validate_password
 
-DEMO_PASSWORD = "ChangeMe123!"
+
+def _demo_password() -> str:
+    password = os.getenv("TRACKERX_DEMO_PASSWORD", "")
+    if not password:
+        raise RuntimeError(
+            "Set TRACKERX_DEMO_PASSWORD to a unique temporary password before seeding demo users."
+        )
+    validate_password(password)
+    return password
 
 # Professional role titles for each team member.
 PROFESSIONAL_ROLES = {
@@ -75,6 +87,7 @@ def _member_or_raise(db, name: str) -> TeamMember:
 
 
 def seed() -> None:
+    require_non_production("the demo-role seed")
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
@@ -100,9 +113,11 @@ def seed() -> None:
         if project is None:
             raise RuntimeError("No project found — run `python -m app.load_sample_project` first.")
 
+        demo_password = _demo_password()
+
         admin = User(
             email="admin@demo.com",
-            hashed_password=hash_password(DEMO_PASSWORD),
+            hashed_password=hash_password(demo_password),
             full_name="Dr. Mohammad Alnabhan",
             role="admin",
             access_level="write",
@@ -110,13 +125,13 @@ def seed() -> None:
         )
         client = User(
             email="client@demo.com",
-            hashed_password=hash_password(DEMO_PASSWORD),
+            hashed_password=hash_password(demo_password),
             full_name="PSUT Stakeholder",
             role="client",
         )
         pm_user = User(
             email=_email_for(PM_NAME),
-            hashed_password=hash_password(DEMO_PASSWORD),
+            hashed_password=hash_password(demo_password),
             full_name=PM_NAME,
             role="admin",
             access_level="write",
@@ -141,7 +156,7 @@ def seed() -> None:
             member = _member_or_raise(db, name)
             dev_user = User(
                 email=_email_for(name),
-                hashed_password=hash_password(DEMO_PASSWORD),
+                hashed_password=hash_password(demo_password),
                 full_name=name,
                 role="developer",
                 must_change_password=1,
@@ -180,7 +195,7 @@ def seed() -> None:
         db.commit()
         logins = ["admin@demo.com", pm_user.email, "client@demo.com", *dev_emails]
         print(f"Role seed complete. {len(logins)} user accounts created.")
-        print(f"Logins (password {DEMO_PASSWORD}): " + ", ".join(logins))
+        print("Logins: " + ", ".join(logins))
     finally:
         db.close()
 

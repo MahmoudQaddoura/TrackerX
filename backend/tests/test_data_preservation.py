@@ -9,6 +9,15 @@ from pathlib import Path
 
 
 class DocumentStorageTests(unittest.TestCase):
+    def test_office_preview_rejects_xml_entities(self):
+        from app.services.document_preview import PreviewUnavailable, _xml_text
+
+        malicious_xml = b"""<?xml version="1.0"?>
+        <!DOCTYPE data [<!ENTITY xxe SYSTEM="file:///etc/passwd">]>
+        <data><t>&xxe;</t></data>"""
+        with self.assertRaises(PreviewUnavailable):
+            _xml_text(malicious_xml)
+
     def test_legacy_windows_path_becomes_portable(self):
         from app.services.document_storage import resolve_document_path, storage_key_for_path
 
