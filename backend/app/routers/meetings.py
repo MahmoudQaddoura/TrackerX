@@ -11,7 +11,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.deps import check_project_access, get_current_user, require_manager
+from app.deps import (
+    check_project_access,
+    check_project_manage_access,
+    get_current_user,
+    require_manager,
+)
 from app.models import Meeting, Project, User
 from app.models.meeting import MEETING_TYPES
 from app.schemas.meeting import MeetingInput, MeetingOut, MeetingUpdate

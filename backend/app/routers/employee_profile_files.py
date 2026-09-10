@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db import get_db
-from app.deps import get_current_user, require_admin
+from app.deps import get_current_user
 from app.models import EmployeeProfileFile, TeamMember, User
 from app.schemas.employee_profile_file import EmployeeProfileFileOut
 from app.services.document_storage import InvalidDocumentPath, build_storage_key
@@ -54,6 +54,15 @@ def _require_file_view(user: User, member: TeamMember) -> None:
         raise HTTPException(
             status_code=403,
             detail="Employee files are private to the employee and administrators.",
+        )
+
+
+def _require_file_manage(user: User, member: TeamMember) -> None:
+    """Allow administrators, or an employee acting on their own private profile."""
+    if user.role != "admin" and member.user_id != user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="Employee files can be changed only by the employee or an administrator.",
         )
 
 
@@ -100,9 +109,10 @@ async def upload_profile_files(
     member_id: int,
     files: list[UploadFile] = File(...),
     db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    user: User = Depends(get_current_user),
 ):
-    _member_or_404(db, member_id)
+    member = _member_or_404(db, member_id)
+    _require_file_manage(user, member)
     if not files:
         raise HTTPException(status_code=422, detail="Select at least one file.")
     if len(files) > _MAX_FILES_PER_UPLOAD:
@@ -158,7 +168,7 @@ async def upload_profile_files(
                 file_path=storage_key,
                 content_type=upload.content_type,
                 file_size=total_bytes,
-                uploaded_by_id=admin.id,
+                uploaded_by_id=user.id,
             )
             db.add(record)
             records.append(record)
@@ -200,9 +210,10 @@ def preview_profile_file(
 def delete_profile_file(
     file_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    user: User = Depends(get_current_user),
 ):
     profile_file = _file_or_404(db, file_id)
+    _require_file_manage(user, profile_file.team_member)
     try:
         get_document_store().delete(object_key_from_stored(profile_file.file_path))
     except InvalidDocumentPath:
