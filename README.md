@@ -44,6 +44,28 @@ server regularly; neither runtime data nor confidential uploads are committed to
 See [docs/GUIDE.md](docs/GUIDE.md) for the full deployment, update, backup, and
 verification procedure.
 
+### Concurrent-use protection
+
+The production service accepts up to 100 active requests, queues connection
+bursts with a 2,048-entry listen backlog, and restarts automatically after a
+process or memory failure. The SQLAlchemy pool supports 20 persistent plus 20
+overflow connections, while SQLite WAL and a 30-second busy timeout protect
+normal concurrent reads and short writes. Full readiness results are
+single-flight cached for five seconds so monitoring bursts cannot repeatedly
+scan the database or object store.
+
+Run the read-only production concurrency gate from a trusted operator machine:
+
+```bash
+python scripts/load_readiness.py https://trackerx.example.com/api/health \
+  --requests 300 --concurrency 30
+```
+
+The current single-process setting intentionally keeps login throttling and
+SQLite writes consistent. Before adding API replicas or Uvicorn workers, migrate
+the database to PostgreSQL and the throttle state to Redis. Multiple processes
+sharing SQLite are not presented as a high-availability design.
+
 ## Local development
 
 Backend (Python 3.10+):

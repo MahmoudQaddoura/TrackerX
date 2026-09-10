@@ -10,6 +10,7 @@ One purpose: expose a cached `settings` object. No DB, no framework logic here.
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # backend/ directory (this file lives in backend/app/)
@@ -24,6 +25,15 @@ class Settings(BaseSettings):
 
     # Database — SQLite file inside backend/data/
     database_url: str = f"sqlite:///{BASE_DIR / 'data' / 'app.db'}"
+    database_pool_size: int = Field(default=20, ge=1, le=64)
+    database_max_overflow: int = Field(default=20, ge=0, le=64)
+    database_pool_timeout_seconds: int = Field(default=30, ge=1, le=120)
+    database_pool_recycle_seconds: int = Field(default=1800, ge=60, le=86_400)
+
+    # A short single-flight cache prevents concurrent health checks from
+    # repeatedly scanning the same database and object store.
+    readiness_cache_seconds: float = Field(default=5.0, ge=0, le=30)
+    readiness_failure_cache_seconds: float = Field(default=1.0, ge=0, le=10)
 
     # Auth / JWT
     jwt_secret_key: str = "CHANGE_ME_IN_PRODUCTION_USE_32_BYTES"

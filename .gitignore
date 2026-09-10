@@ -5,6 +5,7 @@
 
 *.log
 *.out
+*.bundle
 __pycache__/
 *.py[cod]
 .pytest_cache/
