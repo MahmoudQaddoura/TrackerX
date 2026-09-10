@@ -3,8 +3,9 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  Clock3,
   Download,
+  PencilLine,
+  RefreshCw,
   Save,
   Search,
   Undo2,
@@ -33,11 +34,8 @@ import { getApiErrorMessage } from "@/lib/apiClient";
 import { cn } from "@/lib/utils";
 import type { AttendanceRecord, AttendanceStatus } from "@/types";
 
-const DEFAULT_START = "09:00";
-const DEFAULT_END = "17:00";
-
 const STATUS_OPTIONS: { value: AttendanceStatus; label: string }[] = [
-  { value: "not_recorded", label: "Not recorded" },
+  { value: "not_recorded", label: "Awaiting check-in" },
   { value: "present", label: "Present" },
   { value: "remote", label: "Remote" },
   { value: "leave", label: "Leave" },
@@ -115,16 +113,14 @@ export function AttendancePage({ embedded = false }: { embedded?: boolean } = {}
   const { isAdmin } = useAuth();
   const [searchParams] = useSearchParams();
   const [date, setDate] = useState(() => searchParams.get("date") ?? localDate());
-  const attendance = useAttendance(date);
-  const save = useSaveAttendance(date);
   const [rows, setRows] = useState<AttendanceRecord[]>([]);
   const [dirty, setDirty] = useState(false);
+  const [correctionMode, setCorrectionMode] = useState(false);
+  const attendance = useAttendance(date, !dirty);
+  const save = useSaveAttendance(date);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [exporting, setExporting] = useState<"daily" | "monthly" | null>(null);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
-  const [officeStart, setOfficeStart] = useState(DEFAULT_START);
-  const [officeEnd, setOfficeEnd] = useState(DEFAULT_END);
-  const [autoFillHours, setAutoFillHours] = useState(true);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<AttendanceFilter>("all");
 
@@ -148,9 +144,6 @@ export function AttendancePage({ embedded = false }: { embedded?: boolean } = {}
       attending,
       away,
       unrecorded: rows.filter((row) => row.status === "not_recorded").length,
-      fillable: rows.filter(
-        (row) => row.status === "not_recorded" && !row.leave_request_id,
-      ).length,
     };
   }, [rows]);
 
@@ -186,53 +179,17 @@ export function AttendancePage({ embedded = false }: { embedded?: boolean } = {}
     const row = rows.find((item) => item.team_member_id === memberId);
     if (!row) return;
     const patch: Partial<AttendanceRecord> = { status };
-    if (isOnDuty(status)) {
-      patch.check_in = row.check_in ?? (autoFillHours ? officeStart : null);
-      patch.check_out = row.check_out ?? (autoFillHours ? officeEnd : null);
-    } else {
+    if (!isOnDuty(status)) {
       patch.check_in = null;
       patch.check_out = null;
     }
     updateRow(memberId, patch);
   }
 
-  function markAllPresent() {
-    let changed = false;
-    const next = rows.map((row) => {
-      if (row.status !== "not_recorded" || row.leave_request_id) return row;
-      changed = true;
-      return {
-        ...row,
-        status: "present" as const,
-        check_in: autoFillHours ? officeStart : null,
-        check_out: autoFillHours ? officeEnd : null,
-      };
-    });
-    if (!changed) return;
-    setRows(next);
-    setDirty(true);
-    setSavedAt(null);
-    setSaveError(null);
-  }
-
-  function applyOfficeHours() {
-    let changed = false;
-    const next = rows.map((row) => {
-      if (!isOnDuty(row.status)) return row;
-      if (row.check_in === officeStart && row.check_out === officeEnd) return row;
-      changed = true;
-      return { ...row, check_in: officeStart, check_out: officeEnd };
-    });
-    if (!changed) return;
-    setRows(next);
-    setDirty(true);
-    setSavedAt(null);
-    setSaveError(null);
-  }
-
   function discardChanges() {
     setRows(attendance.data ?? []);
     setDirty(false);
+    setCorrectionMode(false);
     setSaveError(null);
   }
 
@@ -252,6 +209,7 @@ export function AttendancePage({ embedded = false }: { embedded?: boolean } = {}
     try {
       await save.mutateAsync(buildPayload());
       setDirty(false);
+      setCorrectionMode(false);
       setSavedAt(new Date());
     } catch (error) {
       setSaveError(getApiErrorMessage(error, "Could not save the attendance sheet."));
@@ -401,51 +359,32 @@ export function AttendancePage({ embedded = false }: { embedded?: boolean } = {}
               <div>
                 <h2 className="font-display text-lg font-semibold text-fg">Daily attendance</h2>
                 <p className="mt-0.5 text-xs text-fg-muted">
-                  Office-local time · leave-linked rows are protected from bulk attendance.
+                  Employee confirmations and approved leave sync into this register automatically.
                 </p>
               </div>
 
               {isAdmin && (
-                <div className="flex flex-wrap items-end gap-2">
-                  <label className="space-y-1">
-                    <span className="block text-[11px] font-medium uppercase tracking-wide text-fg-subtle">Start</span>
-                    <Input
-                      aria-label="Default office start"
-                      className="w-[112px]"
-                      type="time"
-                      value={officeStart}
-                      onChange={(event) => setOfficeStart(event.target.value)}
-                    />
-                  </label>
-                  <label className="space-y-1">
-                    <span className="block text-[11px] font-medium uppercase tracking-wide text-fg-subtle">End</span>
-                    <Input
-                      aria-label="Default office end"
-                      className="w-[112px]"
-                      type="time"
-                      value={officeEnd}
-                      onChange={(event) => setOfficeEnd(event.target.value)}
-                    />
-                  </label>
-                  <Button variant="outline" size="sm" onClick={applyOfficeHours} disabled={!counts.attending}>
-                    <Clock3 className="h-4 w-4" />
-                    Apply hours
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="success" className="gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-current" />Live sync · 5s</Badge>
+                  <Button variant="outline" size="sm" onClick={() => attendance.refetch()} disabled={attendance.isFetching || dirty}>
+                    <RefreshCw className={cn("h-4 w-4", attendance.isFetching && "animate-spin")} /> Refresh
                   </Button>
-                  <label className="flex h-9 cursor-pointer items-center gap-2 rounded-md border border-border bg-surface px-3 text-sm font-medium text-fg">
-                    <input
-                      type="checkbox"
-                      checked={autoFillHours}
-                      onChange={(event) => setAutoFillHours(event.target.checked)}
-                      className="h-4 w-4 rounded border-border accent-accent"
-                    />
-                    Auto-fill hours
-                  </label>
-                  <Button size="sm" onClick={markAllPresent} disabled={!counts.fillable}>
-                    <UserCheck className="h-4 w-4" />
-                    Mark all present
-                  </Button>
+                  {!correctionMode && (
+                    <Button variant="outline" size="sm" onClick={() => setCorrectionMode(true)}>
+                      <PencilLine className="h-4 w-4" /> Manage exceptions
+                    </Button>
+                  )}
                 </div>
               )}
+            </div>
+
+            <div className={cn("mt-4 rounded-xl border px-4 py-3 text-sm", correctionMode ? "border-warning/25 bg-warning/5" : "border-accent/15 bg-accent-soft/30")}>
+              <p className="font-semibold text-fg">{correctionMode ? "Exception editing is active" : "No manual attendance sheet required"}</p>
+              <p className="mt-0.5 text-xs leading-5 text-fg-muted">
+                {correctionMode
+                  ? "Use this only to classify an unresolved no-show or correct a verified record. Approved leave is protected and added through the Leave center."
+                  : "Employees record their own office or remote check-in and check-out. Approved vacation, leave, or sickness is added automatically; unresolved employees stay Awaiting check-in."}
+              </p>
             </div>
 
             <div className="mt-4 flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
@@ -467,17 +406,17 @@ export function AttendancePage({ embedded = false }: { embedded?: boolean } = {}
                   aria-label="Filter attendance status"
                 >
                   <option value="all">All employees</option>
-                  <option value="unrecorded">Unrecorded ({counts.unrecorded})</option>
+                  <option value="unrecorded">Awaiting check-in ({counts.unrecorded})</option>
                   <option value="on_duty">On duty ({counts.attending})</option>
                   <option value="away">Away ({counts.away})</option>
                 </Select>
               </div>
 
               <div className="flex items-center justify-end gap-2">
-                {isAdmin && dirty && (
+                {isAdmin && correctionMode && (
                   <Button variant="ghost" size="sm" onClick={discardChanges}>
                     <Undo2 className="h-4 w-4" />
-                    Discard
+                    {dirty ? "Discard" : "Exit exceptions"}
                   </Button>
                 )}
                 <Button
@@ -500,10 +439,10 @@ export function AttendancePage({ embedded = false }: { embedded?: boolean } = {}
                   {exporting === "monthly" ? <Spinner /> : <CalendarCheck2 className="h-4 w-4" />}
                   Monthly PDF
                 </Button>
-                {isAdmin && (
+                {isAdmin && correctionMode && (
                   <Button size="sm" onClick={handleSave} disabled={!dirty || save.isPending}>
                     {save.isPending ? <Spinner /> : <Save className="h-4 w-4" />}
-                    Save attendance
+                    Save corrections
                   </Button>
                 )}
               </div>
@@ -534,7 +473,7 @@ export function AttendancePage({ embedded = false }: { embedded?: boolean } = {}
                     <tr>
                       <th className="w-[9%] px-4 py-3 font-semibold">Employee ID</th>
                       <th className="w-[21%] px-3 py-3 font-semibold">Employee</th>
-                      <th className="w-[10%] px-3 py-3 text-center font-semibold">Confirmed</th>
+                      <th className="w-[12%] px-3 py-3 text-center font-semibold">Source</th>
                       <th className="w-[14%] px-3 py-3 font-semibold">Status</th>
                       <th className="w-[13%] px-3 py-3 font-semibold">Check-in</th>
                       <th className="w-[13%] px-3 py-3 font-semibold">Check-out</th>
@@ -546,7 +485,7 @@ export function AttendancePage({ embedded = false }: { embedded?: boolean } = {}
                       <AttendanceTableRow
                         key={row.team_member_id}
                         row={row}
-                        isAdmin={isAdmin}
+                        isAdmin={isAdmin && correctionMode}
                         onStatusChange={updateStatus}
                         onUpdate={updateRow}
                       />
@@ -558,7 +497,7 @@ export function AttendancePage({ embedded = false }: { embedded?: boolean } = {}
 
           <div className="flex items-center justify-between border-t border-border bg-raised/30 px-4 py-2.5 text-xs text-fg-muted">
             <span>Showing {visibleRows.length} of {rows.length} employees</span>
-            {dirty ? <span className="font-medium text-warning">Changes not saved</span> : <span>Sheet up to date</span>}
+            {dirty ? <span className="font-medium text-warning">Corrections not saved</span> : <span>{attendance.isFetching ? "Syncing…" : "Live register up to date"}</span>}
           </div>
         </Card>
       )}
@@ -605,8 +544,10 @@ type RowEditorProps = {
 
 function AttendanceTableRow(props: RowEditorProps) {
   const { row, isAdmin } = props;
+  const canEdit = isAdmin && !row.leave_request_id;
+  const editableProps = { ...props, isAdmin: canEdit };
   return (
-    <tr className="bg-surface align-middle transition-colors hover:bg-raised/30">
+    <tr className={cn("align-middle transition-colors hover:bg-raised/30", row.status === "not_recorded" ? "bg-warning/[0.025]" : "bg-surface")}>
       <td className="px-4 py-3 font-mono text-xs font-semibold text-accent">
         {row.employee_number}
       </td>
@@ -614,36 +555,29 @@ function AttendanceTableRow(props: RowEditorProps) {
         <EmployeeIdentity row={row} />
       </td>
       <td className="px-3 py-3">
-        <label className="flex cursor-pointer items-center justify-center gap-2">
-          <input
-            type="checkbox"
-            checked={isOnDuty(row.status)}
-            disabled={!isAdmin}
-            onChange={(event) =>
-              props.onStatusChange(
-                row.team_member_id,
-                event.target.checked ? "present" : "absent",
-              )
-            }
-            aria-label={`Mark ${row.employee_name} attended`}
-            className="h-5 w-5 rounded border-border accent-accent disabled:cursor-not-allowed"
-          />
-          <span className={cn("text-xs font-medium", isOnDuty(row.status) ? "text-success" : "text-fg-subtle")}>
-            {row.confirmed_by_employee ? "Self" : isOnDuty(row.status) ? "Admin" : "No"}
-          </span>
-        </label>
+        <div className="flex justify-center">
+          {row.confirmed_by_employee ? (
+            <Badge variant="success">Employee</Badge>
+          ) : row.leave_request_id ? (
+            <Badge variant="warning">Approved leave</Badge>
+          ) : row.status === "not_recorded" ? (
+            <Badge variant="outline">Awaiting</Badge>
+          ) : (
+            <Badge variant="neutral">Admin correction</Badge>
+          )}
+        </div>
       </td>
       <td className="px-3 py-3">
-        <StatusControl {...props} />
+        <StatusControl {...editableProps} />
       </td>
       <td className="px-3 py-3">
-        <TimeControl {...props} field="check_in" label="Check-in" />
+        <TimeControl {...editableProps} field="check_in" label="Check-in" />
       </td>
       <td className="px-3 py-3">
-        <TimeControl {...props} field="check_out" label="Check-out" />
+        <TimeControl {...editableProps} field="check_out" label="Check-out" />
       </td>
       <td className="px-3 py-3">
-        {isAdmin ? (
+        {canEdit ? (
           <Input
             className="w-full min-w-0"
             value={row.notes ?? ""}

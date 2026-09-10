@@ -321,6 +321,20 @@ def save_attendance_sheet(
             )
             .first()
         )
+        if record is not None and record.leave_request_id:
+            next_notes = item.notes.strip() if item.notes and item.notes.strip() else None
+            leave_row_changed = (
+                record.status != item.status
+                or record.check_in != (item.check_in or None)
+                or record.check_out != (item.check_out or None)
+                or record.notes != next_notes
+            )
+            if leave_row_changed:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Approved leave rows must be changed through the Leave center.",
+                )
+            continue
         if item.status == "not_recorded":
             if record:
                 db.delete(record)

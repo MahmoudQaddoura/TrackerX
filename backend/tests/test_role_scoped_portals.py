@@ -9,7 +9,12 @@ from sqlalchemy.orm import Session
 from app.db import Base
 from app.deps import check_project_manage_access, get_accessible_project_ids
 from app.models import Notification, Project, TeamMember, User
-from app.routers.attendance import _scoped_members, confirm_my_attendance, save_attendance_sheet
+from app.routers.attendance import (
+    _scoped_members,
+    attendance_sheet,
+    confirm_my_attendance,
+    save_attendance_sheet,
+)
 from app.routers.leave_requests import create_leave_request, list_leave_requests, review_leave_request
 from app.routers.projects import get_project_team, replace_project_team, update_project_manager
 from app.routers.tasks import _validate_pm_roster
@@ -107,6 +112,16 @@ class RoleScopedPortalTests(unittest.TestCase):
         self.assertEqual(confirmed["status"], "remote")
         self.assertTrue(confirmed["confirmed_by_employee"])
         self.assertIsNotNone(confirmed["check_in"])
+        team_row = next(
+            row
+            for row in attendance_sheet(
+                attendance_date=confirmed["attendance_date"], db=self.db, user=self.admin
+            )
+            if row["team_member_id"] == self.dev.id
+        )
+        self.assertEqual(team_row["check_in"], confirmed["check_in"])
+        self.assertEqual(team_row["status"], "remote")
+        self.assertTrue(team_row["confirmed_by_employee"])
         checked_out = confirm_my_attendance(
             AttendanceSelfConfirmationInput(action="check_out", work_mode="remote"),
             db=self.db,
@@ -162,11 +177,38 @@ class RoleScopedPortalTests(unittest.TestCase):
 
         reviewed = review_leave_request(
             employee_leave["id"],
-            LeaveRequestReview(status="approved", autofill_attendance=False),
+            LeaveRequestReview(status="approved", autofill_attendance=True),
             db=self.db,
             reviewer=self.pm_user,
         )
         self.assertEqual(reviewed["status"], "approved")
+        leave_row = next(
+            row
+            for row in attendance_sheet(
+                attendance_date="2026-09-15", db=self.db, user=self.admin
+            )
+            if row["team_member_id"] == self.dev.id
+        )
+        self.assertEqual(leave_row["status"], "leave")
+        self.assertEqual(leave_row["leave_request_id"], employee_leave["id"])
+        with self.assertRaises(HTTPException) as error:
+            save_attendance_sheet(
+                AttendanceBulkInput(
+                    records=[
+                        AttendanceInput(
+                            team_member_id=self.dev.id,
+                            attendance_date="2026-09-15",
+                            status="present",
+                            check_in="09:00",
+                            check_out="17:00",
+                            notes=None,
+                        )
+                    ]
+                ),
+                db=self.db,
+                admin=self.admin,
+            )
+        self.assertEqual(error.exception.status_code, 409)
 
         manager_leave = create_leave_request(
             LeaveRequestCreate(

@@ -10,10 +10,12 @@ import {
   type AttendanceInput,
 } from "@/api/attendance";
 
-export function useAttendance(date: string) {
+export function useAttendance(date: string, live = true) {
   return useQuery({
     queryKey: ["attendance", date],
     queryFn: () => fetchAttendance(date),
+    refetchInterval: live ? 5_000 : false,
+    refetchOnWindowFocus: "always",
   });
 }
 
@@ -29,6 +31,8 @@ export function useMyAttendance() {
   return useQuery({
     queryKey: ["attendance", "me", "today"],
     queryFn: fetchMyAttendance,
+    refetchInterval: 15_000,
+    refetchOnWindowFocus: "always",
   });
 }
 

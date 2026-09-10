@@ -47,6 +47,7 @@ export function AttendanceConfirmation() {
   const isAway = ["leave", "sick_leave", "absent"].includes(record.status);
   const checkedIn = Boolean(record.check_in && record.confirmed_by_employee);
   const checkedOut = Boolean(record.check_out && record.confirmed_by_employee);
+  const selectedMode: WorkMode = checkedIn && record.status === "remote" ? "remote" : workMode;
 
   return (
     <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
@@ -71,12 +72,12 @@ export function AttendanceConfirmation() {
           ) : (
             <>
               <div className="grid grid-cols-2 gap-2">
-                <button type="button" onClick={() => setWorkMode("present")} disabled={checkedIn} className={`rounded-xl border p-4 text-left transition ${workMode === "present" ? "border-accent bg-accent-soft" : "border-border hover:bg-raised"} disabled:cursor-not-allowed disabled:opacity-70`}>
+                <button type="button" onClick={() => setWorkMode("present")} disabled={checkedIn} className={`rounded-xl border p-4 text-left transition ${selectedMode === "present" ? "border-accent bg-accent-soft" : "border-border hover:bg-raised"} disabled:cursor-not-allowed disabled:opacity-70`}>
                   <Building2 className="h-5 w-5 text-accent" />
                   <span className="mt-2 block font-semibold text-fg">Office</span>
                   <span className="text-xs text-fg-muted">Working on site</span>
                 </button>
-                <button type="button" onClick={() => setWorkMode("remote")} disabled={checkedIn} className={`rounded-xl border p-4 text-left transition ${workMode === "remote" ? "border-accent bg-accent-soft" : "border-border hover:bg-raised"} disabled:cursor-not-allowed disabled:opacity-70`}>
+                <button type="button" onClick={() => setWorkMode("remote")} disabled={checkedIn} className={`rounded-xl border p-4 text-left transition ${selectedMode === "remote" ? "border-accent bg-accent-soft" : "border-border hover:bg-raised"} disabled:cursor-not-allowed disabled:opacity-70`}>
                   <MonitorUp className="h-5 w-5 text-accent" />
                   <span className="mt-2 block font-semibold text-fg">Remote</span>
                   <span className="text-xs text-fg-muted">Working off site</span>

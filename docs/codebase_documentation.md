@@ -150,7 +150,7 @@ Prototype/
 | Projects | Company-wide | Assigned and task-linked projects | Assigned and task-linked projects | Explicitly linked projects and inherited support workspace |
 | Delivery management | All projects | Only projects they are the named manager of | Status updates when write access is granted | Read-only client view |
 | Project team | Assign managers and members | Replace the roster of each project they lead | No roster management | Hidden |
-| Attendance and leave | Company-wide sheet; review employee leave; owner reviews PM/non-owner admin leave; another admin reviews owner leave | Self-confirm attendance; review leave only for employees fully within managed project scope; own requests go to owner | Self-confirm attendance; submit and view own leave | Denied in UI and API |
+| Attendance and leave | Live company register; exception corrections; review employee leave; owner reviews PM/non-owner admin leave; another admin reviews owner leave | Self-confirm attendance from attendance or own profile; review leave only for employees fully within managed project scope; own requests go to owner | Self-confirm attendance from attendance or own profile; submit and view own leave | Denied in UI and API |
 | Employee profiles | Full directory and private files | Read-only directory; own private profile | Own private profile | Not available |
 | Employment records | Manage job role, employment type, and weekly hours | Read-only workforce view | Own profile | Not available |
 | Login roles | Owner assigns/removes privileged roles; admins manage ordinary access | No access administration | Change own password | Not available |
