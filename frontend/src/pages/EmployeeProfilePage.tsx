@@ -29,6 +29,7 @@ import {
   updateMember,
   uploadEmployeeProfileFiles,
 } from "@/api/team";
+import { AttendanceConfirmation } from "@/components/attendance/AttendanceConfirmation";
 import { EmployeeFilePreviewDialog } from "@/components/employees/EmployeeFilePreviewDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -81,7 +82,7 @@ export function EmployeeProfilePage({ self = false }: { self?: boolean }) {
   const { memberId } = useParams();
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const { isAdmin } = useAuth();
+  const { isAdmin, isClient } = useAuth();
   const parsedMemberId = Number(memberId);
   const profileQuery = useQuery({
     queryKey: ["employee-profile", self ? "me" : parsedMemberId],
@@ -219,6 +220,8 @@ export function EmployeeProfilePage({ self = false }: { self?: boolean }) {
         <ProfileMetric icon={CheckCircle2} label="Completed tasks" value={completedTasks} tone="success" />
         <ProfileMetric icon={FileText} label="Profile files" value={member.profile_file_count} />
       </div>
+
+      {self && !isClient && <AttendanceConfirmation />}
 
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.65fr)_minmax(300px,0.85fr)]">
         <div className="space-y-5">

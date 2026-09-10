@@ -28,12 +28,13 @@ Audit baseline: 5 September 2026. This inventory is reconstructed from the appli
 
 ## Attendance, leave, and coverage
 
-- One daily employee sheet with employee self-confirmation, admin correction, autofill/bulk attendance, optional times and notes, date navigation. Check-in and check-out use server-controlled Amman office time.
+- One live daily employee register with self-service office/remote check-in and check-out, server-controlled Amman timestamps, automatic five-second team refresh, optional notes, and a separate administrator exception-correction mode.
 - Daily PDF attendance sheet and monthly days-off/leave PDF report with employee ID and role columns, Blockexe branding, and Yu Gothic styling where the font is available.
 - Full-day/hourly leave requests with role-aware routing: employees notify accountable PMs and admins; PM/non-owner administrator leave requires owner review; owner leave routes to another administrator. No requester can approve their own leave.
 - Coverage considers the requested absence interval, task urgency, candidate workload, and availability.
 - Coverage offers notify the selected employee; task ownership changes after acceptance.
-- Separate personal confirmation, team attendance, leave center, and coverage inbox views in a TrackerX attendance control center.
+- Separate personal confirmation, team attendance, leave center, and coverage inbox views in a TrackerX attendance control center. Personal confirmation is also embedded in every internal user's own profile.
+- Approved leave automatically owns and protects the corresponding attendance row. Unresolved employees remain clearly marked as Awaiting check-in until an authorized exception is recorded; TrackerX never invents vacation without an approved request.
 - Administrators retain company-wide attendance; PMs review leave only when they own the employee's complete active project scope; employees see their own records; clients are denied attendance and leave access.
 
 ## Asset inventory
