@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.db import get_db, now_iso
-from app.deps import get_current_user, require_admin
+from app.deps import get_current_user
 from app.models import LeaveCoverageOffer, LeaveRequest, Task, TeamMember, User
 from app.schemas.coverage import (
     CoverageAssignInput,
@@ -18,6 +18,8 @@ from app.schemas.coverage import (
     CoverageResponseInput,
 )
 from app.services.leave import approve_leave_request
+from app.services.leave_permissions import require_leave_review_access
+from app.services.notifications import notify_members
 from app.services.risk import task_risk
 
 router = APIRouter(tags=["leave coverage"])
@@ -243,9 +245,10 @@ def _offer_out(offer: LeaveCoverageOffer) -> dict:
 def coverage_plan(
     request_id: int,
     db: Session = Depends(get_db),
-    _admin: User = Depends(require_admin),
+    _admin: User = Depends(get_current_user),
 ):
     request = _request_or_404(db, request_id)
+    require_leave_review_access(db, _admin, request)
     leave_dates = _leave_dates(request)
     all_source_tasks = _member_tasks(request.team_member)
     source_tasks_with_dates = [
@@ -323,9 +326,10 @@ def assign_leave_coverage(
     request_id: int,
     inp: CoverageAssignInput,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(get_current_user),
 ):
     request = _request_or_404(db, request_id)
+    require_leave_review_access(db, admin, request)
     if request.status not in ("pending", "approved"):
         raise HTTPException(status_code=409, detail="Coverage cannot be assigned to this request.")
 
@@ -371,6 +375,7 @@ def assign_leave_coverage(
         .all()
     }
     created: list[LeaveCoverageOffer] = []
+    coverage_recipients: list[TeamMember] = []
     for assignment in inp.assignments:
         if assignment.task_id in active_offer_ids:
             raise HTTPException(status_code=409, detail="A selected task already has active coverage.")
@@ -390,6 +395,18 @@ def assign_leave_coverage(
         )
         db.add(offer)
         created.append(offer)
+        coverage_recipients.append(candidate)
+
+    if created:
+        notify_members(
+            db,
+            coverage_recipients,
+            kind="leave_coverage",
+            title=f"Coverage requested · {request.team_member.name}",
+            message=f"You have {len(created)} task coverage request{'s' if len(created) != 1 else ''} for {request.start_date} to {request.end_date}.",
+            link="/attendance?section=coverage",
+            exclude_user_id=admin.id,
+        )
 
     if request.status == "pending":
         approve_leave_request(
@@ -398,6 +415,15 @@ def assign_leave_coverage(
             admin,
             inp.review_note,
             inp.autofill_attendance,
+        )
+        notify_members(
+            db,
+            [request.team_member],
+            kind="leave_review",
+            title="Leave request approved",
+            message=f"Your {request.request_type.replace('_', ' ')} request for {request.start_date} to {request.end_date} was approved by {admin.full_name}.",
+            link="/attendance?section=leave",
+            exclude_user_id=admin.id,
         )
     db.commit()
     for offer in created:
@@ -460,6 +486,15 @@ def respond_to_coverage_offer(
         inp.response_note.strip() if inp.response_note and inp.response_note.strip() else None
     )
     offer.responded_at = now_iso()
+    notify_members(
+        db,
+        [offer.from_member],
+        kind="coverage_response",
+        title=f"Coverage {inp.action}",
+        message=f"{member.name} {inp.action} coverage for {offer.task.title}.",
+        link="/attendance?section=coverage",
+        exclude_user_id=user.id,
+    )
     db.commit()
     db.refresh(offer)
     return _offer_out(offer)

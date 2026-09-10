@@ -9,12 +9,15 @@ from sqlalchemy.orm import Session
 from app.db import Base
 from app.deps import check_project_manage_access, get_accessible_project_ids
 from app.models import Notification, Project, TeamMember, User
-from app.routers.attendance import _scoped_members
+from app.routers.attendance import _scoped_members, confirm_my_attendance, save_attendance_sheet
+from app.routers.leave_requests import create_leave_request, list_leave_requests, review_leave_request
 from app.routers.projects import get_project_team, replace_project_team, update_project_manager
 from app.routers.tasks import _validate_pm_roster
 from app.schemas.project import ProjectManagerInput, ProjectTeamInput
 from app.routers.team_members import provision_credentials
 from app.schemas.team_member import EmployeeCredentialsInput
+from app.schemas.attendance import AttendanceBulkInput, AttendanceInput, AttendanceSelfConfirmationInput
+from app.schemas.leave_request import LeaveRequestCreate, LeaveRequestReview
 
 
 class RoleScopedPortalTests(unittest.TestCase):
@@ -94,6 +97,97 @@ class RoleScopedPortalTests(unittest.TestCase):
     def test_pm_attendance_scope_is_self_only(self) -> None:
         self.assertEqual([member.id for member in _scoped_members(self.db, self.pm_user)], [self.pm.id])
         self.assertGreaterEqual(len(_scoped_members(self.db, self.admin)), 4)
+
+    def test_internal_employee_can_self_confirm_but_client_cannot(self) -> None:
+        confirmed = confirm_my_attendance(
+            AttendanceSelfConfirmationInput(action="check_in", work_mode="remote"),
+            db=self.db,
+            user=self.dev_user,
+        )
+        self.assertEqual(confirmed["status"], "remote")
+        self.assertTrue(confirmed["confirmed_by_employee"])
+        self.assertIsNotNone(confirmed["check_in"])
+        checked_out = confirm_my_attendance(
+            AttendanceSelfConfirmationInput(action="check_out", work_mode="remote"),
+            db=self.db,
+            user=self.dev_user,
+        )
+        self.assertIsNotNone(checked_out["check_out"])
+        unchanged = save_attendance_sheet(
+            AttendanceBulkInput(records=[AttendanceInput(
+                team_member_id=self.dev.id,
+                attendance_date=checked_out["attendance_date"],
+                status=checked_out["status"],
+                check_in=checked_out["check_in"],
+                check_out=checked_out["check_out"],
+                notes=checked_out["notes"],
+            )]),
+            db=self.db,
+            admin=self.admin,
+        )
+        self.assertTrue(next(row for row in unchanged if row["team_member_id"] == self.dev.id)["confirmed_by_employee"])
+
+        with self.assertRaises(HTTPException) as error:
+            confirm_my_attendance(
+                AttendanceSelfConfirmationInput(action="check_in", work_mode="present"),
+                db=self.db,
+                user=self.client_user,
+            )
+        self.assertEqual(error.exception.status_code, 403)
+
+    def test_employee_leave_routes_to_pm_and_admin_but_pm_leave_routes_to_owner(self) -> None:
+        self.admin.is_primary_admin = 1
+        self.project_one.assigned_members.append(self.dev)
+        self.db.commit()
+
+        employee_leave = create_leave_request(
+            LeaveRequestCreate(
+                request_type="leave",
+                start_date="2026-09-15",
+                end_date="2026-09-15",
+                reason="Personal appointment",
+            ),
+            db=self.db,
+            user=self.dev_user,
+        )
+        notified_user_ids = {
+            notice.user_id
+            for notice in self.db.query(Notification).filter(Notification.kind == "leave_request").all()
+        }
+        self.assertEqual(notified_user_ids, {self.admin.id, self.pm_user.id})
+        pm_inbox = list_leave_requests(scope="reviewable", status=None, db=self.db, user=self.pm_user)
+        self.assertEqual([request["id"] for request in pm_inbox], [employee_leave["id"]])
+        other_pm_inbox = list_leave_requests(scope="reviewable", status=None, db=self.db, user=self.other_pm_user)
+        self.assertEqual(other_pm_inbox, [])
+
+        reviewed = review_leave_request(
+            employee_leave["id"],
+            LeaveRequestReview(status="approved", autofill_attendance=False),
+            db=self.db,
+            reviewer=self.pm_user,
+        )
+        self.assertEqual(reviewed["status"], "approved")
+
+        manager_leave = create_leave_request(
+            LeaveRequestCreate(
+                request_type="leave",
+                start_date="2026-09-20",
+                end_date="2026-09-20",
+                reason="Manager personal leave",
+            ),
+            db=self.db,
+            user=self.pm_user,
+        )
+        with self.assertRaises(HTTPException) as error:
+            review_leave_request(
+                manager_leave["id"],
+                LeaveRequestReview(status="approved", autofill_attendance=False),
+                db=self.db,
+                reviewer=self.pm_user,
+            )
+        self.assertEqual(error.exception.status_code, 403)
+        owner_inbox = list_leave_requests(scope="reviewable", status=None, db=self.db, user=self.admin)
+        self.assertIn(manager_leave["id"], [request["id"] for request in owner_inbox])
 
     def test_client_cannot_read_internal_project_team(self) -> None:
         with self.assertRaises(HTTPException) as error:

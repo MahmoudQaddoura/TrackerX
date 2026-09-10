@@ -14,10 +14,11 @@ import {
   type LeaveRequestReviewPayload,
 } from "@/api/leaveRequests";
 
-export function useLeaveRequests(scope: "mine" | "all") {
+export function useLeaveRequests(scope: "mine" | "all" | "reviewable", enabled = true) {
   return useQuery({
     queryKey: ["leave-requests", scope],
     queryFn: () => fetchLeaveRequests(scope),
+    enabled,
   });
 }
 

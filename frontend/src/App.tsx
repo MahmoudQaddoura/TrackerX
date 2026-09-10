@@ -32,6 +32,12 @@ function RequireAdmin({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function RequireInternal({ children }: { children: React.ReactNode }) {
+  const { isClient } = useAuth();
+  if (isClient) return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+}
+
 export default function App() {
   return (
     <Routes>
@@ -42,8 +48,8 @@ export default function App() {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/projects" element={<ProjectsPage />} />
         <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
-        <Route path="/attendance" element={<AttendanceHubPage />} />
-        <Route path="/leave-requests" element={<Navigate to="/attendance?section=leave" replace />} />
+        <Route path="/attendance" element={<RequireInternal><AttendanceHubPage /></RequireInternal>} />
+        <Route path="/leave-requests" element={<RequireInternal><Navigate to="/attendance?section=leave" replace /></RequireInternal>} />
         <Route
           path="/employees"
           element={

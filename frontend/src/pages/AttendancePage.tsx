@@ -139,15 +139,15 @@ export function AttendancePage({ embedded = false }: { embedded?: boolean } = {}
   }, [date]);
 
   const counts = useMemo(() => {
-    const recorded = rows.filter((row) => row.status !== "not_recorded").length;
+    const confirmed = rows.filter((row) => row.confirmed_by_employee).length;
     const attending = rows.filter((row) => isOnDuty(row.status)).length;
     const away = rows.filter((row) => isAway(row.status)).length;
     return {
       total: rows.length,
-      recorded,
+      confirmed,
       attending,
       away,
-      unrecorded: rows.length - recorded,
+      unrecorded: rows.filter((row) => row.status === "not_recorded").length,
       fillable: rows.filter(
         (row) => row.status === "not_recorded" && !row.leave_request_id,
       ).length,
@@ -307,7 +307,7 @@ export function AttendancePage({ embedded = false }: { embedded?: boolean } = {}
   }
 
   const isToday = date === localDate();
-  const completion = counts.total ? Math.round((counts.recorded / counts.total) * 100) : 0;
+  const completion = counts.total ? Math.round(((counts.confirmed + counts.away) / counts.total) * 100) : 0;
 
   return (
     <div className="flex flex-col gap-4">
@@ -340,7 +340,7 @@ export function AttendancePage({ embedded = false }: { embedded?: boolean } = {}
               <div className="h-1.5 w-40 overflow-hidden rounded-full bg-border sm:w-56">
                 <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${completion}%` }} />
               </div>
-              <span className="text-xs font-medium text-fg-muted">{completion}% recorded</span>
+              <span className="text-xs font-medium text-fg-muted">{completion}% confirmed or approved away</span>
             </div>
           </div>
 
@@ -383,7 +383,7 @@ export function AttendancePage({ embedded = false }: { embedded?: boolean } = {}
 
         <div className="grid grid-cols-2 divide-x divide-y divide-border border-t border-border sm:grid-cols-4 sm:divide-y-0">
           <SummaryMetric icon={Users} label="Employees" value={counts.total} />
-          <SummaryMetric icon={CheckCircle2} label="Recorded" value={`${counts.recorded}/${counts.total}`} tone="accent" />
+          <SummaryMetric icon={CheckCircle2} label="Self-confirmed" value={`${counts.confirmed}/${Math.max(0, counts.total - counts.away)}`} tone="accent" />
           <SummaryMetric icon={UserCheck} label="On duty" value={counts.attending} tone="success" />
           <SummaryMetric icon={CalendarCheck2} label="Away" value={counts.away} tone="warning" />
         </div>
@@ -534,7 +534,7 @@ export function AttendancePage({ embedded = false }: { embedded?: boolean } = {}
                     <tr>
                       <th className="w-[9%] px-4 py-3 font-semibold">Employee ID</th>
                       <th className="w-[21%] px-3 py-3 font-semibold">Employee</th>
-                      <th className="w-[10%] px-3 py-3 text-center font-semibold">Attended</th>
+                      <th className="w-[10%] px-3 py-3 text-center font-semibold">Confirmed</th>
                       <th className="w-[14%] px-3 py-3 font-semibold">Status</th>
                       <th className="w-[13%] px-3 py-3 font-semibold">Check-in</th>
                       <th className="w-[13%] px-3 py-3 font-semibold">Check-out</th>
@@ -629,7 +629,7 @@ function AttendanceTableRow(props: RowEditorProps) {
             className="h-5 w-5 rounded border-border accent-accent disabled:cursor-not-allowed"
           />
           <span className={cn("text-xs font-medium", isOnDuty(row.status) ? "text-success" : "text-fg-subtle")}>
-            {isOnDuty(row.status) ? "Yes" : "No"}
+            {row.confirmed_by_employee ? "Self" : isOnDuty(row.status) ? "Admin" : "No"}
           </span>
         </label>
       </td>
