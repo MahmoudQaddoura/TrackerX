@@ -557,7 +557,7 @@ function AttendanceTableRow(props: RowEditorProps) {
       <td className="px-3 py-3">
         <div className="flex justify-center">
           {row.confirmed_by_employee ? (
-            <Badge variant="success">Employee</Badge>
+            <Badge variant="success">Self-confirmed</Badge>
           ) : row.leave_request_id ? (
             <Badge variant="warning">Approved leave</Badge>
           ) : row.status === "not_recorded" ? (
