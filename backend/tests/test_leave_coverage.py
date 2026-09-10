@@ -6,11 +6,13 @@ import tempfile
 import unittest
 
 from fastapi import HTTPException
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 _database_file = Path(tempfile.gettempdir()) / "trackerx_leave_coverage_test.db"
 os.environ["DATABASE_URL"] = f"sqlite:///{_database_file.as_posix()}"
 
-from app.db import Base, SessionLocal, engine
+from app.db import Base
 from app.deps import get_accessible_project_ids
 from app.models import LeaveRequest, Milestone, Project, Task, TeamMember, User
 from app.routers.coverage import (
@@ -30,22 +32,33 @@ from app.routers.projects import update_project_manager
 from app.schemas.project import ProjectManagerInput
 from app.security import hash_password
 
+test_engine = create_engine(
+    f"sqlite:///{_database_file.as_posix()}",
+    connect_args={"check_same_thread": False},
+)
+TestSessionLocal = sessionmaker(
+    bind=test_engine,
+    autoflush=False,
+    autocommit=False,
+    future=True,
+)
+
 
 class LeaveCoverageWorkflowTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        Base.metadata.create_all(bind=engine)
+        Base.metadata.create_all(bind=test_engine)
 
     @classmethod
     def tearDownClass(cls) -> None:
-        Base.metadata.drop_all(bind=engine)
-        engine.dispose()
+        Base.metadata.drop_all(bind=test_engine)
+        test_engine.dispose()
         _database_file.unlink(missing_ok=True)
 
     def setUp(self) -> None:
-        Base.metadata.drop_all(bind=engine)
-        Base.metadata.create_all(bind=engine)
-        with SessionLocal() as db:
+        Base.metadata.drop_all(bind=test_engine)
+        Base.metadata.create_all(bind=test_engine)
+        with TestSessionLocal() as db:
             admin = User(
                 email="admin@trackerx.test",
                 hashed_password=hash_password("AdminPassword123!"),
@@ -153,7 +166,7 @@ class LeaveCoverageWorkflowTest(unittest.TestCase):
             self.project_id = project.id
 
     def test_plan_only_includes_tasks_during_the_leave_period(self) -> None:
-        with SessionLocal() as db:
+        with TestSessionLocal() as db:
             admin = db.get(User, self.admin_id)
             plan = coverage_plan(self.leave_id, db=db, _admin=admin)
 
@@ -166,7 +179,7 @@ class LeaveCoverageWorkflowTest(unittest.TestCase):
             self.assertEqual(plan["unscheduled_task_count"], 1)
 
     def test_day_leave_requests_are_limited_to_one_week(self) -> None:
-        with SessionLocal() as db:
+        with TestSessionLocal() as db:
             source_user = db.get(User, self.source_user_id)
             with self.assertRaises(HTTPException) as error:
                 create_leave_request(
@@ -184,7 +197,7 @@ class LeaveCoverageWorkflowTest(unittest.TestCase):
             self.assertIn("at most 7 days", error.exception.detail)
 
     def test_offer_is_not_reassigned_until_recipient_accepts(self) -> None:
-        with SessionLocal() as db:
+        with TestSessionLocal() as db:
             admin = db.get(User, self.admin_id)
             recipient_user = db.get(User, self.recipient_user_id)
 
@@ -228,7 +241,7 @@ class LeaveCoverageWorkflowTest(unittest.TestCase):
             self.assertEqual(task.assigned_member_id, self.recipient_id)
 
     def test_owner_can_assign_an_eligible_employee_as_project_manager(self) -> None:
-        with SessionLocal() as db:
+        with TestSessionLocal() as db:
             admin = db.get(User, self.admin_id)
             manager_user = db.get(User, self.recipient_user_id)
             manager_user.role = "pm"

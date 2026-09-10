@@ -1,9 +1,18 @@
 from __future__ import annotations
 
+import os
+from pathlib import Path
+import tempfile
 import unittest
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
+
+# This module is discovered before the rest of the suite. Establish a disposable
+# database before importing the application so no shared engine can point at a
+# developer or production database during tests.
+_shared_test_database = Path(tempfile.gettempdir()) / "trackerx_unit_tests.db"
+os.environ.setdefault("DATABASE_URL", f"sqlite:///{_shared_test_database.as_posix()}")
 
 from app.db import Base
 from app.main import app
