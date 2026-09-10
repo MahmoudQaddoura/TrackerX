@@ -9,6 +9,7 @@ User=blockexe
 Group=blockexe
 WorkingDirectory=/home/blockexe/TrackerX/projectx-master/projectx-git/backend
 Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
 EnvironmentFile=-/home/blockexe/TrackerX/projectx-master/projectx-git/backend/.env
 ExecStart=/home/blockexe/TrackerX/projectx-master/projectx-git/backend/.venv/bin/python -m app.backup --reason scheduled --keep 14
 Nice=10
