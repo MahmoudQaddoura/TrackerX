@@ -115,3 +115,31 @@ release changed stored data incompatibly.
 - `curl --fail https://your-domain/api/health` — public health check
 - Verify login, dashboard, assigned projects, Kanban, Gantt, attendance, document
   upload, multi-file upload, preview, and permission enforcement after release
+
+## 9. Bare-metal systemd reliability controls
+
+The checked-in units under `deploy/systemd/` match the current TrackerX host at
+`/home/blockexe/TrackerX/projectx-master/projectx-git`. Adjust those absolute
+paths and the service account before using them on another server.
+
+```bash
+sudo cp deploy/systemd/trackerx-*.service /etc/systemd/system/
+sudo cp deploy/systemd/trackerx-*.timer /etc/systemd/system/
+sudo systemd-analyze verify /etc/systemd/system/trackerx-*.service \
+  /etc/systemd/system/trackerx-*.timer
+sudo systemctl daemon-reload
+sudo systemctl enable --now trackerx-backend.service
+sudo systemctl enable --now trackerx-backup.timer trackerx-healthcheck.timer
+systemctl list-timers trackerx-backup.timer trackerx-healthcheck.timer
+curl --fail https://trackerx.defendexe.com/api/health
+```
+
+The readiness timer checks the complete database schema, SQLite integrity, user
+presence, and document storage every minute. A failed probe invokes the recovery
+unit. The backup timer creates and verifies one portable archive every day and
+retains the newest 14 archives.
+
+For the current key-only host, install the checked-in SSH drop-in only after a
+fresh key-authenticated session succeeds. Validate with `sudo sshd -t` before
+reloading SSH. The host firewall permits only TCP 22, 80, and 443; application,
+database, and object-storage ports remain bound to loopback.

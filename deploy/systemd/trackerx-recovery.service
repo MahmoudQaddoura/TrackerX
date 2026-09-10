@@ -1,0 +1,7 @@
+[Unit]
+Description=Restart TrackerX after a failed readiness check
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/systemctl restart trackerx-backend.service
+

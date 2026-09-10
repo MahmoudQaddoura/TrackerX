@@ -1,0 +1,11 @@
+[Unit]
+Description=Continuously check TrackerX application readiness
+
+[Timer]
+OnBootSec=90s
+OnUnitInactiveSec=60s
+AccuracySec=10s
+Unit=trackerx-healthcheck.service
+
+[Install]
+WantedBy=timers.target

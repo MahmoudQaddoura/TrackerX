@@ -1,0 +1,52 @@
+[Unit]
+Description=TrackerX FastAPI backend
+After=network-online.target minio.service
+Wants=network-online.target minio.service
+StartLimitIntervalSec=60
+StartLimitBurst=10
+
+[Service]
+Type=simple
+User=blockexe
+Group=blockexe
+WorkingDirectory=/home/blockexe/TrackerX/projectx-master/projectx-git/backend
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+EnvironmentFile=-/home/blockexe/TrackerX/projectx-master/projectx-git/backend/.env
+ExecStart=/home/blockexe/TrackerX/projectx-master/projectx-git/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+TimeoutStartSec=60
+TimeoutStopSec=30
+KillSignal=SIGINT
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/blockexe/TrackerX/projectx-master/projectx-git/backend/data
+ReadWritePaths=/home/blockexe/TrackerX/projectx-master/projectx-git/backend/backups
+CapabilityBoundingSet=
+DevicePolicy=closed
+IPAddressDeny=any
+IPAddressAllow=localhost
+LockPersonality=true
+MemoryDenyWriteExecute=true
+ProtectClock=true
+ProtectHostname=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectProc=invisible
+ProcSubset=pid
+RemoveIPC=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

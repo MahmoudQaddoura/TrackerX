@@ -21,10 +21,9 @@ _INSECURE_JWT_SECRETS = {
     "CHANGE_ME_IN_PRODUCTION_USE_32_BYTES",
     "replace-with-a-strong-random-secret",
 }
-_EXAMPLE_ADMIN_PASSWORD = "replace-with-a-unique-password-of-12-or-more-characters"
 
 
-def _validate_runtime_settings() -> None:
+def validate_runtime_settings() -> None:
     if settings.environment.strip().lower() == "production":
         if (
             settings.jwt_secret_key in _INSECURE_JWT_SECRETS
@@ -64,7 +63,7 @@ def _create_initial_admin_if_empty() -> None:
                 "The database has no users. Set INITIAL_ADMIN_EMAIL and "
                 "INITIAL_ADMIN_PASSWORD for the first production start."
             )
-        if email == "admin@example.com" or password == _EXAMPLE_ADMIN_PASSWORD:
+        if email == "admin@example.com" or password.startswith("replace-with-"):
             raise RuntimeError(
                 "Replace the example initial-administrator credentials before starting."
             )
@@ -96,7 +95,7 @@ def _create_initial_admin_if_empty() -> None:
 
 
 def bootstrap() -> None:
-    _validate_runtime_settings()
+    validate_runtime_settings()
     _create_initial_admin_if_empty()
 
 

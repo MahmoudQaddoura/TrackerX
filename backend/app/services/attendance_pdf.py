@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 """Build the branded TrackerX daily-attendance PDF."""
 
 from datetime import date, datetime
@@ -26,6 +27,9 @@ from reportlab.platypus import (
     Table,
     TableStyle,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 NAVY = colors.HexColor("#0B5279")
@@ -92,6 +96,7 @@ def _register_report_fonts() -> tuple[str, str]:
                 )
             return "YuGothicTrackerX", "YuGothicTrackerXBold"
         except Exception:
+            logger.warning("Could not load attendance PDF font candidate: %s", regular_path)
             continue
     return "Helvetica", "Helvetica-Bold"
 
