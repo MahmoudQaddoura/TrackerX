@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     jwt_audience: str = "trackerx-web"
     access_token_expire_minutes: int = 120
     auth_cookie_name: str = "trackerx_session"
+    office_timezone: str = "Asia/Amman"
 
     # Document storage — local disk, or S3-compatible (MinIO) via DOCUMENT_STORAGE=s3
     documents_dir: Path = BASE_DIR / "data" / "documents"

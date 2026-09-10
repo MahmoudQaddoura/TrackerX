@@ -11,8 +11,26 @@ export interface AttendanceInput {
   notes: string | null;
 }
 
+export interface AttendanceConfirmationInput {
+  action: "check_in" | "check_out";
+  work_mode: "present" | "remote";
+  notes?: string | null;
+}
+
 export async function fetchAttendance(date: string): Promise<AttendanceRecord[]> {
   const { data } = await api.get<AttendanceRecord[]>("/attendance", { params: { date } });
+  return data;
+}
+
+export async function fetchMyAttendance(): Promise<AttendanceRecord> {
+  const { data } = await api.get<AttendanceRecord>("/attendance/me");
+  return data;
+}
+
+export async function confirmMyAttendance(
+  payload: AttendanceConfirmationInput,
+): Promise<AttendanceRecord> {
+  const { data } = await api.put<AttendanceRecord>("/attendance/me/confirm", payload);
   return data;
 }
 

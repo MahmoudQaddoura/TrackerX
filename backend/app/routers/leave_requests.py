@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.deps import get_current_user, require_admin
+from app.deps import get_current_user
 from app.models import LeaveRequest, TeamMember, User
 from app.models.leave_request import (
     LEAVE_DURATION_UNITS,
@@ -22,6 +22,13 @@ from app.schemas.leave_request import (
     LeaveRequestReview,
 )
 from app.services.leave import approve_leave_request, duration_hours
+from app.services.leave_permissions import (
+    leave_reviewer_members,
+    member_for_user,
+    require_leave_review_access,
+    reviewable_leave_requests,
+)
+from app.services.notifications import notify_members
 
 router = APIRouter(prefix="/leave-requests", tags=["leave requests"])
 
@@ -36,13 +43,7 @@ def _parse_date(value: str, label: str) -> date_type:
 
 
 def _member_for_user(db: Session, user: User) -> TeamMember:
-    member = db.query(TeamMember).filter(TeamMember.user_id == user.id).first()
-    if member is None or not bool(member.is_active):
-        raise HTTPException(
-            status_code=422,
-            detail="This account is not linked to an active employee profile.",
-        )
-    return member
+    return member_for_user(db, user)
 
 
 def _request_or_404(db: Session, request_id: int) -> LeaveRequest:
@@ -95,7 +96,7 @@ def _serialize(request: LeaveRequest) -> dict:
 
 @router.get("", response_model=list[LeaveRequestOut])
 def list_leave_requests(
-    scope: str = Query(default="mine", pattern="^(mine|all)$"),
+    scope: str = Query(default="mine", pattern="^(mine|all|reviewable)$"),
     status: str | None = Query(default=None),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
@@ -103,8 +104,16 @@ def list_leave_requests(
     if status is not None and status not in LEAVE_REQUEST_STATUSES:
         raise HTTPException(status_code=422, detail=f"Invalid request status '{status}'.")
 
+    if scope == "reviewable":
+        requests = reviewable_leave_requests(db, user)
+        if status is not None:
+            requests = [request for request in requests if request.status == status]
+        requests.sort(key=lambda item: (item.created_at, item.id), reverse=True)
+        requests.sort(key=lambda item: item.status != "pending")
+        return [_serialize(request) for request in requests]
+
     query = db.query(LeaveRequest)
-    if scope != "all" or user.role != "admin":
+    if scope != "all" or user.role != "admin" or not bool(user.is_primary_admin):
         member = _member_for_user(db, user)
         query = query.filter(LeaveRequest.team_member_id == member.id)
     if status is not None:
@@ -157,6 +166,16 @@ def create_leave_request(
         reason=inp.reason.strip(),
     )
     db.add(request)
+    db.flush()
+    notify_members(
+        db,
+        leave_reviewer_members(db, member),
+        kind="leave_request",
+        title=f"Leave review · {member.name}",
+        message=f"{inp.request_type.replace('_', ' ').title()} requested for {start.isoformat()} to {end.isoformat()}.",
+        link="/attendance?section=leave",
+        exclude_user_id=user.id,
+    )
     db.commit()
     db.refresh(request)
     return _serialize(request)
@@ -167,7 +186,7 @@ def review_leave_request(
     request_id: int,
     inp: LeaveRequestReview,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),
+    reviewer: User = Depends(get_current_user),
 ):
     if inp.status not in ("approved", "rejected"):
         raise HTTPException(status_code=422, detail="Review status must be approved or rejected.")
@@ -175,6 +194,7 @@ def review_leave_request(
         raise HTTPException(status_code=422, detail="Rejected requests cannot fill attendance.")
 
     request = _request_or_404(db, request_id)
+    require_leave_review_access(db, reviewer, request)
     if request.status != "pending":
         raise HTTPException(status_code=409, detail="This request has already been reviewed.")
 
@@ -182,7 +202,7 @@ def review_leave_request(
         approve_leave_request(
             db,
             request,
-            admin,
+            reviewer,
             inp.review_note,
             inp.autofill_attendance,
         )
@@ -191,7 +211,17 @@ def review_leave_request(
         request.review_note = (
             inp.review_note.strip() if inp.review_note and inp.review_note.strip() else None
         )
-        request.reviewed_by_id = admin.id
+        request.reviewed_by_id = reviewer.id
+
+    notify_members(
+        db,
+        [request.team_member],
+        kind="leave_review",
+        title=f"Leave request {inp.status}",
+        message=f"Your {request.request_type.replace('_', ' ')} request for {request.start_date} to {request.end_date} was {inp.status} by {reviewer.full_name}.",
+        link="/attendance?section=leave",
+        exclude_user_id=reviewer.id,
+    )
 
     db.commit()
     db.refresh(request)

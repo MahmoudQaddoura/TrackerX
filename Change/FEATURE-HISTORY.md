@@ -9,7 +9,7 @@ Audit baseline: 5 September 2026. This inventory is reconstructed from the appli
 - Employee directory, enabled/disabled logins, temporary credentials, required password replacement, project assignments, task delegation.
 - Employee profiles with English/Arabic names, role descriptions, current projects, private CV/profile uploads, previews, and downloads.
 - Persistent four-digit employee numbers; owner 0001 and Yazan 0002; numbers included in attendance and leave reporting.
-- One owner-selected project manager per project through the project menu; the employee leadership panel and assistant-PM selection were removed.
+- One owner-selected project lead per project, chosen from eligible Administrators or Project Managers; the employee leadership panel and assistant-PM selection were removed.
 - Self-service password changes are available from every signed-in employee profile, while temporary-password replacement remains mandatory before workspace access.
 - Project managers organize a separate employee roster for each project they lead. A manager may lead multiple projects without merging their teams, and task assignment is limited to the selected project roster.
 - Persistent in-app notifications connect managers and employees: project/team assignments notify employees, and employee task-status updates notify the responsible project manager.
@@ -28,13 +28,13 @@ Audit baseline: 5 September 2026. This inventory is reconstructed from the appli
 
 ## Attendance, leave, and coverage
 
-- One daily employee sheet with present/absent recording, autofill/bulk attendance, optional times and notes, date navigation.
-- Daily PDF attendance sheet and monthly days-off/leave PDF report, employee ID columns, Blockexe branding and Yu Gothic styling where the font is available.
-- Full-day/hourly leave requests; assign, approve, and reject actions and review notes.
+- One daily employee sheet with employee self-confirmation, admin correction, autofill/bulk attendance, optional times and notes, date navigation. Check-in and check-out use server-controlled Amman office time.
+- Daily PDF attendance sheet and monthly days-off/leave PDF report with employee ID and role columns, Blockexe branding, and Yu Gothic styling where the font is available.
+- Full-day/hourly leave requests with role-aware routing: employees notify accountable PMs and admins; PM/non-owner administrator leave requires owner review; owner leave routes to another administrator. No requester can approve their own leave.
 - Coverage considers the requested absence interval, task urgency, candidate workload, and availability.
 - Coverage offers notify the selected employee; task ownership changes after acceptance.
-- Separate daily attendance, request inbox, and coverage inbox; redundant header removed.
-- Attendance and leave are company-wide only for administrators; project managers and employees see only their own attendance and requests.
+- Separate personal confirmation, team attendance, leave center, and coverage inbox views in a TrackerX attendance control center.
+- Administrators retain company-wide attendance; PMs review leave only when they own the employee's complete active project scope; employees see their own records; clients are denied attendance and leave access.
 
 ## Asset inventory
 

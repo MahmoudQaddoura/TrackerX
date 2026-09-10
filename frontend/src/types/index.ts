@@ -195,6 +195,7 @@ export interface AttendanceRecord {
   check_out: string | null;
   notes: string | null;
   recorded_by_name: string | null;
+  confirmed_by_employee: boolean;
   leave_request_id: number | null;
   updated_at: string | null;
 }

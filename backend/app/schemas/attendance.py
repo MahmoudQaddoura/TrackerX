@@ -20,6 +20,12 @@ class AttendanceExportInput(BaseModel):
     records: list[AttendanceInput] = Field(max_length=500)
 
 
+class AttendanceSelfConfirmationInput(BaseModel):
+    action: str
+    work_mode: str = "present"
+    notes: str | None = Field(default=None, max_length=500)
+
+
 class AttendanceOut(BaseModel):
     id: int | None
     team_member_id: int
@@ -32,5 +38,6 @@ class AttendanceOut(BaseModel):
     check_out: str | None
     notes: str | None
     recorded_by_name: str | None
+    confirmed_by_employee: bool
     leave_request_id: int | None
     updated_at: str | None

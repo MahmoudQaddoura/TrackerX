@@ -110,10 +110,13 @@ function scheduleLabel(request: LeaveRequest): string {
 }
 
 export function LeaveRequestsPage({ embedded = false }: { embedded?: boolean } = {}) {
-  const { isAdmin } = useAuth();
-  const requests = useLeaveRequests(isAdmin ? "all" : "mine");
+  const { isAdmin, isPm, isPrimaryAdmin } = useAuth();
+  const canReview = isAdmin || isPm;
+  const mine = useLeaveRequests("mine");
+  const reviewable = useLeaveRequests("reviewable", canReview);
   const createRequest = useCreateLeaveRequest();
   const reviewRequest = useReviewLeaveRequest();
+  const [view, setView] = useState<"inbox" | "mine">(canReview ? "inbox" : "mine");
 
   const [requestType, setRequestType] = useState<LeaveRequestType>("leave");
   const [durationUnit, setDurationUnit] = useState<LeaveDurationUnit>("days");
@@ -129,8 +132,8 @@ export function LeaveRequestsPage({ embedded = false }: { embedded?: boolean } =
   const [rejectionError, setRejectionError] = useState<string | null>(null);
 
   const pendingCount = useMemo(
-    () => (requests.data ?? []).filter((request) => request.status === "pending").length,
-    [requests.data],
+    () => (reviewable.data ?? []).filter((request) => request.status === "pending").length,
+    [reviewable.data],
   );
 
   async function submitRequest() {
@@ -190,12 +193,13 @@ export function LeaveRequestsPage({ embedded = false }: { embedded?: boolean } =
     }
   }
 
-  if (requests.isLoading) return <Spinner />;
-  if (requests.isError) {
+  const activeQuery = view === "inbox" ? reviewable : mine;
+  if (activeQuery.isLoading) return <Spinner />;
+  if (activeQuery.isError) {
     return (
       <ErrorState
         message="Could not load leave requests."
-        onRetry={() => requests.refetch()}
+        onRetry={() => activeQuery.refetch()}
       />
     );
   }
@@ -205,7 +209,11 @@ export function LeaveRequestsPage({ embedded = false }: { embedded?: boolean } =
       <div className="mb-4">
         <h2 className="font-semibold text-fg">Submit a leave or absence reason</h2>
         <p className="mt-1 text-sm text-fg-muted">
-          Your administrator will receive this note and decide whether to add it to attendance.
+          {isPrimaryAdmin
+            ? "Your request is routed to another enabled Administrator. You cannot approve your own leave."
+            : isPm || isAdmin
+            ? "Your request is routed to the owner for review. You cannot approve your own leave."
+            : "Your accountable Project Manager and administrators will be notified. An authorized reviewer can approve and link it to attendance."}
         </p>
       </div>
       <div className="grid gap-4 md:grid-cols-2">
@@ -331,24 +339,30 @@ export function LeaveRequestsPage({ embedded = false }: { embedded?: boolean } =
               <h1 className="font-display text-2xl font-bold text-fg">Leave &amp; absence</h1>
             </div>
             <p className="mt-1 text-sm text-fg-muted">
-              Submit reasons, review requests, and keep attendance linked to the approval record.
+              Submit requests, review your team inbox, and keep attendance linked to the approval record.
             </p>
           </div>
-          {isAdmin && <Badge variant={pendingCount ? "warning" : "success"}>{pendingCount} pending</Badge>}
+          {canReview && <Badge variant={pendingCount ? "warning" : "success"}>{pendingCount} pending review</Badge>}
         </div>
       )}
 
-      {isAdmin ? (
-        <RequestList
-          requests={requests.data ?? []}
-          canReview
-          onManageCoverage={setCoverageRequest}
-          onReject={openRejection}
-        />
+      {canReview && (
+        <div className="grid grid-cols-2 gap-1 rounded-xl border border-border bg-surface p-1.5 sm:w-fit">
+          <button type="button" onClick={() => setView("inbox")} className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${view === "inbox" ? "bg-accent text-white shadow-sm" : "text-fg-muted hover:bg-raised"}`}>
+            Team inbox {pendingCount > 0 ? `(${pendingCount})` : ""}
+          </button>
+          <button type="button" onClick={() => setView("mine")} className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${view === "mine" ? "bg-accent text-white shadow-sm" : "text-fg-muted hover:bg-raised"}`}>
+            My requests
+          </button>
+        </div>
+      )}
+
+      {view === "inbox" && canReview ? (
+        <RequestList requests={reviewable.data ?? []} canReview onManageCoverage={setCoverageRequest} onReject={openRejection} />
       ) : (
         <div className="space-y-5">
           {requestForm}
-          <RequestList requests={requests.data ?? []} />
+          <RequestList requests={mine.data ?? []} />
         </div>
       )}
 
@@ -374,7 +388,7 @@ export function LeaveRequestsPage({ embedded = false }: { embedded?: boolean } =
                 <p className="mt-2 text-fg">{rejectingRequest.reason}</p>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="rejection-note">Admin note</Label>
+                <Label htmlFor="rejection-note">Reviewer note</Label>
                 <Textarea
                   id="rejection-note"
                   rows={3}
@@ -484,7 +498,7 @@ function RequestList({
               <p className="mt-3 whitespace-pre-wrap text-sm text-fg">{request.reason}</p>
               {request.review_note && (
                 <p className="mt-3 rounded-md bg-raised/60 px-3 py-2 text-sm text-fg-muted">
-                  <span className="font-medium text-fg">Admin note:</span> {request.review_note}
+                  <span className="font-medium text-fg">Reviewer note:</span> {request.review_note}
                 </p>
               )}
               {request.reviewed_by_name && <p className="mt-2 text-xs text-fg-subtle">Reviewed by {request.reviewed_by_name}</p>}

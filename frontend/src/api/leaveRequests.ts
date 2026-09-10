@@ -25,7 +25,7 @@ export interface LeaveRequestReviewPayload {
   autofill_attendance: boolean;
 }
 
-export async function fetchLeaveRequests(scope: "mine" | "all"): Promise<LeaveRequest[]> {
+export async function fetchLeaveRequests(scope: "mine" | "all" | "reviewable"): Promise<LeaveRequest[]> {
   const { data } = await api.get<LeaveRequest[]>("/leave-requests", { params: { scope } });
   return data;
 }

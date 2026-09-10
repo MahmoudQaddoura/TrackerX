@@ -1,15 +1,17 @@
 from __future__ import annotations
 
-"""Attendance sheet: everyone can read their scope; only admin can edit."""
+"""Attendance sheet: internal staff read their scope; only admins edit the team sheet."""
 
 from calendar import monthrange
-from datetime import date as date_type
+from datetime import date as date_type, datetime
 import re
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from app.db import get_db
+from app.config import settings
 from app.deps import get_current_user, require_admin
 from app.models import AttendanceRecord, TeamMember, User
 from app.models.attendance import ATTENDANCE_STATUSES
@@ -18,7 +20,9 @@ from app.schemas.attendance import (
     AttendanceExportInput,
     AttendanceInput,
     AttendanceOut,
+    AttendanceSelfConfirmationInput,
 )
+from app.services.leave_permissions import member_for_user
 from app.services.attendance_pdf import build_attendance_pdf, build_monthly_days_off_pdf
 
 router = APIRouter(prefix="/attendance", tags=["attendance"])
@@ -66,6 +70,9 @@ def _serialize(member: TeamMember, record: AttendanceRecord | None, day: str) ->
         "recorded_by_name": (
             record.recorded_by.full_name if record and record.recorded_by else None
         ),
+        "confirmed_by_employee": bool(
+            record and member.user_id and record.recorded_by_id == member.user_id
+        ),
         "leave_request_id": record.leave_request_id if record else None,
         "updated_at": record.updated_at if record else None,
     }
@@ -79,8 +86,95 @@ def _scoped_members(db: Session, user: User) -> list[TeamMember]:
             .order_by(TeamMember.employee_number, TeamMember.id)
             .all()
         )
+    if user.role == "client":
+        return []
     member = db.query(TeamMember).filter(TeamMember.user_id == user.id).first()
     return [member] if member and bool(member.is_active) else []
+
+
+def _office_now() -> datetime:
+    try:
+        return datetime.now(ZoneInfo(settings.office_timezone))
+    except ZoneInfoNotFoundError:
+        return datetime.now().astimezone()
+
+
+def _require_internal_member(db: Session, user: User) -> TeamMember:
+    if user.role not in ("admin", "pm", "developer"):
+        raise HTTPException(status_code=403, detail="Attendance confirmation is for employees only.")
+    return member_for_user(db, user)
+
+
+@router.get("/me", response_model=AttendanceOut)
+def my_attendance(
+    attendance_date: str | None = Query(default=None, alias="date"),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    member = _require_internal_member(db, user)
+    day = _validate_date(attendance_date or _office_now().date().isoformat())
+    record = (
+        db.query(AttendanceRecord)
+        .filter(
+            AttendanceRecord.team_member_id == member.id,
+            AttendanceRecord.attendance_date == day,
+        )
+        .first()
+    )
+    return _serialize(member, record, day)
+
+
+@router.put("/me/confirm", response_model=AttendanceOut)
+def confirm_my_attendance(
+    inp: AttendanceSelfConfirmationInput,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    if inp.action not in ("check_in", "check_out"):
+        raise HTTPException(status_code=422, detail="Action must be check_in or check_out.")
+    if inp.work_mode not in ("present", "remote"):
+        raise HTTPException(status_code=422, detail="Work mode must be present or remote.")
+
+    member = _require_internal_member(db, user)
+    now = _office_now()
+    day = now.date().isoformat()
+    time_value = now.strftime("%H:%M")
+    record = (
+        db.query(AttendanceRecord)
+        .filter(
+            AttendanceRecord.team_member_id == member.id,
+            AttendanceRecord.attendance_date == day,
+        )
+        .first()
+    )
+    if record and (record.leave_request_id or record.status in ("leave", "sick_leave", "absent")):
+        raise HTTPException(
+            status_code=409,
+            detail="Attendance cannot be confirmed while this date is recorded as leave or absence.",
+        )
+
+    if inp.action == "check_in":
+        if record is None:
+            record = AttendanceRecord(team_member_id=member.id, attendance_date=day)
+            db.add(record)
+        elif record.recorded_by_id == user.id and record.check_in:
+            return _serialize(member, record, day)
+        if record.recorded_by_id != user.id or not record.check_in:
+            record.check_in = time_value
+            record.check_out = None
+        record.status = inp.work_mode
+    else:
+        if record is None or not record.check_in or record.recorded_by_id != user.id:
+            raise HTTPException(status_code=409, detail="Confirm your own check-in before checking out.")
+        if not record.check_out:
+            record.check_out = time_value
+
+    if inp.notes is not None:
+        record.notes = inp.notes.strip() or None
+    record.recorded_by_id = user.id
+    db.commit()
+    db.refresh(record)
+    return _serialize(member, record, day)
 
 
 @router.get("", response_model=list[AttendanceOut])
@@ -89,7 +183,7 @@ def attendance_sheet(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    day = _validate_date(attendance_date or date_type.today().isoformat())
+    day = _validate_date(attendance_date or _office_now().date().isoformat())
     members = _scoped_members(db, user)
     member_ids = [member.id for member in members]
     rows = (
@@ -131,6 +225,7 @@ def export_attendance_pdf(
         export_rows.append(
             {
                 "employee_name": member.name,
+                "employee_number": member.employee_number or f"{member.id:04d}",
                 "employee_role": member.role,
                 "status": item.status,
                 "check_in": item.check_in,
@@ -184,7 +279,9 @@ def export_monthly_days_off_pdf(
         )
     report_rows = [
         {
+            "employee_number": member.employee_number or f"{member.id:04d}",
             "employee_name": member.name,
+            "employee_role": member.role,
             "days_off": days_off_by_member.get(member.id, 0),
         }
         for member in members
@@ -234,14 +331,24 @@ def save_attendance_sheet(
                 attendance_date=item.attendance_date,
             )
             db.add(record)
+        next_check_in = item.check_in or None
+        next_check_out = item.check_out or None
+        next_notes = item.notes.strip() if item.notes and item.notes.strip() else None
+        changed = (
+            record.status != item.status
+            or record.check_in != next_check_in
+            or record.check_out != next_check_out
+            or record.notes != next_notes
+        )
         record.status = item.status
-        record.check_in = item.check_in or None
-        record.check_out = item.check_out or None
-        record.notes = item.notes.strip() if item.notes and item.notes.strip() else None
-        record.recorded_by_id = admin.id
-        # A manual edit takes ownership of the row away from an earlier
-        # request autofill while keeping the note text visible to the admin.
-        record.leave_request_id = None
+        record.check_in = next_check_in
+        record.check_out = next_check_out
+        record.notes = next_notes
+        if changed:
+            record.recorded_by_id = admin.id
+            # A manual edit takes ownership of the row away from an earlier
+            # request autofill while keeping the note text visible to the admin.
+            record.leave_request_id = None
 
     db.commit()
     if not inp.records:

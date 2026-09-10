@@ -336,7 +336,7 @@ def build_attendance_pdf(
             Spacer(1, 7 * mm),
             _report_heading(
                 day.strftime("%A, %d %B %Y"),
-                "Attendance register and recorded working hours",
+                "Attendance register with employee IDs and approved leave records",
                 prepared_by,
                 created.strftime("%d %b %Y, %I:%M %p"),
             ),
@@ -409,6 +409,7 @@ def build_attendance_pdf(
 
     table_data: list[list[Any]] = [
         [
+            Paragraph("ID", header_style),
             Paragraph("EMPLOYEE", header_style),
             Paragraph("ROLE", header_style),
             Paragraph("ATTENDANCE", header_style),
@@ -420,6 +421,7 @@ def build_attendance_pdf(
     for row in rows:
         table_data.append(
             [
+                _paragraph(row.get("employee_number"), cell_bold),
                 _paragraph(row.get("employee_name"), cell_bold),
                 _paragraph(row.get("employee_role"), cell_style),
                 _paragraph(STATUS_LABELS.get(row["status"], row["status"]), status_style),
@@ -431,7 +433,7 @@ def build_attendance_pdf(
 
     attendance_table = Table(
         table_data,
-        colWidths=[36 * mm, 32 * mm, 25 * mm, 18 * mm, 18 * mm, 30 * mm],
+        colWidths=[15 * mm, 28 * mm, 27 * mm, 23 * mm, 17 * mm, 17 * mm, 32 * mm],
         repeatRows=1,
         hAlign="LEFT",
     )
@@ -446,7 +448,8 @@ def build_attendance_pdf(
         ("BOTTOMPADDING", (0, 0), (-1, 0), 3 * mm),
         ("TOPPADDING", (0, 1), (-1, -1), 3.2 * mm),
         ("BOTTOMPADDING", (0, 1), (-1, -1), 3.2 * mm),
-        ("ALIGN", (2, 0), (4, -1), "CENTER"),
+        ("ALIGN", (0, 0), (0, -1), "CENTER"),
+        ("ALIGN", (3, 0), (5, -1), "CENTER"),
     ]
     status_background = {
         "present": PALE_GREEN,
@@ -461,7 +464,7 @@ def build_attendance_pdf(
             table_commands.append(("BACKGROUND", (0, index), (-1, index), ROW_ALT))
         table_commands.append(("LINEBELOW", (0, index), (-1, index), 0.35, LINE))
         table_commands.append(
-            ("BACKGROUND", (2, index), (2, index), status_background.get(row["status"], colors.white))
+            ("BACKGROUND", (3, index), (3, index), status_background.get(row["status"], colors.white))
         )
     attendance_table.setStyle(TableStyle(table_commands))
     story.append(attendance_table)
@@ -539,7 +542,7 @@ def build_monthly_days_off_pdf(
             Spacer(1, 7 * mm),
             _report_heading(
                 month_date.strftime("%B %Y"),
-                "Employee leave and absence summary",
+                "Leave and absence summary by employee ID",
                 prepared_by,
                 created.strftime("%d %b %Y, %I:%M %p"),
             ),
@@ -604,16 +607,23 @@ def build_monthly_days_off_pdf(
     story.extend([summary, Spacer(1, 7 * mm), section_heading])
 
     report_data: list[list[Any]] = [
-        [Paragraph("EMPLOYEE", header_style), Paragraph("DAYS OFF", header_style)]
+        [
+            Paragraph("ID", header_style),
+            Paragraph("EMPLOYEE", header_style),
+            Paragraph("ROLE", header_style),
+            Paragraph("DAYS OFF", header_style),
+        ]
     ]
     for row in rows:
         report_data.append(
             [
+                _paragraph(row.get("employee_number"), name_style),
                 _paragraph(row.get("employee_name"), name_style),
+                _paragraph(row.get("employee_role"), name_style),
                 _paragraph(row.get("days_off", 0), days_style),
             ]
         )
-    report_table = Table(report_data, colWidths=[126 * mm, 33 * mm], repeatRows=1)
+    report_table = Table(report_data, colWidths=[20 * mm, 61 * mm, 57 * mm, 21 * mm], repeatRows=1)
     commands: list[tuple[Any, ...]] = [
         ("BACKGROUND", (0, 0), (-1, 0), PALE_BLUE),
         ("BOX", (0, 0), (-1, -1), 0.6, LINE),
@@ -625,7 +635,8 @@ def build_monthly_days_off_pdf(
         ("BOTTOMPADDING", (0, 0), (-1, 0), 3 * mm),
         ("TOPPADDING", (0, 1), (-1, -1), 3.4 * mm),
         ("BOTTOMPADDING", (0, 1), (-1, -1), 3.4 * mm),
-        ("ALIGN", (1, 0), (1, -1), "CENTER"),
+        ("ALIGN", (0, 0), (0, -1), "CENTER"),
+        ("ALIGN", (3, 0), (3, -1), "CENTER"),
     ]
     for index, row in enumerate(rows, start=1):
         commands.append(
@@ -633,7 +644,7 @@ def build_monthly_days_off_pdf(
         )
         commands.append(("LINEBELOW", (0, index), (-1, index), 0.35, LINE))
         if int(row["days_off"]) > 0:
-            commands.append(("BACKGROUND", (1, index), (1, index), PALE_AMBER))
+            commands.append(("BACKGROUND", (3, index), (3, index), PALE_AMBER))
     report_table.setStyle(TableStyle(commands))
     story.extend([report_table, Spacer(1, 4 * mm)])
     story.append(
