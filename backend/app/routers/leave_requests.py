@@ -21,7 +21,12 @@ from app.schemas.leave_request import (
     LeaveRequestOut,
     LeaveRequestReview,
 )
-from app.services.leave import approve_leave_request, duration_hours
+from app.services.leave import (
+    MAX_HOURLY_LEAVE_MINUTES,
+    approve_leave_request,
+    duration_hours,
+    duration_minutes,
+)
 from app.services.leave_permissions import (
     leave_reviewer_members,
     member_for_user,
@@ -149,8 +154,17 @@ def create_leave_request(
             raise HTTPException(status_code=422, detail="Start time must use HH:MM.")
         if not inp.end_time or not _TIME_PATTERN.match(inp.end_time):
             raise HTTPException(status_code=422, detail="End time must use HH:MM.")
-        if _duration_hours(inp.start_time, inp.end_time) <= 0:
+        requested_minutes = duration_minutes(inp.start_time, inp.end_time)
+        if requested_minutes <= 0:
             raise HTTPException(status_code=422, detail="End time must be after start time.")
+        if requested_minutes > MAX_HOURLY_LEAVE_MINUTES:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "Hourly leave is limited to 2 hours 30 minutes. "
+                    "Choose Full day(s) for a longer request."
+                ),
+            )
         start_time = inp.start_time
         end_time = inp.end_time
 

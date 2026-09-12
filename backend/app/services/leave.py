@@ -8,12 +8,18 @@ from sqlalchemy.orm import Session
 
 from app.models import AttendanceRecord, LeaveRequest, User
 
+MAX_HOURLY_LEAVE_MINUTES = 150
 
-def duration_hours(start_time: str, end_time: str) -> float:
+
+def duration_minutes(start_time: str, end_time: str) -> int:
+    """Return the signed duration between two same-day HH:MM values."""
     start_hour, start_minute = (int(part) for part in start_time.split(":"))
     end_hour, end_minute = (int(part) for part in end_time.split(":"))
-    minutes = (end_hour * 60 + end_minute) - (start_hour * 60 + start_minute)
-    return round(minutes / 60, 2)
+    return (end_hour * 60 + end_minute) - (start_hour * 60 + start_minute)
+
+
+def duration_hours(start_time: str, end_time: str) -> float:
+    return round(duration_minutes(start_time, end_time) / 60, 2)
 
 
 def approve_leave_request(

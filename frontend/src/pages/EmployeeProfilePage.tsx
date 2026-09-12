@@ -31,6 +31,7 @@ import {
 } from "@/api/team";
 import { AttendanceConfirmation } from "@/components/attendance/AttendanceConfirmation";
 import { EmployeeFilePreviewDialog } from "@/components/employees/EmployeeFilePreviewDialog";
+import { ProfileVacationPanel } from "@/components/employees/ProfileVacationPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -223,6 +224,7 @@ export function EmployeeProfilePage({ self = false }: { self?: boolean }) {
       </div>
 
       {self && !isClient && <AttendanceConfirmation />}
+      {self && !isClient && <ProfileVacationPanel />}
 
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.65fr)_minmax(300px,0.85fr)]">
         <div className="space-y-5">

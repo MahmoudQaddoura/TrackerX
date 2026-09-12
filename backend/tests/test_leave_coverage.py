@@ -196,6 +196,42 @@ class LeaveCoverageWorkflowTest(unittest.TestCase):
             self.assertEqual(error.exception.status_code, 422)
             self.assertIn("at most 7 days", error.exception.detail)
 
+    def test_hourly_leave_accepts_two_and_a_half_hours_and_rejects_longer(self) -> None:
+        with TestSessionLocal() as db:
+            source_user = db.get(User, self.source_user_id)
+            accepted = create_leave_request(
+                LeaveRequestCreate(
+                    request_type="leave",
+                    start_date="2026-08-24",
+                    end_date="2026-08-24",
+                    duration_unit="hours",
+                    start_time="09:00",
+                    end_time="11:30",
+                    reason="Personal appointment",
+                ),
+                db=db,
+                user=source_user,
+            )
+            self.assertEqual(accepted["duration_hours"], 2.5)
+
+            with self.assertRaises(HTTPException) as error:
+                create_leave_request(
+                    LeaveRequestCreate(
+                        request_type="leave",
+                        start_date="2026-08-25",
+                        end_date="2026-08-25",
+                        duration_unit="hours",
+                        start_time="09:00",
+                        end_time="11:31",
+                        reason="Long personal appointment",
+                    ),
+                    db=db,
+                    user=source_user,
+                )
+            self.assertEqual(error.exception.status_code, 422)
+            self.assertIn("2 hours 30 minutes", error.exception.detail)
+            self.assertIn("Full day(s)", error.exception.detail)
+
     def test_offer_is_not_reassigned_until_recipient_accepts(self) -> None:
         with TestSessionLocal() as db:
             admin = db.get(User, self.admin_id)

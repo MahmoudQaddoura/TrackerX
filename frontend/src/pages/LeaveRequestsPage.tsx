@@ -1,4 +1,5 @@
 import {
+  CalendarCheck2,
   CalendarDays,
   CalendarClock,
   Clock3,
@@ -58,6 +59,7 @@ const STATUS_VARIANTS: Record<
 };
 
 const MAX_LEAVE_DAYS = 7;
+const MAX_HOURLY_LEAVE_HOURS = 2.5;
 
 function localDate(): string {
   const now = new Date();
@@ -78,6 +80,12 @@ function calculateHours(startTime: string, endTime: string): number {
   const [startHour, startMinute] = startTime.split(":").map(Number);
   const [endHour, endMinute] = endTime.split(":").map(Number);
   return Math.max(0, ((endHour * 60 + endMinute) - (startHour * 60 + startMinute)) / 60);
+}
+
+function maximumHourlyEnd(startTime: string): string {
+  const [hour, minute] = startTime.split(":").map(Number);
+  const cappedMinutes = Math.min((hour * 60) + minute + (MAX_HOURLY_LEAVE_HOURS * 60), (23 * 60) + 59);
+  return `${String(Math.floor(cappedMinutes / 60)).padStart(2, "0")}:${String(cappedMinutes % 60).padStart(2, "0")}`;
 }
 
 function addCalendarDays(value: string, days: number): string {
@@ -123,7 +131,7 @@ export function LeaveRequestsPage({ embedded = false }: { embedded?: boolean } =
   const [startDate, setStartDate] = useState(localDate);
   const [endDate, setEndDate] = useState(localDate);
   const [startTime, setStartTime] = useState("09:00");
-  const [endTime, setEndTime] = useState("17:00");
+  const [endTime, setEndTime] = useState("11:30");
   const [reason, setReason] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [coverageRequest, setCoverageRequest] = useState<LeaveRequest | null>(null);
@@ -135,6 +143,8 @@ export function LeaveRequestsPage({ embedded = false }: { embedded?: boolean } =
     () => (reviewable.data ?? []).filter((request) => request.status === "pending").length,
     [reviewable.data],
   );
+  const requestedHours = calculateHours(startTime, endTime);
+  const hourlyRequestTooLong = durationUnit === "hours" && requestedHours > MAX_HOURLY_LEAVE_HOURS;
 
   async function submitRequest() {
     if (reason.trim().length < 3) {
@@ -143,6 +153,10 @@ export function LeaveRequestsPage({ embedded = false }: { embedded?: boolean } =
     }
     if (durationUnit === "hours" && calculateHours(startTime, endTime) <= 0) {
       setFormError("End time must be after start time.");
+      return;
+    }
+    if (hourlyRequestTooLong) {
+      setFormError("Hourly leave is limited to 2 hours 30 minutes. Choose Full day(s) for a longer request.");
       return;
     }
     if (durationUnit === "days") {
@@ -245,7 +259,13 @@ export function LeaveRequestsPage({ embedded = false }: { embedded?: boolean } =
             </button>
             <button
               type="button"
-              onClick={() => setDurationUnit("hours")}
+              onClick={() => {
+                setDurationUnit("hours");
+                setFormError(null);
+                if (endTime <= startTime || calculateHours(startTime, endTime) > MAX_HOURLY_LEAVE_HOURS) {
+                  setEndTime(maximumHourlyEnd(startTime));
+                }
+              }}
               className={`flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
                 durationUnit === "hours"
                   ? "border-accent bg-accent-soft text-accent"
@@ -288,23 +308,56 @@ export function LeaveRequestsPage({ embedded = false }: { embedded?: boolean } =
         </div>
       ) : (
         <div className="mt-4 grid gap-4 sm:grid-cols-3">
+          <div className="sm:col-span-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-accent/20 bg-accent-soft/35 px-3 py-2.5 text-sm">
+            <div>
+              <p className="font-semibold text-fg">Hourly leave · maximum 2 hours 30 minutes</p>
+              <p className="mt-0.5 text-xs text-fg-muted">Longer absences must be submitted as a full-day request.</p>
+            </div>
+            <button type="button" onClick={() => { setDurationUnit("days"); setFormError(null); }} className="rounded-md border border-accent/25 bg-surface px-3 py-1.5 text-xs font-semibold text-accent hover:bg-accent-soft">
+              Switch to full day
+            </button>
+          </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="leave-hour-date">Date</Label>
             <Input id="leave-hour-date" type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="leave-start-time">Start time</Label>
-            <Input id="leave-start-time" type="time" value={startTime} onChange={(event) => setStartTime(event.target.value)} />
+            <Input
+              id="leave-start-time"
+              type="time"
+              step={300}
+              value={startTime}
+              onChange={(event) => {
+                const nextStart = event.target.value;
+                setStartTime(nextStart);
+                if (endTime <= nextStart || calculateHours(nextStart, endTime) > MAX_HOURLY_LEAVE_HOURS) {
+                  setEndTime(maximumHourlyEnd(nextStart));
+                }
+                setFormError(null);
+              }}
+            />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="leave-end-time">End time</Label>
-            <Input id="leave-end-time" type="time" value={endTime} onChange={(event) => setEndTime(event.target.value)} />
+            <Input
+              id="leave-end-time"
+              type="time"
+              step={300}
+              min={startTime}
+              max={maximumHourlyEnd(startTime)}
+              value={endTime}
+              onChange={(event) => { setEndTime(event.target.value); setFormError(null); }}
+            />
           </div>
-          <div className="sm:col-span-3 flex items-center justify-between rounded-lg bg-raised/60 px-3 py-2 text-sm">
+          <div className={`sm:col-span-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm ${hourlyRequestTooLong ? "border-danger/30 bg-danger/5" : "border-border bg-raised/60"}`}>
             <span className="text-fg-muted">Requested time</span>
-            <span className="font-semibold text-fg">
-              {calculateHours(startTime, endTime).toLocaleString(undefined, { maximumFractionDigits: 2 })} hours
+            <span className={hourlyRequestTooLong ? "font-semibold text-danger" : "font-semibold text-fg"}>
+              {requestedHours.toLocaleString(undefined, { maximumFractionDigits: 2 })} hours
             </span>
+            {hourlyRequestTooLong && (
+              <p className="w-full text-xs font-medium text-danger">This is over 2 hours 30 minutes. Please choose Full day(s).</p>
+            )}
           </div>
         </div>
       )}
@@ -321,7 +374,7 @@ export function LeaveRequestsPage({ embedded = false }: { embedded?: boolean } =
       </div>
       {formError && <p className="mt-3 text-sm text-danger">{formError}</p>}
       <div className="mt-4 flex justify-end">
-        <Button onClick={submitRequest} disabled={createRequest.isPending}>
+        <Button onClick={submitRequest} disabled={createRequest.isPending || hourlyRequestTooLong}>
           {createRequest.isPending ? <Spinner /> : <Send className="h-4 w-4" />}
           Submit request
         </Button>
@@ -361,6 +414,7 @@ export function LeaveRequestsPage({ embedded = false }: { embedded?: boolean } =
         <RequestList requests={reviewable.data ?? []} canReview onManageCoverage={setCoverageRequest} onReject={openRejection} />
       ) : (
         <div className="space-y-5">
+          <LeaveUsageSummary requests={mine.data ?? []} />
           {requestForm}
           <RequestList requests={mine.data ?? []} />
         </div>
@@ -412,6 +466,52 @@ export function LeaveRequestsPage({ embedded = false }: { embedded?: boolean } =
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function LeaveUsageSummary({ requests }: { requests: LeaveRequest[] }) {
+  const totals = useMemo(() => {
+    const approved = requests.filter((request) => request.status === "approved");
+    const fullDayTotal = (type: LeaveRequestType) => approved
+      .filter((request) => request.request_type === type && request.duration_unit === "days")
+      .reduce((sum, request) => sum + (request.duration_days ?? 0), 0);
+    return {
+      vacationDays: fullDayTotal("leave"),
+      sickDays: fullDayTotal("sick_leave"),
+      absenceDays: fullDayTotal("absent"),
+      hourlyLeave: approved
+        .filter((request) => request.duration_unit === "hours")
+        .reduce((sum, request) => sum + (request.duration_hours ?? 0), 0),
+    };
+  }, [requests]);
+
+  const metrics = [
+    { label: "Vacation / leave", value: totals.vacationDays, unit: totals.vacationDays === 1 ? "day" : "days", tone: "text-accent" },
+    { label: "Sick leave", value: totals.sickDays, unit: totals.sickDays === 1 ? "day" : "days", tone: "text-warning" },
+    { label: "Other absence", value: totals.absenceDays, unit: totals.absenceDays === 1 ? "day" : "days", tone: "text-danger" },
+    { label: "Hourly leave", value: totals.hourlyLeave.toLocaleString(undefined, { maximumFractionDigits: 2 }), unit: totals.hourlyLeave === 1 ? "hour" : "hours", tone: "text-success" },
+  ];
+
+  return (
+    <Card className="overflow-hidden">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-accent-soft/25 px-5 py-3.5">
+        <div>
+          <h2 className="font-semibold text-fg">My cumulative leave record</h2>
+          <p className="mt-0.5 text-xs text-fg-muted">All-time approved requests recorded in TrackerX. Pending and rejected requests are not included.</p>
+        </div>
+        <Badge variant="outline"><CalendarCheck2 className="h-3.5 w-3.5" /> Approved totals</Badge>
+      </div>
+      <div className="grid grid-cols-2 divide-x divide-y divide-border md:grid-cols-4 md:divide-y-0">
+        {metrics.map((metric) => (
+          <div key={metric.label} className="px-5 py-4">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-fg-subtle">{metric.label}</p>
+            <p className={`mt-1 text-2xl font-bold ${metric.tone}`}>
+              {metric.value} <span className="text-sm font-medium text-fg-muted">{metric.unit}</span>
+            </p>
+          </div>
+        ))}
+      </div>
+    </Card>
   );
 }
 
