@@ -33,6 +33,7 @@ Audit baseline: 5 September 2026. This inventory is reconstructed from the appli
 - One live daily employee register with self-service office/remote check-in and check-out, server-controlled Amman timestamps, automatic five-second team refresh, optional notes, and a separate administrator exception-correction mode.
 - Daily PDF attendance sheet and monthly days-off/leave PDF report with employee ID and role columns, Blockexe branding, and Yu Gothic styling where the font is available.
 - Full-day/hourly leave requests with role-aware routing: employees notify accountable PMs and admins; PM/non-owner administrator leave requires owner review; owner leave routes to another administrator. No requester can approve their own leave.
+- Hourly leave is capped at 2 hours 30 minutes in both the API and the form; longer selections direct the requester to a full-day request. Each employee's My requests view shows cumulative all-time approved vacation/leave days, sick days, other absence days, and hourly leave.
 - Coverage considers the requested absence interval, task urgency, candidate workload, and availability.
 - Coverage offers notify the selected employee; task ownership changes after acceptance.
 - Separate personal confirmation, team attendance, leave center, and coverage inbox views in a TrackerX attendance control center. Personal confirmation is also embedded in every internal user's own profile.
