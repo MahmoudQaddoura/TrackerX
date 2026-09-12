@@ -18,6 +18,7 @@ from app.deps import (
     require_project_manage_access,
 )
 from app.models import Asset, AssetConnection, AssetPort, Milestone, Project, Task, User
+from app.models.asset import ASSET_ENVIRONMENTS, CONNECTION_STATUSES
 from app.services.asset_excel_import import import_asset_excel
 from app.services.asset_inventory_excel import build_asset_inventory_excel
 from app.services.kanban_excel import build_kanban_excel
@@ -231,14 +232,28 @@ async def upload_asset_excel(
     user: User = Depends(require_project_content_editor),
     file: UploadFile = File(...),
     commit: bool = Form(False),
+    default_environment: str = Form("other"),
+    default_connection_status: str = Form("connected"),
 ):
     project = db.get(Project, project_id)
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found.")
     check_project_access(db, user, project_id)
+    if default_environment not in ASSET_ENVIRONMENTS:
+        raise HTTPException(status_code=422, detail="Choose a valid default asset environment.")
+    if default_connection_status not in CONNECTION_STATUSES:
+        raise HTTPException(status_code=422, detail="Choose a valid default connection status.")
     raw = await _read_upload(file)
     try:
-        result = import_asset_excel(db, project=project, user=user, raw=raw, commit=commit)
+        result = import_asset_excel(
+            db,
+            project=project,
+            user=user,
+            raw=raw,
+            commit=commit,
+            default_environment=default_environment,
+            default_connection_status=default_connection_status,
+        )
     except WorkbookFormatError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     if commit and not result["valid"]:

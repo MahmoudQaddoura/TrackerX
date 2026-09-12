@@ -15,12 +15,42 @@ _shared_test_database = Path(tempfile.gettempdir()) / "trackerx_unit_tests.db"
 os.environ.setdefault("DATABASE_URL", f"sqlite:///{_shared_test_database.as_posix()}")
 
 from app.db import Base
-from app.models import Asset, AssetConnection, Milestone, Project, Task, TeamMember, User
+from app.models import Asset, AssetConnection, AssetPort, Milestone, Project, Task, TeamMember, User
 from app.services.asset_excel_import import import_asset_excel
 from app.services.asset_inventory_excel import build_asset_inventory_excel
 from app.services.kanban_excel import build_kanban_excel
 from app.services.kanban_excel_import import import_kanban_excel
-from app.services.ooxml_workbook import WorkbookFormatError, read_xlsx
+from app.services.ooxml_workbook import (
+    WorkbookFormatError,
+    package_xlsx,
+    read_xlsx,
+    row_xml,
+    sheet_xml,
+    text_cell,
+)
+
+
+def _external_workbook(sheet_name: str, headers: list[str], records: list[list[object]]) -> bytes:
+    rows = [row_xml(1, [text_cell(1, 1, "External workbook")])]
+    rows.append(
+        row_xml(3, [text_cell(3, index, header) for index, header in enumerate(headers, start=1)])
+    )
+    for row_number, record in enumerate(records, start=4):
+        rows.append(
+            row_xml(
+                row_number,
+                [text_cell(row_number, index, value) for index, value in enumerate(record, start=1)],
+            )
+        )
+    worksheet = sheet_xml(
+        rows,
+        len(headers),
+        3 + len(records),
+        [24] * len(headers),
+        freeze_rows=3,
+        autofilter=f"A3:{chr(64 + len(headers))}{3 + len(records)}",
+    )
+    return package_xlsx([(sheet_name, worksheet)], title="External data", creator="Test")
 
 
 class ExcelTransferTests(unittest.TestCase):
@@ -219,6 +249,84 @@ class ExcelTransferTests(unittest.TestCase):
         self.assertTrue(result["committed"])
         self.assertEqual(self.db.query(Asset).count(), 2)
         self.assertEqual(self.db.query(AssetConnection).one().status, "connected")
+
+    def test_flexible_network_allowlist_is_inferred_consolidated_and_idempotent(self) -> None:
+        workbook = _external_workbook(
+            "NFS_backup_allowlist",
+            ["Source role", "Source IP", "Destination", "Destination IP", "Port", "Protocol", "What is copied / notes"],
+            [
+                ["VerifyX backend", "10.145.10.11", "PSUT-MON", "10.145.40.10", "2049", "TCP", "Database dumps"],
+                ["VerifyX frontend", "10.145.10.10", "PSUT-MON", "10.145.40.10", "111", "TCP, UDP", "rpcbind"],
+            ],
+        )
+        preview = import_asset_excel(
+            self.db, project=self.project, user=self.user, raw=workbook, commit=False
+        )
+        self.assertTrue(preview["valid"], preview["errors"])
+        self.assertEqual(preview["detected_format"], "network_allowlist")
+        self.assertEqual(preview["rows_read"], 2)
+        self.assertEqual(preview["counts"]["assets_create"], 3)
+        self.assertEqual(preview["counts"]["ports_create"], 3)
+        self.assertEqual(preview["counts"]["connections_create"], 3)
+        self.assertEqual(preview["detected_tables"][0]["header_row"], 3)
+
+        first = import_asset_excel(
+            self.db, project=self.project, user=self.user, raw=workbook, commit=True
+        )
+        self.assertTrue(first["committed"])
+        self.assertEqual(self.db.query(Asset).count(), 3)
+        self.assertEqual(self.db.query(AssetPort).count(), 3)
+        self.assertEqual(self.db.query(AssetConnection).count(), 3)
+        self.assertEqual(
+            {(item.port, item.protocol) for item in self.db.query(AssetPort).all()},
+            {(2049, "tcp"), (111, "tcp"), (111, "udp")},
+        )
+
+        second = import_asset_excel(
+            self.db, project=self.project, user=self.user, raw=workbook, commit=False
+        )
+        self.assertTrue(second["valid"], second["errors"])
+        self.assertEqual(second["counts"]["assets_create"], 0)
+        self.assertEqual(second["counts"]["ports_create"], 0)
+        self.assertEqual(second["counts"]["connections_create"], 0)
+
+    def test_flexible_kanban_import_maps_names_statuses_and_phase(self) -> None:
+        workbook = _external_workbook(
+            "Delivery Plan",
+            ["Activity", "Phase", "Assigned To", "Progress Status", "Details", "Due Date"],
+            [
+                ["Prepare deployment", "Release 1", "Yazan Abu Osbeh", "In Progress", "Prepare the runbook", "2026-09-20"],
+                ["Approve release", "Release 1", "", "Complete", "Capture approval", "2026-09-21"],
+            ],
+        )
+        preview = import_kanban_excel(
+            self.db, project=self.project, user=self.user, raw=workbook, commit=False
+        )
+        self.assertTrue(preview["valid"], preview["errors"])
+        self.assertEqual(preview["detected_format"], "task_list")
+        self.assertEqual(preview["counts"]["milestones_create"], 1)
+        self.assertEqual(preview["counts"]["tasks_create"], 2)
+        result = import_kanban_excel(
+            self.db, project=self.project, user=self.user, raw=workbook, commit=True
+        )
+        self.assertTrue(result["committed"], result["errors"])
+        tasks = self.db.query(Task).order_by(Task.id).all()
+        self.assertEqual([task.status for task in tasks], ["in_progress", "done"])
+        self.assertEqual(tasks[0].milestone.title, "Release 1")
+        self.assertEqual([member.name for member in tasks[0].assigned_members], ["Yazan Abu Osbeh"])
+
+    def test_wrong_workspace_gives_actionable_routing(self) -> None:
+        workbook = _external_workbook(
+            "Network",
+            ["Source IP", "Destination IP", "Port", "Protocol"],
+            [["10.0.0.1", "10.0.0.2", "443", "TCP"]],
+        )
+        preview = import_kanban_excel(
+            self.db, project=self.project, user=self.user, raw=workbook, commit=False
+        )
+        self.assertFalse(preview["valid"])
+        self.assertEqual(preview["suggested_workspace"], "assets")
+        self.assertIn("Asset inventory", preview["errors"][0]["message"])
 
     def test_import_rejects_macro_enabled_workbook_payload(self) -> None:
         clean_workbook = build_kanban_excel(

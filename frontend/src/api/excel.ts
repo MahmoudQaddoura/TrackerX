@@ -17,6 +17,22 @@ export interface ExcelImportResult {
   counts: Record<string, number>;
   warnings: string[];
   errors: ExcelImportIssue[];
+  detected_format?: string;
+  suggested_workspace?: ExcelWorkspace;
+  detected_tables?: Array<{
+    sheet: string;
+    kind: string;
+    header_row: number | null;
+    confidence: number;
+    rows: number;
+    mapping: Array<{ source: string; target: string }>;
+  }>;
+  manual_fields?: string[];
+}
+
+export interface ExcelImportOptions {
+  defaultEnvironment?: "production" | "staging" | "development" | "test" | "disaster_recovery" | "other";
+  defaultConnectionStatus?: "connected" | "closed" | "not_needed";
 }
 
 function paths(projectId: number, workspace: ExcelWorkspace) {
@@ -48,10 +64,15 @@ export async function uploadWorkspaceExcel(
   workspace: ExcelWorkspace,
   file: File,
   commit: boolean,
+  options: ExcelImportOptions = {},
 ): Promise<ExcelImportResult> {
   const form = new FormData();
   form.append("file", file);
   form.append("commit", String(commit));
+  if (workspace === "assets") {
+    form.append("default_environment", options.defaultEnvironment ?? "other");
+    form.append("default_connection_status", options.defaultConnectionStatus ?? "connected");
+  }
   const { data } = await api.post<ExcelImportResult>(paths(projectId, workspace).upload, form);
   return data;
 }
