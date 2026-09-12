@@ -293,7 +293,7 @@ def _styles() -> str:
     <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
     <xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment vertical="center"/></xf>
     <xf numFmtId="0" fontId="2" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment vertical="center"/></xf>
-    <xf numFmtId="0" fontId="3" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+    <xf numFmtId="0" fontId="5" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
     <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
     <xf numFmtId="0" fontId="3" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
     <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
@@ -403,7 +403,7 @@ def build_asset_inventory_excel(
             cells.extend([_inline(distribution_row + index, 7, label.replace("_", " ").title(), _status_style(label)), _number(distribution_row + index, 9, count)])
         overview_rows.append(_row(distribution_row + index, cells, 24))
     note_row = distribution_row + count_rows + 2
-    overview_rows.append(_row(note_row, [_inline(note_row, 1, "Edit and filter the detailed tabs as needed. Identifier columns remain numeric; IP addresses remain text.", 2)], 24))
+    overview_rows.append(_row(note_row, [_inline(note_row, 1, "For import: keep IDs to update, leave IDs blank to create, and edit Assets, Ports, and Connection Log. TrackerX previews every change and rebuilds the connectivity matrix.", 2)], 24))
 
     overview_xml = _sheet(
         overview_rows, 12, note_row, [14, 3, 13, 15, 3, 14, 14, 18, 10, 15, 10, 10],

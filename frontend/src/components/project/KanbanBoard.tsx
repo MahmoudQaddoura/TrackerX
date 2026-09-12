@@ -14,6 +14,7 @@ import {
   CircleDot,
   Download,
   FileText,
+  FileSpreadsheet,
   MessageSquare,
   Paperclip,
   Pencil,
@@ -30,6 +31,7 @@ import { downloadDocument } from "@/api/documents";
 import { CommentThread } from "@/components/common/CommentThread";
 import { DelayBadge, RiskBadge } from "@/components/common/RiskBadge";
 import { DeleteConfirmDialog } from "@/components/forms/DeleteConfirmDialog";
+import { ExcelTransferDialog } from "@/components/forms/ExcelTransferDialog";
 import { MilestoneFormDialog } from "@/components/forms/MilestoneFormDialog";
 import { TaskFormDialog } from "@/components/forms/TaskFormDialog";
 import { Badge } from "@/components/ui/badge";
@@ -149,6 +151,7 @@ export function KanbanBoard({
     initialAssigneeId ? String(initialAssigneeId) : "",
   );
   const [expandedMilestoneId, setExpandedMilestoneId] = useState<number | null>(null);
+  const [excelOpen, setExcelOpen] = useState(false);
 
   const currentMilestoneId = useMemo(() => {
     const ordered = (milestones.data ?? [])
@@ -349,19 +352,24 @@ export function KanbanBoard({
                   <p className="mt-0.5 text-xs text-fg-muted">{section.description}</p>
                 </div>
               </div>
-              {canManageProject && (
-                <Button
-                  size="sm"
-                  variant="default"
-                  onClick={() => {
-                    setEditingMs(undefined);
-                    setNewMilestoneWorkstream(section.key);
-                    setMsFormOpen(true);
-                  }}
-                >
-                  <Plus className="h-4 w-4" /> {section.addLabel}
+              <div className="flex flex-wrap items-center gap-2">
+                <Button size="sm" variant="outline" onClick={() => setExcelOpen(true)}>
+                  <FileSpreadsheet className="h-4 w-4" /> Excel import / export
                 </Button>
-              )}
+                {canManageProject && (
+                  <Button
+                    size="sm"
+                    variant="default"
+                    onClick={() => {
+                      setEditingMs(undefined);
+                      setNewMilestoneWorkstream(section.key);
+                      setMsFormOpen(true);
+                    }}
+                  >
+                    <Plus className="h-4 w-4" /> {section.addLabel}
+                  </Button>
+                )}
+              </div>
             </div>
 
             {sectionMilestones.length === 0 ? (
@@ -445,6 +453,14 @@ export function KanbanBoard({
         onConfirm={() => {
           if (msToDelete) msMut.remove.mutate(msToDelete.id, { onSuccess: () => setMsToDelete(null) });
         }}
+      />
+      <ExcelTransferDialog
+        open={excelOpen}
+        onOpenChange={setExcelOpen}
+        projectId={project.id}
+        workspace="kanban"
+        canImport={canManageProject}
+        hasRecords={(milestones.data?.length ?? 0) > 0 || (tasks.data?.length ?? 0) > 0}
       />
     </div>
   );

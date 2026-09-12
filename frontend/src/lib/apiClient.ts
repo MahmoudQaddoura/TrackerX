@@ -26,6 +26,9 @@ export function getApiErrorMessage(error: unknown, fallback = "Something went wr
   if (axios.isAxiosError(error)) {
     const detail = error.response?.data?.detail;
     if (typeof detail === "string") return detail;
+    if (detail && typeof detail === "object" && "message" in detail && typeof detail.message === "string") {
+      return detail.message;
+    }
     if (Array.isArray(detail) && detail[0]?.msg) return detail[0].msg;
     if (error.message) return error.message;
   }

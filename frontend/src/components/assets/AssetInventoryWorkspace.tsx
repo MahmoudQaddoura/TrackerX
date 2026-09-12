@@ -25,6 +25,7 @@ import { AssetNetworkMatrix } from "@/components/assets/AssetNetworkMatrix";
 import { AssetPortDialog } from "@/components/assets/AssetPortDialog";
 import { AssetRegistryTable } from "@/components/assets/AssetRegistryTable";
 import { DeleteConfirmDialog } from "@/components/forms/DeleteConfirmDialog";
+import { ExcelTransferDialog } from "@/components/forms/ExcelTransferDialog";
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/ui/error-state";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -61,6 +62,7 @@ export function AssetInventoryWorkspace({
   const [exporting, setExporting] = useState<"pdf" | "xlsx" | null>(null);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [excelOpen, setExcelOpen] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
 
   const assets = assetsQuery.data ?? [];
@@ -82,6 +84,7 @@ export function AssetInventoryWorkspace({
         event.key === "Escape"
         && !assetOpen
         && !portOpen
+        && !excelOpen
         && !deleteTarget
       ) setExpanded(false);
     };
@@ -90,7 +93,7 @@ export function AssetInventoryWorkspace({
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", closeOnEscape);
     };
-  }, [assetOpen, deleteTarget, expanded, portOpen]);
+  }, [assetOpen, deleteTarget, excelOpen, expanded, portOpen]);
 
   useEffect(() => {
     if (!exportMenuOpen) return;
@@ -261,6 +264,13 @@ export function AssetInventoryWorkspace({
                 </div>
               )}
             </div>
+            <Button
+              variant="outline"
+              className="border-white/30 bg-white/10 text-white hover:bg-white/20"
+              onClick={() => setExcelOpen(true)}
+            >
+              <FileSpreadsheet className="h-4 w-4" /> Excel import / export
+            </Button>
             {canEdit && (
               <Button
                 className="bg-white text-accent hover:bg-accent-soft"
@@ -363,6 +373,14 @@ export function AssetInventoryWorkspace({
         }
         isPending={mutations.deleteAsset.isPending || mutations.deletePort.isPending}
         onConfirm={confirmDelete}
+      />
+      <ExcelTransferDialog
+        open={excelOpen}
+        onOpenChange={setExcelOpen}
+        projectId={projectId}
+        workspace="assets"
+        canImport={canEdit}
+        hasRecords={assets.length > 0}
       />
     </section>
   );
