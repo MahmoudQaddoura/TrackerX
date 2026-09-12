@@ -46,6 +46,15 @@ Audit baseline: 5 September 2026. This inventory is reconstructed from the appli
 - PDF and Excel download formats under a common export control, including inventory and connectivity matrix; Excel replaced the earlier XML request.
 - Demo register data is explicitly sample infrastructure, not a network discovery result.
 - Employee/client access follows project permissions; authorized exports include the full register.
+- One Excel import/export workspace supports the complete asset register, ports, connection log, generated connectivity matrix, and overview. Stable IDs update records, blank IDs create records, and omitted rows are never deleted.
+
+## Excel data exchange
+
+- Kanban and Asset Inventory now expose a consistent TrackerX Excel control for current-data export, blank-template download, drag-and-drop upload, mandatory preview, and explicit commit.
+- Kanban workbooks preserve milestones, tasks, descriptions, status, employee-number assignees, schedules, estimates, delay metadata, sort order, risk, and stable record IDs.
+- Asset workbooks preserve assets, resources, applications and services, ports, connection states, notes, stable IDs, and the complete connectivity matrix generated from the register.
+- Imports are project-scoped, atomic, and non-destructive. Validation reports the exact worksheet, row, and field before any database write; successful commits refresh all affected project views.
+- Workbook defenses enforce `.xlsx` and upload limits, bounded ZIP/XML expansion, safe XML parsing, stable-ID ownership, project-roster permissions, type/range checks, duplicate detection, and rejection of macros, external links, and formulas in imported fields.
 
 ## Maintenance and client delivery
 
