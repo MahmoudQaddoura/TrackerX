@@ -24,6 +24,7 @@ Audit baseline: 5 September 2026. This inventory is reconstructed from the appli
 - Project overview, milestone/task progress, delay/risk indicators, assignees, project GitHub links.
 - Kanban, milestone-grouped Gantt, workstreams, CSV import, task comments, multiple assignees, task status updates.
 - Progressive Kanban milestones: the current stage opens by default, fully completed stages collapse with a Done state, and the next ordered stage opens automatically. Milestone/task forms use guided outcome, ownership, schedule, status, and delay sections with milestone-bound date validation.
+- Flexible Excel intake for Kanban and Asset Inventory: TrackerX detects external task plans, asset registers, and network allowlists; previews the recognized column mapping and safe defaults; consolidates endpoints by IP; expands multi-protocol rules; and leaves missing optional information for manual completion without deleting existing records.
 - Dashboard project-progress presentation, reduced dashboard clutter, and task/milestone inspection.
 - Project documents grouped by category and milestone, uploads, safe previews, downloads, metadata editing; meeting records.
 

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Milestone, Project, Task, TeamMember, User
 from app.models.task import DELAY_CAUSES, TASK_STATUSES
+from app.services.excel_inference import prepare_flexible_kanban_workbook, trackerx_metadata
 from app.services.notifications import notify_members
 from app.services.ooxml_workbook import WorkbookCell, read_xlsx, table_rows
 
@@ -130,6 +131,22 @@ def import_kanban_excel(
     commit: bool,
 ) -> dict[str, Any]:
     workbook = read_xlsx(raw)
+    native = {"Milestones", "Tasks"}.issubset(workbook)
+    inferred_warnings: list[str] = []
+    inferred_issues: list[dict[str, Any]] = []
+    source_rows: int | None = None
+    if native:
+        metadata = trackerx_metadata("kanban", workbook)
+    else:
+        workbook, metadata, inferred_warnings, inferred_issues, source_rows = prepare_flexible_kanban_workbook(
+            db, project=project, user=user, workbook=workbook
+        )
+        if not workbook:
+            return {
+                "workspace": "kanban", "valid": False, "committed": False,
+                "rows_read": source_rows or 0, "counts": _empty_counts(),
+                "warnings": inferred_warnings, "errors": inferred_issues[:200], **metadata,
+            }
     milestone_rows = table_rows(
         workbook,
         "Milestones",
@@ -147,8 +164,8 @@ def import_kanban_excel(
             "Assignee Employee IDs",
         },
     )
-    issues: list[dict[str, Any]] = []
-    warnings: list[str] = []
+    issues: list[dict[str, Any]] = list(inferred_issues)
+    warnings: list[str] = list(inferred_warnings)
     counts = _empty_counts()
 
     existing_milestones = {
@@ -379,10 +396,11 @@ def import_kanban_excel(
         "workspace": "kanban",
         "valid": not issues,
         "committed": False,
-        "rows_read": len(milestone_rows) + len(task_rows),
+        "rows_read": source_rows if source_rows is not None else len(milestone_rows) + len(task_rows),
         "counts": counts,
         "warnings": warnings,
         "errors": issues[:200],
+        **metadata,
     }
     if issues or not commit:
         return result

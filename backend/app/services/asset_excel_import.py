@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Asset, AssetConnection, AssetPort, Project, User
 from app.models.asset import ASSET_ENVIRONMENTS, ASSET_STATUSES, CONNECTION_STATUSES, PORT_PROTOCOLS
+from app.services.excel_inference import prepare_flexible_asset_workbook, trackerx_metadata
 from app.services.ooxml_workbook import WorkbookCell, read_xlsx, table_rows
 
 
@@ -97,8 +98,30 @@ def import_asset_excel(
     user: User,
     raw: bytes,
     commit: bool,
+    default_environment: str = "other",
+    default_connection_status: str = "connected",
 ) -> dict[str, Any]:
     workbook = read_xlsx(raw)
+    native = {"Assets", "Ports", "Connection Log"}.issubset(workbook)
+    inferred_warnings: list[str] = []
+    inferred_issues: list[dict[str, Any]] = []
+    source_rows: int | None = None
+    if native:
+        metadata = trackerx_metadata("assets", workbook)
+    else:
+        workbook, metadata, inferred_warnings, inferred_issues, source_rows = prepare_flexible_asset_workbook(
+            db,
+            project=project,
+            workbook=workbook,
+            default_environment=default_environment,
+            default_connection_status=default_connection_status,
+        )
+        if not workbook:
+            return {
+                "workspace": "assets", "valid": False, "committed": False,
+                "rows_read": source_rows or 0, "counts": _empty_counts(),
+                "warnings": inferred_warnings, "errors": inferred_issues[:200], **metadata,
+            }
     asset_rows = table_rows(
         workbook,
         "Assets",
@@ -117,8 +140,8 @@ def import_asset_excel(
             "Destination Hostname", "Port ID", "Port", "Protocol", "Status",
         },
     )
-    issues: list[dict[str, Any]] = []
-    warnings: list[str] = []
+    issues: list[dict[str, Any]] = list(inferred_issues)
+    warnings: list[str] = list(inferred_warnings)
     counts = _empty_counts()
 
     existing_assets = {
@@ -393,8 +416,8 @@ def import_asset_excel(
 
     result: dict[str, Any] = {
         "workspace": "assets", "valid": not issues, "committed": False,
-        "rows_read": len(asset_rows) + len(port_rows) + len(connection_rows),
-        "counts": counts, "warnings": warnings, "errors": issues[:200],
+        "rows_read": source_rows if source_rows is not None else len(asset_rows) + len(port_rows) + len(connection_rows),
+        "counts": counts, "warnings": warnings, "errors": issues[:200], **metadata,
     }
     if issues or not commit:
         return result

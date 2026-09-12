@@ -4,6 +4,7 @@ import {
   Download,
   FileDown,
   FileSpreadsheet,
+  GitMerge,
   RefreshCw,
   ShieldCheck,
   Upload,
@@ -79,11 +80,15 @@ export function ExcelTransferDialog({
   const [preview, setPreview] = useState<ExcelImportResult | null>(null);
   const [busy, setBusy] = useState<"export" | "template" | "preview" | "commit" | null>(null);
   const [error, setError] = useState("");
+  const [defaultEnvironment, setDefaultEnvironment] = useState<"production" | "staging" | "development" | "test" | "disaster_recovery" | "other">("other");
+  const [defaultConnectionStatus, setDefaultConnectionStatus] = useState<"connected" | "closed" | "not_needed">("connected");
   const label = workspace === "kanban" ? "Kanban board" : "Asset inventory";
   const baseFilename = `trackerx-project-${projectId}-${workspace === "kanban" ? "kanban" : "asset-inventory"}`;
   const importScope = workspace === "kanban"
-    ? "Import the Milestones and Tasks sheets. Stable IDs update existing records; blank IDs create new records."
-    : "Import the Assets, Ports, and Connection Log sheets. TrackerX rebuilds the connectivity matrix from those records.";
+    ? "TrackerX detects task and milestone tables, maps familiar column names, and groups task-only sheets into a safe milestone."
+    : "TrackerX detects asset registers and network allowlists, merges repeated assets by IP, and builds ports and connectivity rules.";
+
+  const importOptions = { defaultEnvironment, defaultConnectionStatus };
 
   function reset() {
     setFile(null);
@@ -105,7 +110,7 @@ export function ExcelTransferDialog({
     }
   }
 
-  async function selectFile(selected: File | null) {
+  async function selectFile(selected: File | null, options = importOptions) {
     setFile(selected);
     setPreview(null);
     setError("");
@@ -116,7 +121,7 @@ export function ExcelTransferDialog({
     }
     setBusy("preview");
     try {
-      setPreview(await uploadWorkspaceExcel(projectId, workspace, selected, false));
+      setPreview(await uploadWorkspaceExcel(projectId, workspace, selected, false, options));
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, "Could not validate this workbook."));
     } finally {
@@ -129,7 +134,7 @@ export function ExcelTransferDialog({
     setBusy("commit");
     setError("");
     try {
-      const result = await uploadWorkspaceExcel(projectId, workspace, file, true);
+      const result = await uploadWorkspaceExcel(projectId, workspace, file, true, importOptions);
       setPreview(result);
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["milestones", projectId] }),
@@ -215,6 +220,47 @@ export function ExcelTransferDialog({
             <div className="mt-4 rounded-lg border border-accent/15 bg-accent-soft/30 px-3 py-2 text-xs leading-relaxed text-fg-muted">
               {importScope} Import is non-destructive: rows missing from the workbook are never deleted.
             </div>
+            {workspace === "assets" && (
+              <div className="mt-4 grid gap-3 rounded-xl border border-border bg-raised/25 p-3 sm:grid-cols-2">
+                <label className="text-xs font-semibold text-fg-muted">
+                  When environment is missing
+                  <select
+                    value={defaultEnvironment}
+                    disabled={busy !== null}
+                    onChange={(event) => {
+                      const next = event.target.value as typeof defaultEnvironment;
+                      setDefaultEnvironment(next);
+                      if (file) void selectFile(file, { defaultEnvironment: next, defaultConnectionStatus });
+                    }}
+                    className="mt-1.5 h-10 w-full rounded-lg border border-border bg-surface px-3 text-sm font-medium text-fg"
+                  >
+                    <option value="other">Other — complete later</option>
+                    <option value="production">Production</option>
+                    <option value="staging">Staging</option>
+                    <option value="development">Development</option>
+                    <option value="test">Test / UAT</option>
+                    <option value="disaster_recovery">Disaster recovery</option>
+                  </select>
+                </label>
+                <label className="text-xs font-semibold text-fg-muted">
+                  New network rules mean
+                  <select
+                    value={defaultConnectionStatus}
+                    disabled={busy !== null}
+                    onChange={(event) => {
+                      const next = event.target.value as typeof defaultConnectionStatus;
+                      setDefaultConnectionStatus(next);
+                      if (file) void selectFile(file, { defaultEnvironment, defaultConnectionStatus: next });
+                    }}
+                    className="mt-1.5 h-10 w-full rounded-lg border border-border bg-surface px-3 text-sm font-medium text-fg"
+                  >
+                    <option value="connected">Connected / required</option>
+                    <option value="closed">Closed / blocked</option>
+                    <option value="not_needed">Not needed</option>
+                  </select>
+                </label>
+              </div>
+            )}
             <input
               ref={inputRef}
               type="file"
@@ -253,6 +299,42 @@ export function ExcelTransferDialog({
                   </span>
                   <Badge variant={preview.valid ? "success" : "danger"}>{preview.rows_read} rows read</Badge>
                 </div>
+                {preview.detected_format && (
+                  <div className="mt-3 rounded-xl border border-accent/20 bg-surface p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="flex items-center gap-2 text-sm font-semibold text-fg">
+                        <GitMerge className="h-4 w-4 text-accent" />
+                        TrackerX understood this workbook
+                      </span>
+                      <Badge variant="outline">{preview.detected_format.replace(/_/g, " ")}</Badge>
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      {preview.detected_tables?.map((table) => (
+                        <div key={`${table.sheet}-${table.header_row}`} className="rounded-lg bg-raised/55 px-3 py-2">
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                            <span className="font-semibold text-fg">{table.sheet} · {table.rows} data rows</span>
+                            <span className="text-fg-subtle">{table.confidence}% mapping confidence</span>
+                          </div>
+                          {table.mapping.length > 0 && (
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {table.mapping.map((item) => (
+                                <span key={`${item.source}-${item.target}`} className="rounded-full border border-border bg-surface px-2 py-1 text-[10px] text-fg-muted">
+                                  {item.source} → <strong className="text-fg">{item.target}</strong>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    {(preview.manual_fields?.length ?? 0) > 0 && (
+                      <div className="mt-3 border-t border-border pt-2 text-xs text-fg-muted">
+                        <p className="font-semibold text-fg">Safe defaults and manual follow-up</p>
+                        {preview.manual_fields?.map((item) => <p key={item} className="mt-1">• {item}</p>)}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                   {Object.entries(preview.counts).filter(([, value]) => value > 0).map(([key, value]) => (
                     <div key={key} className="rounded-lg border border-border/70 bg-surface px-3 py-2">
