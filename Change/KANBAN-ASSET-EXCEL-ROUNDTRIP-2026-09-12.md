@@ -73,5 +73,6 @@ Both upload endpoints accept multipart `file` and `commit`. `commit=false` is th
 - Feature regression coverage verifies Kanban preview/commit, stable-ID round trip, asset/port/connection creation, and matrix-state persistence.
 - Security regression coverage verifies that a workbook containing a macro payload is rejected.
 - Both generated templates were independently imported, inspected, exported again, and rendered with the spreadsheet artifact runtime. All expected sheets and fields survived the round trip, formulas were enumerated, and the rendered TrackerX layout passed visual inspection.
+- `httpx2` is pinned with the backend dependencies so the FastAPI/Starlette API-integrity suite is reproducible in the deployment environment.
 
 The deployed commit is recorded in the release handoff.
