@@ -56,7 +56,8 @@ export function DocumentRepository({
   embedded?: boolean;
 }) {
   const { data, isLoading, isError, refetch } = useDocuments(projectId);
-  const milestones = useMilestones(projectId);
+  const needsMilestones = workspace !== "support";
+  const milestones = useMilestones(projectId, needsMilestones);
   const collection: DocumentCollectionKey = workspace === "support" ? "operations" : "project";
   const [folderKey, setFolderKey] = useState<DocumentFolderKey>("technical_manual");
   const folders = getDocumentFolders(collection);
@@ -66,14 +67,14 @@ export function DocumentRepository({
     [data],
   );
 
-  if (isLoading || milestones.isLoading) return <DocumentWorkspaceSkeleton />;
-  if (isError || milestones.isError)
+  if (isLoading || (needsMilestones && milestones.isLoading)) return <DocumentWorkspaceSkeleton />;
+  if (isError || (needsMilestones && milestones.isError))
     return (
       <ErrorState
         message="Could not load the document workspace."
         onRetry={() => {
           refetch();
-          milestones.refetch();
+          if (needsMilestones) milestones.refetch();
         }}
       />
     );
@@ -140,7 +141,7 @@ export function DocumentRepository({
             folder={activeFolder}
             icon={FOLDER_ICONS[activeFolder.key]}
             documents={activeDocuments}
-            milestones={milestones.data ?? []}
+            milestones={needsMilestones ? milestones.data ?? [] : []}
           />
         </div>
       </div>

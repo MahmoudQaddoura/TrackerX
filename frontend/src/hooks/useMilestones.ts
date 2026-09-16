@@ -9,11 +9,11 @@ import {
   type MilestonePayload,
 } from "@/api/milestones";
 
-export function useMilestones(projectId: number) {
+export function useMilestones(projectId: number, enabled = true) {
   return useQuery({
     queryKey: ["milestones", projectId],
     queryFn: () => fetchMilestones(projectId),
-    enabled: !!projectId,
+    enabled: !!projectId && enabled,
   });
 }
 

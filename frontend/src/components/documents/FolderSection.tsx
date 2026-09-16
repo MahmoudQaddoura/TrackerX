@@ -61,17 +61,20 @@ export function FolderSection({
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const [toDelete, setToDelete] = useState<DocumentMeta | null>(null);
   const [toPreview, setToPreview] = useState<DocumentMeta | null>(null);
+  const requiresMilestone = collection === "project";
 
   const visibleDocuments = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase();
     if (!normalizedQuery) return documents;
     return documents.filter((document) => {
-      const milestone = milestones.find((item) => item.id === document.milestone_id);
+      const milestone = requiresMilestone
+        ? milestones.find((item) => item.id === document.milestone_id)
+        : null;
       return `${document.title} ${document.file_name} ${milestone?.title ?? ""}`
         .toLocaleLowerCase()
         .includes(normalizedQuery);
     });
-  }, [documents, milestones, query]);
+  }, [documents, milestones, query, requiresMilestone]);
 
   const selectedBytes = files.reduce((total, file) => total + file.size, 0);
 
@@ -104,7 +107,7 @@ export function FolderSection({
 
   async function handleUpload(event: FormEvent) {
     event.preventDefault();
-    if (!selectedMilestoneId) return setError("Select a milestone for this upload.");
+    if (requiresMilestone && !selectedMilestoneId) return setError("Select a milestone for this upload.");
     if (files.length === 0) return setError("Choose one or more files.");
     setError(null);
     setUploadProgress({ completed: 0, total: files.length });
@@ -114,7 +117,7 @@ export function FolderSection({
         category: getStorageCategory(folder.key),
         title: file.name,
         description: encodeDocumentPlacement(collection, folder.key),
-        milestone_id: Number(selectedMilestoneId),
+        milestone_id: requiresMilestone ? Number(selectedMilestoneId) : null,
         file,
       })),
       onProgress: (completed, total) => setUploadProgress({ completed, total }),
@@ -142,7 +145,10 @@ export function FolderSection({
     try {
       await downloadDocument(document);
     } catch (downloadError) {
-      setError(getApiErrorMessage(downloadError));
+      setError(getApiErrorMessage(
+        downloadError,
+        downloadError instanceof Error ? downloadError.message : "Could not download this file.",
+      ));
     } finally {
       setDownloadingId(null);
     }
@@ -198,7 +204,8 @@ export function FolderSection({
 
         {canEditProjectContent && showUpload && (
           <form onSubmit={handleUpload} className="animate-slide-up rounded-lg border border-border bg-surface p-4">
-            <div className="mb-4 max-w-xl">
+            {requiresMilestone && (
+              <div className="mb-4 max-w-xl">
               <Label htmlFor={`milestone-${collection}-${folder.key}`}>Link files to milestone</Label>
               <Select
                 id={`milestone-${collection}-${folder.key}`}
@@ -223,7 +230,8 @@ export function FolderSection({
                   ? "Every file in this batch will be tagged to this milestone and shown in Kanban."
                   : "Create a project milestone before uploading documents."}
               </p>
-            </div>
+              </div>
+            )}
 
             <div
               className={`rounded-lg border-2 border-dashed px-5 py-7 text-center transition-colors ${
@@ -321,7 +329,7 @@ export function FolderSection({
               </div>
               <Button
                 type="submit"
-                disabled={files.length === 0 || !selectedMilestoneId || uploadMany.isPending}
+                disabled={files.length === 0 || (requiresMilestone && !selectedMilestoneId) || uploadMany.isPending}
               >
                 {uploadMany.isPending && <Spinner />}
                 Upload {files.length || "selected"} {files.length === 1 ? "file" : "files"}
@@ -384,7 +392,8 @@ export function FolderSection({
                         <p className="mt-0.5 truncate text-xs text-fg-subtle">
                           {document.file_name} · {formatBytes(document.file_size)} · {formatDate(document.created_at)}
                         </p>
-                        <span className="mt-1 inline-flex max-w-full items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent">
+                        {requiresMilestone && (
+                          <span className="mt-1 inline-flex max-w-full items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent">
                           <Link2 className="h-3 w-3 shrink-0" />
                           <span className="truncate">
                             {document.milestone_id
@@ -392,7 +401,8 @@ export function FolderSection({
                                 "Milestone unavailable"
                               : "Unlinked legacy file"}
                           </span>
-                        </span>
+                          </span>
+                        )}
                       </div>
                     </button>
                     <div className="flex shrink-0 items-center gap-1">

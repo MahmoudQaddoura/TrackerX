@@ -1,4 +1,6 @@
 /** api/documents.ts — document list/upload/download/delete. */
+import axios from "axios";
+
 import { api } from "@/lib/apiClient";
 import type { DocumentMeta } from "@/types";
 
@@ -55,13 +57,30 @@ export async function previewDocument(id: number): Promise<DocumentPreviewRespon
 
 /** Download a file as an attachment (never rendered inline). */
 export async function downloadDocument(doc: DocumentMeta): Promise<void> {
-  const response = await api.get(`/documents/${doc.id}/download`, { responseType: "blob" });
-  const url = URL.createObjectURL(response.data as Blob);
+  let file: Blob;
+  try {
+    const response = await api.get<Blob>(`/documents/${doc.id}/download`, { responseType: "blob" });
+    file = response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.data instanceof Blob) {
+      let detail: unknown;
+      try {
+        detail = (JSON.parse(await error.response.data.text()) as { detail?: unknown }).detail;
+      } catch {
+        // Keep the original HTTP error if the response is not JSON.
+      }
+      if (typeof detail === "string") throw new Error(detail);
+    }
+    throw error;
+  }
+  if (file.size === 0) throw new Error("The downloaded file is empty.");
+  const url = URL.createObjectURL(file);
   const link = document.createElement("a");
   link.href = url;
   link.download = doc.file_name;
   document.body.appendChild(link);
   link.click();
   link.remove();
-  URL.revokeObjectURL(url);
+  // Keep the object URL alive until the browser has begun saving the file.
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
