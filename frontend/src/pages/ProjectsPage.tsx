@@ -12,7 +12,6 @@ import {
   Plus,
   Search,
   ShieldCheck,
-  Upload,
   UserRoundCog,
   type LucideIcon,
 } from "lucide-react";
@@ -22,7 +21,6 @@ import { useNavigate } from "react-router-dom";
 import type { ProjectPayload } from "@/api/projects";
 import { RiskBadge } from "@/components/common/RiskBadge";
 import { ProjectStatusBadge } from "@/components/common/StatusBadge";
-import { CsvImportDialog } from "@/components/forms/CsvImportDialog";
 import { ProjectFormDialog } from "@/components/forms/ProjectFormDialog";
 import { ProjectGitHubButton } from "@/components/project/ProjectGitHubButton";
 import { ProjectManagerDialog } from "@/components/project/ProjectManagerDialog";
@@ -46,10 +44,9 @@ export function ProjectsPage() {
   const { isAdmin, isPrimaryAdmin } = useAuth();
   const navigate = useNavigate();
   const { data, isLoading, isError, refetch } = useProjects();
-  const { create, update, importCsv } = useProjectMutations();
+  const { create, update } = useProjectMutations();
   const team = useTeam(true, isPrimaryAdmin);
   const [formOpen, setFormOpen] = useState(false);
-  const [csvOpen, setCsvOpen] = useState(false);
   const [managerProject, setManagerProject] = useState<Project | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -105,9 +102,6 @@ export function ProjectsPage() {
             </div>
             {isAdmin && (
               <div className="flex flex-wrap gap-2">
-                <Button className="border-white/25 bg-white/10 text-white shadow-none hover:bg-white/20" variant="outline" onClick={() => setCsvOpen(true)}>
-                  <Upload className="h-4 w-4" /> Import actual project
-                </Button>
                 <Button className="bg-white text-accent hover:bg-white/90" onClick={() => setFormOpen(true)}>
                   <Plus className="h-4 w-4" /> New project
                 </Button>
@@ -159,7 +153,6 @@ export function ProjectsPage() {
       )}
 
       <ProjectFormDialog open={formOpen} onOpenChange={setFormOpen} availableProjects={data ?? []} onSubmit={(payload) => create.mutateAsync(payload)} isPending={create.isPending} />
-      <CsvImportDialog open={csvOpen} onOpenChange={setCsvOpen} onImport={(file) => importCsv.mutateAsync(file)} isPending={importCsv.isPending} />
       <ProjectManagerDialog project={managerProject} members={team.data ?? []} onClose={() => setManagerProject(null)} />
     </div>
   );
