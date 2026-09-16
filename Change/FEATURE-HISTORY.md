@@ -27,6 +27,7 @@ Audit baseline: 5 September 2026. This inventory is reconstructed from the appli
 - Flexible Excel intake for Kanban and Asset Inventory: TrackerX detects external task plans, asset registers, and network allowlists; previews the recognized column mapping and safe defaults; consolidates endpoints by IP; expands multi-protocol rules; and leaves missing optional information for manual completion without deleting existing records.
 - Dashboard project-progress presentation, reduced dashboard clutter, and task/milestone inspection.
 - Project documents grouped by category and milestone, uploads, safe previews, downloads, metadata editing; meeting records.
+- Maintenance & Support documents upload directly into their selected category without a milestone. Downloads remain available from each file row and its preview, with the browser given time to start saving the original file.
 
 ## Attendance, leave, and coverage
 

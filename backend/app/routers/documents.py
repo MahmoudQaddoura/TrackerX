@@ -75,7 +75,8 @@ async def upload_document(
     db: Session = Depends(get_db),
     user: User = Depends(require_project_content_editor),
 ):
-    if db.get(Project, project_id) is None:
+    project = db.get(Project, project_id)
+    if project is None:
         raise HTTPException(status_code=404, detail="Project not found.")
     check_project_access(db, user, project_id)
     if category not in DOCUMENT_CATEGORIES:
@@ -87,6 +88,11 @@ async def upload_document(
         raise HTTPException(status_code=422, detail="Document description exceeds 10,000 characters.")
     if len(file.filename or "file") > 255:
         raise HTTPException(status_code=422, detail="File name exceeds 255 characters.")
+    if project.project_type == "maintenance_support" and milestone_id is not None:
+        raise HTTPException(
+            status_code=422,
+            detail="Maintenance & Support documents are filed by category, without a milestone.",
+        )
     if milestone_id is not None:
         ms = db.get(Milestone, milestone_id)
         if ms is None or ms.project_id != project_id:

@@ -1,7 +1,8 @@
-import { Eye, FileWarning, Maximize2 } from "lucide-react";
+import { Download, Eye, FileWarning, Maximize2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { previewDocument } from "@/api/documents";
+import { downloadDocument, previewDocument } from "@/api/documents";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -10,6 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
+import { getApiErrorMessage } from "@/lib/apiClient";
 import { formatBytes } from "@/lib/utils";
 import type { DocumentMeta } from "@/types";
 
@@ -26,6 +28,24 @@ export function FilePreviewDialog({
   onClose: () => void;
 }) {
   const [preview, setPreview] = useState<PreviewState>({ status: "loading" });
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+
+  async function handleDownload() {
+    if (!document) return;
+    setDownloading(true);
+    setDownloadError(null);
+    try {
+      await downloadDocument(document);
+    } catch (error) {
+      setDownloadError(getApiErrorMessage(
+        error,
+        error instanceof Error ? error.message : "Could not download this file.",
+      ));
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   useEffect(() => {
     if (!document) return;
@@ -84,17 +104,23 @@ export function FilePreviewDialog({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="flex h-[88vh] max-w-6xl grid-rows-[auto_minmax(0,1fr)] flex-col overflow-hidden p-0">
         <DialogHeader className="shrink-0 border-b border-border px-5 py-4 pr-12">
-          <div className="flex items-start gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
-              <Eye className="h-5 w-5" />
-            </span>
-            <div className="min-w-0">
-              <DialogTitle className="truncate">{document.file_name}</DialogTitle>
-              <DialogDescription className="mt-1 flex flex-wrap items-center gap-2">
-                <span>{extension}</span><span>·</span><span>{formatBytes(document.file_size)}</span><span>·</span><span>Secure in-app preview</span>
-              </DialogDescription>
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-start gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+                <Eye className="h-5 w-5" />
+              </span>
+              <div className="min-w-0">
+                <DialogTitle className="truncate">{document.file_name}</DialogTitle>
+                <DialogDescription className="mt-1 flex flex-wrap items-center gap-2">
+                  <span>{extension}</span><span>·</span><span>{formatBytes(document.file_size)}</span><span>·</span><span>Secure in-app preview</span>
+                </DialogDescription>
+              </div>
             </div>
+            <Button variant="outline" size="sm" className="shrink-0" onClick={handleDownload} disabled={downloading}>
+              {downloading ? <Spinner /> : <Download className="h-4 w-4" />} Download
+            </Button>
           </div>
+          {downloadError && <p className="mt-2 text-sm text-danger" role="alert">{downloadError}</p>}
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-auto bg-bg/70 p-4 sm:p-5">
